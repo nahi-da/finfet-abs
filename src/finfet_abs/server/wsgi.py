@@ -1,0 +1,140 @@
+"""自前の WSGI アプリ（2.3）。安全対策（2.5）はルーターの前で1か所で行います。"""
+
+from __future__ import annotations
+
+import logging
+import re
+from typing import Callable
+
+from ..core.errors import AppError
+from .http import Request, Response, error_response, file_response, json_response, redirect, simple_page
+from .router import Router
+from .security import CSRF_HEADER, INSTANCE_HEADER, SECURITY_HEADERS, SESSION_COOKIE, UNSAFE_METHODS, Security
+from .static import StaticFiles
+
+log = logging.getLogger(__name__)
+
+#: ページの URL（4.2.2）。すべて index.html を返します。
+PAGE_PATTERNS = [re.compile(p) for p in (
+    r"^/$", r"^/search$", r"^/search/urls$", r"^/searches/[^/]+$",
+    r"^/jobs$", r"^/jobs/ended$", r"^/jobs/[^/]+(?:/(?:condition|options|log))?$",
+    r"^/history$", r"^/connections$", r"^/settings$",
+)]
+
+#: Cookie なしで返す静的ファイル（401 などの案内のページで使うもの）
+PUBLIC_STATIC = {"/css/tokens.css", "/css/simple.css", "/favicon.svg"}
+
+
+def is_page(path: str) -> bool:
+    return any(p.match(path) for p in PAGE_PATTERNS)
+
+
+class WsgiApp:
+    """WSGI アプリ。"""
+
+    def __init__(self, router: Router, security: Security, web: StaticFiles, docs: StaticFiles | None = None,
+                 *, signin_return: Callable[[Request], Response] | None = None) -> None:
+        self.router = router
+        self.security = security
+        self.web = web
+        self.docs = docs
+        self.signin_return = signin_return
+        self.index = web.lookup("/index.html")
+
+    def __call__(self, environ: dict, start_response):
+        req = Request(environ)
+        try:
+            resp = self.handle(req)
+        except AppError as err:
+            resp = error_response(err)
+        except Exception:  # noqa: BLE001
+            log.exception("要求の処理でエラーが発生しました: %s %s", req.method, req.path)
+            resp = error_response(AppError("INTERNAL", "内部のエラーが発生しました。詳しくはログを確認してください。",
+                                           status=500))
+        for name, value in SECURITY_HEADERS:
+            resp.set_header(name, value)
+        if not req.path.startswith("/api/v1/events"):
+            # パスだけを出します（クエリには秘密情報が含まれうるため出しません。3.6.2 の 6）
+            log.debug("%s %s %s", req.method, req.path, resp.status)
+        start_response(resp.status_line(), resp.headers)
+        if req.method == "HEAD":
+            return [b""]
+        body = resp.body
+        if isinstance(body, (bytes, bytearray)):
+            return [bytes(body)]
+        return body
+
+    # ------------------------------------------------------------ 振り分け
+
+    def handle(self, req: Request) -> Response:
+        sec = self.security
+        path = req.path
+        is_api = path.startswith("/api/") or path.startswith("/internal/")
+
+        # S5: DNS リバインディング
+        if not sec.host_ok(req.header("host")):
+            return Response(403, b"Forbidden", content_type="text/plain; charset=utf-8")
+
+        # サインインの戻り（2.5 の例外。Cookie を求めない。S5〜S7 は行う）
+        if req.method == "GET" and path == "/" and req.arg("code") is not None and req.arg("state") is not None:
+            if self.signin_return is None:
+                return simple_page("サインイン", "このサインインは取り消されたか、期限が切れています。", 400)
+            return self.signin_return(req)
+
+        # S4: ほかの Web サイトからの要求
+        if not sec.origin_ok(req.header("origin"), req.header("sec-fetch-site")):
+            if is_api:
+                return error_response(AppError("FORBIDDEN_ORIGIN", "この要求は受け付けられません。", status=403))
+            return Response(403, b"Forbidden", content_type="text/plain; charset=utf-8")
+
+        # 認証のいらないもの
+        if path == "/api/v1/health" and req.method in ("GET", "HEAD"):
+            return json_response({})
+        if path == "/auth/launch" and req.method == "GET":
+            return self._launch(req)
+        if path == "/internal/launch-code":
+            if req.method != "POST":
+                return error_response(AppError("METHOD_NOT_ALLOWED", "許可されていない操作です。", status=405))
+            if not sec.instance_ok(req.header(INSTANCE_HEADER)):
+                return error_response(AppError("UNAUTHORIZED", "認証されていません。", status=401))
+            return json_response({"code": sec.new_launch_code()})
+        if path in PUBLIC_STATIC and req.method in ("GET", "HEAD"):
+            found = self.web.lookup(path)
+            if found:
+                return file_response(*found)
+
+        # S2: Cookie
+        if not sec.session_ok(req.cookies.get(SESSION_COOKIE)):
+            if is_api:
+                return error_response(AppError("UNAUTHORIZED", "本ツールの画面を開き直してください。", status=401))
+            return simple_page("FinFeT", "本ツールの画面を開くには、finfet-abs.bat をもう一度実行してください。", 401)
+
+        # S4: CSRF
+        if req.method in UNSAFE_METHODS and not sec.csrf_ok(req.header(CSRF_HEADER)):
+            return error_response(AppError("CSRF", "この要求は受け付けられません（画面を再読み込みしてください）。", status=403))
+
+        if is_api:
+            route, params, path_matched = self.router.match(req.method, path)
+            if route is None:
+                if path_matched:
+                    return error_response(AppError("METHOD_NOT_ALLOWED", "許可されていない操作です。", status=405))
+                return error_response(AppError("NOT_FOUND", "見つかりません。", status=404))
+            req.params = params
+            return route.handler(req)
+
+        if req.method not in ("GET", "HEAD"):
+            return error_response(AppError("METHOD_NOT_ALLOWED", "許可されていない操作です。", status=405))
+        found = self.web.lookup(path)
+        if found is None and self.docs is not None:
+            found = self.docs.lookup(path)
+        if found is not None:
+            return file_response(*found)
+        if is_page(path) and self.index is not None:
+            return file_response(*self.index)
+        return simple_page("見つかりません", "このページはありません。", 404, ("/", "本ツールの画面を開く"))
+
+    def _launch(self, req: Request) -> Response:
+        """S3: 起動コードを Cookie に交換して `/` にリダイレクトします。"""
+        if not self.security.consume_launch_code(req.arg("code")):
+            return simple_page("FinFeT", "このページの URL は無効か、期限が切れています。finfet-abs.bat をもう一度実行してください。", 400)
+        return redirect("/", [self.security.session_cookie_header()])

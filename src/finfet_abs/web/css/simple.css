@@ -1,0 +1,5 @@
+/* スクリプトを使わない案内のページ（401 など）。tokens.css の後に読み込みます。 */
+html, body { margin: 0; background: var(--bg); color: var(--text); font-family: var(--font); font-size: var(--fs-body); line-height: 1.5; }
+main { padding: var(--sp-8) var(--sp-6); max-width: 720px; }
+h1 { font-size: var(--fs-h1); margin: 0 0 var(--sp-3); }
+a { color: var(--link); }

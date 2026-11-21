@@ -1,0 +1,84 @@
+/* ページの骨組み（4.2.1） */
+body { display: flex; flex-direction: column; min-height: 100vh; }
+
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  height: var(--topbar-h);
+  padding: 0 var(--sp-4) 0 var(--sp-2);
+  background: var(--bg-raised);
+  border-bottom: 1px solid var(--line);
+  flex: none;
+}
+.topbar .app-name { color: var(--text); font-weight: 700; font-size: 16px; }
+.topbar .app-name:hover { text-decoration: none; }
+.topbar .demo-label { color: var(--warn); }
+.topbar .spacer { flex: 1; }
+.topbar .conn-lost { color: var(--danger); }
+
+.shell { display: flex; flex: 1; min-height: 0; }
+
+.nav {
+  width: var(--nav-w);
+  flex: none;
+  background: var(--bg-raised);
+  border-right: 1px solid var(--line);
+  padding: var(--sp-2) 0;
+  display: flex;
+  flex-direction: column;
+  position: sticky;
+  top: var(--topbar-h);
+  height: calc(100vh - var(--topbar-h));
+}
+.nav a {
+  display: flex;
+  align-items: center;
+  height: 36px;
+  padding: 0 var(--sp-4);
+  color: var(--text);
+  border-left: 2px solid transparent;
+}
+.nav a:hover { background: var(--bg-hover); text-decoration: none; }
+.nav a[aria-current="page"] { background: var(--bg-selected); border-left-color: var(--link); }
+.nav a .count { margin-left: auto; color: var(--warn); font-variant-numeric: tabular-nums; }
+.nav .nav-bottom { margin-top: auto; }
+body.nav-closed .nav { display: none; }
+
+main.page {
+  flex: 1;
+  min-width: 0;
+  padding: var(--sp-4) var(--sp-6) var(--sp-8);
+}
+
+.page-head {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-4);
+  flex-wrap: wrap;
+  margin-bottom: var(--sp-3);
+}
+.page-head .actions { margin-left: auto; display: flex; gap: var(--sp-3); align-items: center; flex-wrap: wrap; }
+
+.breadcrumb { color: var(--text-muted); margin-bottom: var(--sp-1); }
+.breadcrumb a { color: var(--text-muted); }
+
+section.part { padding: var(--sp-4) 0; border-top: 1px solid var(--line); }
+section.part:first-of-type { border-top: 0; }
+
+/* ページの下に固定する行 */
+.sticky-bottom {
+  position: sticky;
+  bottom: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: var(--sp-2) 0;
+  background: var(--bg);
+  border-top: 1px solid var(--line);
+}
+.sticky-bottom .push { margin-left: auto; }
