@@ -244,10 +244,15 @@ async function accountMenu(anchor) {
   const auth = app.auth;
   const items = [];
   if (auth && auth.signed_in) {
-    items.push(h('div', { class: 'menu-text' }, h('div', { style: { color: 'var(--text)' }, text: auth.account?.name || '' }), h('div', { text: auth.account?.username || '' }), auth.account?.tenant_name ? h('div', { text: auth.account.tenant_name }) : null));
+    const accounts = auth.accounts && auth.accounts.length ? auth.accounts : [auth.account || {}];
+    for (const a of accounts) {
+      items.push(h('div', { class: 'menu-text' }, h('div', { style: { color: 'var(--text)' }, text: `${a.name || ''}${accounts.length > 1 && a.default ? '（既定）' : ''}` }),
+        h('div', { text: a.username || '' }), a.tenant_name ? h('div', { text: a.tenant_name }) : null));
+    }
     items.push('sep');
+    items.push({ text: 'アカウントを追加', onClick: () => import('./parts/signin.js').then((m) => m.startSignIn(null, { add: true })) });
     items.push({ text: '接続のページを開く', onClick: () => navigate('/connections') });
-    items.push({ text: 'サインアウト', onClick: () => import('./pages/connections.js').then((m) => m.signOut()) });
+    items.push({ text: accounts.length > 1 ? 'すべてサインアウト' : 'サインアウト', onClick: () => import('./pages/connections.js').then((m) => m.signOut()) });
   } else if (auth) {
     items.push({ text: 'サインイン', onClick: () => import('./parts/signin.js').then((m) => m.startSignIn()) });
   }
@@ -261,7 +266,8 @@ async function accountMenu(anchor) {
 export function setAuth(auth) {
   app.auth = auth;
   const btn = document.getElementById('account-btn');
-  btn.textContent = auth && auth.signed_in ? (auth.account?.username || 'アカウント') : 'アカウント';
+  const n = auth && auth.accounts ? auth.accounts.length : 0;
+  btn.textContent = auth && auth.signed_in ? `${auth.account?.username || 'アカウント'}${n > 1 ? ` ほか ${n - 1}` : ''}` : 'アカウント';
 }
 
 async function refreshAuth() {

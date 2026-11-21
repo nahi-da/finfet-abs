@@ -59,7 +59,7 @@ function toCondition() {
   }
   return {
     name: state.name || undefined,
-    targets: state.targets.map((t) => ({ storage_account: t.storage_account, endpoint_suffix: t.endpoint_suffix, container: t.container, auth_kind: t.auth_kind, tenant: t.tenant || null, credential_id: t.credential_id || null })),
+    targets: state.targets.map((t) => ({ storage_account: t.storage_account, endpoint_suffix: t.endpoint_suffix, container: t.container, auth_kind: t.auth_kind, tenant: t.tenant || null, credential_id: t.credential_id || null, account: t.account || null })),
     path_pattern: state.path_pattern, ignore_case: state.ignore_case, input_timezone: state.input_timezone, variables: vars,
   };
 }
@@ -195,7 +195,7 @@ export async function render(ctx) {
     const authLink = h('button', {
       type: 'button', class: `link-btn${t.auth_kind && t.resolved !== false ? '' : ' warn'}`, title: t.auth_detail || '認証方式を選択',
       onclick: () => chooseAuth(i),
-    }, t.auth_kind && t.resolved !== false ? (t.auth_label || t.auth_kind) : [h('span', { class: 'icon icon-warn' }), '認証']);
+    }, t.auth_kind && t.resolved !== false ? `${t.auth_label || t.auth_kind}${t.account ? `（${t.account.split('@')[0]}）` : ''}` : [h('span', { class: 'icon icon-warn' }), '認証']);
     authLink.dataset.authIndex = String(i);
     const result = h('span', { class: 'muted ellipsis target-test' });
     const testLink = linkButton('テスト', async () => {

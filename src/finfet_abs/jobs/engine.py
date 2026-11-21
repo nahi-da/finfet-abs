@@ -181,15 +181,17 @@ class JobEngine:
         """上部のバーの「お知らせ」に残すもの（4.3.5。リハイドレートの完了、ジョブの終了、エラー）。"""
         self.events.publish("notify", {"level": level, "text": text, "url": f"/jobs/{job_id}" if job_id else None})
 
-    def auth_problem(self, job_id: str, code: str, message: str) -> None:
-        """認証が使えないことを、ジョブの一覧と詳細に表示します（3.3.9）。"""
-        text = "サインインが必要です。" if code in SIGNIN_CODES else "認証情報がありません。接続先を追加してください。"
+    def auth_problem(self, job_id: str, code: str, message: str, account: str | None = None) -> None:
+        """認証が使えないことを、ジョブの一覧と詳細に表示します（3.3.9）。account はサインインが必要なアカウント（分かる場合）。"""
+        text = (f"サインインが必要です（{account}）。" if account else "サインインが必要です。") if code in SIGNIN_CODES \
+            else "認証情報がありません。接続先を追加してください。"
         row = self.db.query_one("SELECT last_error_json FROM jobs WHERE id=?", (job_id,))
         cur = json.loads(row["last_error_json"]) if row and row["last_error_json"] else None
         if cur and cur.get("code") == code:
             return
         self.db.execute("UPDATE jobs SET last_error_json=? WHERE id=?",
-                        (json.dumps({"code": code, "message": text, "detail": message}, ensure_ascii=False), job_id))
+                        (json.dumps({"code": code, "message": text, "detail": message, "account": account}, ensure_ascii=False),
+                         job_id))
         self.notify("warn", f"「{self.job_name(job_id)}」: {text}", job_id)
         self.service._publish(job_id)
 
@@ -240,7 +242,7 @@ class JobEngine:
                 code, text = "NOT_SIGNED_IN", f"サインインが必要です{who}。サインインしてから開始してください。"
             else:
                 code, text = "NO_CREDENTIAL", "認証情報がありません。接続のページで接続先を追加してから開始してください。"
-            self.auth_problem(job_id, code, text)
+            self.auth_problem(job_id, code, text, r["account"])
             raise AppError(code, text, status=409)
         all_rows = self.db.query("SELECT * FROM job_items WHERE job_id=? AND credential_id IS NOT NULL AND secret_id IS NULL",
                                  (job_id,))
@@ -386,7 +388,7 @@ class JobEngine:
                     continue  # 次の確認で、新しい認証情報で確かめます
                 for jid in {r["job_id"] for r in items}:
                     code, msg = sorted(auth_errs)[0]
-                    self.auth_problem(jid, code, msg)
+                    self.auth_problem(jid, code, msg, items[0]["account"])
             else:
                 for jid in {r["job_id"] for r in items}:
                     self.clear_auth_problem(jid)

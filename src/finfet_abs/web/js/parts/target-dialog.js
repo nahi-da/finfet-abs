@@ -5,7 +5,7 @@ import { button, clear, debounce, h, iconButton, linkButton } from '../dom.js';
 import { dateShort } from '../format.js';
 import { runTask } from '../task.js';
 import { confirmDialog, openDialog } from './dialog.js';
-import { checkbox, formGrid, row, setError, textInput } from './form.js';
+import { checkbox, formGrid, row, select, setError, textInput } from './form.js';
 import { startSignIn } from './signin.js';
 
 const METHODS = [
@@ -185,7 +185,7 @@ export function openAddTargetDialog(opt = {}) {
     }
 
     // ---------------------------------------------------------------- Azure にサインイン
-    async function azureScreen() {
+    async function azureScreen(user) {
       d.setTitle(titleWith('Azure にサインイン'));
       picks.clear();
       const st = await api.get('/api/v1/auth/status');
@@ -197,19 +197,28 @@ export function openAddTargetDialog(opt = {}) {
       }
       const settings = (await api.get('/api/v1/settings')).values;
       let mode = settings['auth.default_entra_mode'] === 'access_key' ? 'entra_key' : 'entra_user';
-      const a = st.account || {};
+      // 使うアカウント（複数のアカウントでサインインしているときは選べます。1 つだけなら記録せず、既定のアカウントを使います）
+      const accts = st.accounts && st.accounts.length ? st.accounts : [st.account || {}];
+      const a = accts.find((x) => x.id === user) || st.account || accts[0] || {};
+      const acc = accts.length > 1 ? a.id : null;
+      const who = accts.length > 1
+        ? h('span', { class: 'inline' }, h('span', { text: 'アカウント' }), select(accts.map((x) => [x.id, x.tenant_name ? `${x.username}（${x.tenant_name}）` : x.username]), a.id, {
+          'aria-label': '使うアカウント', onchange: (e) => azureScreen(e.target.value),
+        }))
+        : h('span', { text: a.tenant_name ? `${a.username}（${a.tenant_name}）` : a.username });
+      const addAcct = linkButton('アカウントを追加', async () => { if (await startSignIn(null, { add: true })) azureScreen(a.id); });
       const modeRadios = h('div', { class: 'radios', role: 'radiogroup', 'aria-label': '認証方式' },
         ...[['entra_user', 'Entra ID ユーザーアカウント'], ['entra_key', 'アクセスキー']].map(([v, label]) => h('label.check', null,
           h('input', { type: 'radio', name: 'td-mode', value: v, checked: v === mode, onchange: () => { mode = v; drawAccounts(); } }), label)));
       const top = h('div', { class: 'inline', style: { justifyContent: 'space-between', width: '100%' } },
-        h('span', { text: a.tenant_name ? `${a.username}（${a.tenant_name}）` : a.username }),
+        h('span', { class: 'inline' }, who, addAcct),
         h('span', { class: 'inline' }, h('span', { text: '認証方式' }), modeRadios));
       const unavailable = h('div');
       const err = h('div');
       if (choose) {
         d.setBody(top, err);
         d.setFoot(h('span.push'), button('キャンセル', () => d.close()), button('決定', async () => {
-          const res = await api.post('/api/v1/targets/add', { storage_account: opt.row.storage_account, endpoint_suffix: opt.row.endpoint_suffix, auth: { kind: mode }, containers: [opt.row.container] });
+          const res = await api.post('/api/v1/targets/add', { storage_account: opt.row.storage_account, endpoint_suffix: opt.row.endpoint_suffix, auth: { kind: mode, account: acc }, containers: [opt.row.container] });
           finish(res.targets);
         }, { primary: true }));
         return;
@@ -229,7 +238,7 @@ export function openAddTargetDialog(opt = {}) {
         current = name;
         cs.setNames([], '読み込み中…');
         try {
-          const r = await runTask('POST', '/api/v1/containers/list', { storage_account: name, endpoint_suffix: AZURE, auth: { kind: mode } });
+          const r = await runTask('POST', '/api/v1/containers/list', { storage_account: name, endpoint_suffix: AZURE, auth: { kind: mode, account: acc } });
           if (current !== name) return;
           cs.setNames(r.containers, r.list_error ? `コンテナーの一覧を取得できません（${r.list_error}）。コンテナー名を入力してください。` : '');
         } catch (e) {
@@ -287,7 +296,7 @@ export function openAddTargetDialog(opt = {}) {
         const all = [];
         for (const [acct, conts] of groups) {
           try {
-            const res = await api.post('/api/v1/targets/add', { storage_account: acct, endpoint_suffix: AZURE, auth: { kind: mode }, containers: conts });
+            const res = await api.post('/api/v1/targets/add', { storage_account: acct, endpoint_suffix: AZURE, auth: { kind: mode, account: acc }, containers: conts });
             all.push(...res.targets);
           } catch (e) { setError(err, e.message); return; }
         }
@@ -295,14 +304,14 @@ export function openAddTargetDialog(opt = {}) {
       }, { primary: true }));
       acctList.append(h('div', { class: 'empty', text: '読み込み中…' }));
       try {
-        const res = await runTask('GET', `/api/v1/azure/storage-accounts`);
+        const res = await runTask('GET', `/api/v1/azure/storage-accounts${acc ? `?account=${encodeURIComponent(acc)}` : ''}`);
         accounts = res.accounts;
         multi = res.multi_tenant;
         clear(unavailable);
         for (const u of res.unavailable) {
           unavailable.append(h('div', { class: 'inline warn', style: { margin: '8px 0' } },
             h('span', { text: `テナント「${u.tenant_name}」のストレージアカウントは表示されていません（${u.reason.replace(/。$/, '')}）` }),
-            linkButton('このテナントにサインイン', async () => { if (await startSignIn(u.tenant_id)) azureScreen(); })));
+            linkButton('このテナントにサインイン', async () => { if (await startSignIn(u.tenant_id, { account: a.id })) azureScreen(a.id); })));
         }
       } catch (e) {
         accounts = [];

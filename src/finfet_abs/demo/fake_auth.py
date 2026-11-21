@@ -176,11 +176,19 @@ class FakeArm:
     def reset(self) -> None:
         pass
 
+    account = None  # 使うアカウント（None は既定のアカウント）
+
     def for_account(self, account):
-        """アカウントごとの ARM（デモでは、どのアカウントでも同じストレージアカウントを返します）。"""
+        """アカウントごとの ARM（デモでは、どのアカウントでも同じストレージアカウントを返します。テナントの状態はアカウントごと）。"""
         if account and not self.auth.is_signed_in(account):
             raise NotSignedIn(account)
-        return self
+        import copy
+        view = copy.copy(self)
+        view.account = account
+        return view
+
+    def _status(self) -> dict:
+        return self.auth._tenant_status.get(self.auth.resolve(self.account) or "", {})
 
     def forget(self, account) -> None:
         pass
@@ -203,7 +211,7 @@ class FakeArm:
         if not self.auth.signed_in:
             raise NotSignedIn()
         unavailable = []
-        if self.auth.tenant_status.get(TENANT2, {}).get("status") != "ok":
+        if self._status().get(TENANT2, {}).get("status") != "ok":
             unavailable.append({"tenant_id": TENANT2, "tenant_name": "Fabrikam",
                                 "reason": "多要素認証が必要です。"})
         return {"accounts": self._rows(), "unavailable": unavailable, "multi_tenant": False}
