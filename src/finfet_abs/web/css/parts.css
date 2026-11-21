@@ -171,7 +171,6 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--accent); width
   align-items: center;
   height: var(--row-h);
   border-bottom: 1px solid var(--line);
-  min-width: max-content;
 }
 .vtable .vhead {
   position: sticky;

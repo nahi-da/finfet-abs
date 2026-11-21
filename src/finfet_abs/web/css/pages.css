@@ -26,3 +26,77 @@
 .td-accounts .vrow[aria-disabled="true"] { cursor: default; }
 .folder-check { display: flex; padding: var(--sp-1) var(--sp-3); }
 .folder-check:hover { background: var(--bg-hover); }
+
+/* ---- 検索のページ（4.4） */
+.targets { display: grid; grid-template-columns: max-content minmax(0, max-content) max-content minmax(0, 1fr) max-content; column-gap: var(--sp-4); align-items: center; margin-bottom: var(--sp-2); }
+.targets-head, .targets-row { display: contents; }
+.targets-head > div { color: var(--text-muted); padding-bottom: var(--sp-1); border-bottom: 1px solid var(--line); }
+.targets-row > div { padding: var(--sp-1) 0; min-width: 0; }
+.targets-note { grid-column: 2 / -1; margin-top: calc(-1 * var(--sp-1)); }
+.target-test { max-width: 360px; }
+.pi { position: relative; width: 100%; }
+.pi-back, .pi-text {
+  font-family: var(--font-mono);
+  font-size: var(--fs-mono);
+  line-height: 20px;
+  padding: 6px var(--sp-2);
+  white-space: pre-wrap;
+  word-break: break-all;
+  overflow-wrap: anywhere;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  width: 100%;
+  margin: 0;
+}
+.pi-back { position: absolute; inset: 0; color: var(--text); overflow: hidden; pointer-events: none; }
+.pi-text {
+  position: relative;
+  display: block;
+  resize: none;
+  overflow: hidden;
+  color: transparent;
+  caret-color: var(--text);
+  background: transparent;
+  border-color: var(--line-strong);
+  min-height: 34px;
+}
+.pi { background: var(--bg-input); border-radius: var(--radius); }
+.pi-text::placeholder { color: var(--text-disabled); }
+.pi-text::selection { background: var(--bg-selected); color: var(--text); }
+.pi-var { color: var(--code-var); }
+.pi-err { text-decoration: underline wavy var(--danger); text-underline-offset: 3px; }
+.pi-suggest { position: absolute; left: 0; top: 100%; }
+.var-row { display: grid; grid-template-columns: 10em minmax(0, 1fr) max-content; gap: var(--sp-3); padding: var(--sp-2) 0; border-bottom: 1px solid var(--line); align-items: start; }
+.var-row:last-child { border-bottom: 0; }
+.var-unused { opacity: 0.6; }
+.var-name { padding-top: 5px; overflow: hidden; text-overflow: ellipsis; }
+.var-type { padding: 0 var(--sp-1); color: var(--text-muted); }
+.var-body { display: flex; flex-direction: column; gap: var(--sp-2); min-width: 0; }
+.var-side { display: flex; align-items: center; gap: var(--sp-2); padding-top: 2px; }
+.units-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); gap: var(--sp-1) var(--sp-4); }
+.unit-label { width: 2em; }
+.merge-hint { display: inline-flex; gap: var(--sp-2); align-items: center; margin-left: auto; color: var(--text-muted); }
+.search-actions { padding: var(--sp-4) 0; border-top: 1px solid var(--line); }
+
+/* ---- 既知の形式（4.4.5） */
+.kf { display: grid; grid-template-columns: 280px minmax(0, 1fr); gap: var(--sp-4); min-height: 420px; }
+.kf-list { margin-top: var(--sp-2); max-height: 460px; overflow: auto; border-right: 1px solid var(--line); }
+.kf-group { color: var(--text-muted); padding: var(--sp-2) var(--sp-2) var(--sp-1); }
+.kf-item { display: block; width: 100%; text-align: left; padding: var(--sp-1) var(--sp-4); border: 0; background: none; color: var(--text); cursor: pointer; }
+.kf-item:hover { background: var(--bg-hover); }
+.kf-item.selected { background: var(--bg-selected); }
+.kf-preview { margin-top: var(--sp-4); }
+.kf-notes { margin-top: var(--sp-3); }
+
+/* ---- 検索結果（4.4.4） */
+.cond-line { margin-bottom: var(--sp-2); }
+.cond-line .mono { max-width: 60%; }
+.progress-sec { padding-top: var(--sp-2); }
+.progress-grid { display: grid; grid-template-columns: minmax(200px, max-content) max-content repeat(3, max-content); column-gap: var(--sp-6); margin-top: var(--sp-2); }
+.progress-row { display: contents; }
+.progress-err { grid-column: 1 / -1; display: flex; gap: var(--sp-3); align-items: center; margin-bottom: var(--sp-1); }
+
+/* ---- 検索履歴（4.7） */
+.two-line-cell { display: flex; flex-direction: column; min-width: 0; color: var(--text); }
+.two-line-cell:hover { text-decoration: none; }
+.two-line-cell:hover .mono { text-decoration: underline; }

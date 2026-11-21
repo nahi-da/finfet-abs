@@ -79,9 +79,15 @@ export class VirtualTable {
     }).join(' ');
   }
 
+  minWidth() {
+    return this.columns.reduce((a, c) => a + (this.widths[c.key] || c.width || 120), 0);
+  }
+
   renderHead() {
     clear(this.head);
     this.head.style.gridTemplateColumns = this.template();
+    this.head.style.minWidth = `${this.minWidth()}px`;
+    this.body.style.minWidth = `${this.minWidth()}px`;
     for (const c of this.columns) {
       const cls = ['vcell'];
       if (c.align === 'right') cls.push('right');
@@ -129,7 +135,10 @@ export class VirtualTable {
 
   applyTemplate() {
     const t = this.template();
+    const mw = `${this.minWidth()}px`;
     this.head.style.gridTemplateColumns = t;
+    this.head.style.minWidth = mw;
+    this.body.style.minWidth = mw;
     for (const el of this.rendered.values()) el.style.gridTemplateColumns = t;
   }
 

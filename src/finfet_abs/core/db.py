@@ -58,11 +58,15 @@ CREATE TABLE search_results (
   creation_time TEXT, last_modified TEXT, access_tier_change_time TEXT,
   tier TEXT, archive_status TEXT, rehydrate_priority TEXT,
   vars_json TEXT,
-  selected INTEGER NOT NULL DEFAULT 0,
   notes_json TEXT
 );
 CREATE INDEX idx_results_sort ON search_results(search_id, sort_key);
-CREATE INDEX idx_results_selected ON search_results(search_id, selected);
+
+CREATE TABLE search_selection (
+  search_id TEXT NOT NULL REFERENCES searches(id) ON DELETE CASCADE,
+  result_id INTEGER NOT NULL,
+  PRIMARY KEY (search_id, result_id)
+) WITHOUT ROWID;
 
 CREATE TABLE jobs (
   id TEXT PRIMARY KEY,
