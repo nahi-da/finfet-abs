@@ -662,6 +662,14 @@ class JobService:
         row = self.db.query_one("SELECT * FROM jobs WHERE id=?", (job_id,))
         if row is not None:
             self.events.publish("job.changed", self.public(row))
+        self.events.publish_coalesced("nav.counts", "jobs", {"jobs_attention": self.attention_count()})
+
+    def attention_count(self) -> int:
+        """利用者の操作を待っているジョブ（ダウンロード待ち、サインインが必要・認証情報がない）の件数（4.2）。"""
+        return int(self.db.scalar(
+            "SELECT COUNT(*) FROM jobs WHERE status='waiting_download' OR (status IN ('held','queued','running',"
+            "'waiting_rehydrate','paused') AND (last_error_json LIKE '%NOT_SIGNED_IN%' OR "
+            "last_error_json LIKE '%INTERACTION_REQUIRED%' OR last_error_json LIKE '%NO_CREDENTIAL%'))") or 0)
 
 
 def free_bytes(directory: str) -> int | None:

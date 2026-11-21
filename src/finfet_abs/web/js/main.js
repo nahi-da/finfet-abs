@@ -5,7 +5,7 @@ import { button, clear, h } from './dom.js';
 import * as events from './events.js';
 import { confirmDialog, infoDialog } from './parts/dialog.js';
 import { openMenu } from './parts/menu.js';
-import { addNotice, markAllRead, notices, setNoticeHandler, toast, unreadCount } from './parts/toast.js';
+import { addNotice, lastSeq, markAllRead, notices, setNoticeHandler, toast, unreadCount } from './parts/toast.js';
 import { dateShort } from './format.js';
 
 /** URL → ページ（4.2.2）。[正規表現, ページのモジュール, ナビゲーションの項目, ページ名] */
@@ -198,6 +198,8 @@ function showNotices(anchor) {
   menu.style.maxHeight = '60vh';
   menu.style.overflow = 'auto';
   markAllRead();
+  const seq = lastSeq();
+  if (seq) api.post('/api/v1/notices/read', { seq }).catch(() => { /* 次の機会に */ });
 }
 
 function aboutDialog() {
@@ -287,8 +289,8 @@ async function boot() {
   document.getElementById('notices-btn').addEventListener('click', (e) => showNotices(e.currentTarget));
   document.getElementById('account-btn').addEventListener('click', (e) => accountMenu(e.currentTarget));
   events.setConnectionHandler((ok) => { document.getElementById('conn-lost').hidden = ok; });
-  events.on('notify', (d) => {
-    addNotice(d.level || 'info', d.text, d.url);
+  events.on('notify', (d, ev) => {
+    addNotice(d.level || 'info', d.text, d.url, { seq: ev?.seq, at: ev?.at });
     if (app.session?.notifications && 'Notification' in window && Notification.permission === 'granted' && document.hidden) {
       try { new Notification('FinFeT', { body: d.text }); } catch { /* 通知できない環境 */ }
     }
@@ -303,6 +305,10 @@ async function boot() {
     const el = document.getElementById('nav-jobs-count');
     el.textContent = d.jobs_attention ? String(d.jobs_attention) : '';
   });
+  document.getElementById('nav-jobs-count').textContent = s.jobs_attention ? String(s.jobs_attention) : '';
+  for (const n of [...(s.notices || [])].reverse()) {
+    addNotice(n.level || 'info', n.text, n.url, { seq: n.seq, at: n.at, read: n.seq <= (s.notices_read_seq || 0) });
+  }
   for (const w of s.warnings || []) addNotice('warn', w);
   try { app.settings = (await api.get('/api/v1/settings')).values; } catch { app.settings = {}; }
   refreshAuth();

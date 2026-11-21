@@ -31,10 +31,17 @@ export function toast(text, opt = {}) {
  * @param {string} text
  * @param {string} [url]
  */
-export function addNotice(level, text, url) {
-  notices.unshift({ level, text, url, at: new Date(), read: false });
+export function addNotice(level, text, url, { seq = null, at = null, read = false } = {}) {
+  if (seq != null && notices.some((n) => n.seq === seq)) return;
+  notices.unshift({ level, text, url, at: at ? new Date(at * 1000) : new Date(), read, seq });
+  notices.sort((a, b) => b.at - a.at);
   notices.length = Math.min(notices.length, MAX_NOTICES);
   onChange();
+}
+
+/** 既読にした最後のお知らせの番号（サーバーに覚えます。ほかのタブと共有）。 */
+export function lastSeq() {
+  return notices.reduce((m, n) => (n.seq != null && n.seq > m ? n.seq : m), 0);
 }
 
 export function unreadCount() {
