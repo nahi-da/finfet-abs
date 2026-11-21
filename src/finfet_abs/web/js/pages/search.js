@@ -249,6 +249,16 @@ export async function render(ctx) {
     }
   }
 
+  async function fromNames() {
+    const m = await import('../parts/infer-dialog.js');
+    const r = await m.openInferDialog({ targets: state.targets });
+    if (!r) return;
+    state.path_pattern = r.path_pattern;
+    save();
+    pi.value = state.path_pattern;
+    analyze();
+  }
+
   async function fromKnown(formatId, container) {
     let inputs = {};
     if (formatId && container) {
@@ -283,7 +293,7 @@ export async function render(ctx) {
   const icWarn = h('span', { class: 'warn', text: '一覧の取得を絞り込めないため、件数が多いと遅くなります', hidden: !state.ignore_case });
   const ic = checkbox('大文字・小文字を区別しない', state.ignore_case, (on) => { state.ignore_case = on; icWarn.hidden = !on; save(); analyze(); });
   patternSec.append(h('h2', { text: 'パスパターン' }), pi.el, patternErr, hint,
-    h('div', { class: 'line' }, linkButton('既知の形式から作成', () => fromKnown(null)), linkButton('履歴から', (e) => historyMenu(e.currentTarget)), ic, icWarn),
+    h('div', { class: 'line' }, linkButton('既知の形式から作成', () => fromKnown(null)), linkButton('Blob 名から作成', () => fromNames()), linkButton('履歴から', (e) => historyMenu(e.currentTarget)), ic, icWarn),
     prefixLine);
 
   async function historyMenu(anchor) {

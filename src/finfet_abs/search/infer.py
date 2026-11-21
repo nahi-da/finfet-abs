@@ -230,12 +230,13 @@ class Cancelled(Exception):
 
 
 def collect(backend, target: ContainerRef, *, mode: str = "sample", prefix: str = "", limit: int = 10000,
-            per_level: int = 10, max_depth: int = 12, cancel: threading.Event | None = None,
+            per_level: int = 10, max_depth: int = 40, max_requests: int = 500, cancel: threading.Event | None = None,
             progress: Callable[[int, int], None] | None = None,
             connection: Callable[[], object] | None = None) -> tuple[list[tuple[str, int | None]], dict]:
     """Blob 名を集めます。戻り値は [(名前, 大きさ)] と、要求の回数・打ち切ったかの情報。
 
-    - sample: 階層をたどり、各階層で最大 per_level 件の見本（先頭・末尾・等間隔）だけを下へたどります（大きさは不明）
+    - sample: 階層をたどり、各階層で最大 per_level 件の見本（先頭・末尾・等間隔）だけを下へたどります（大きさは不明。
+      要求は最大 max_requests 回）
     - first: 名前の順に、先頭から limit 件
     - all: すべて（limit は無視）
     """
@@ -250,6 +251,9 @@ def collect(backend, target: ContainerRef, *, mode: str = "sample", prefix: str 
         while stack:
             if cancel.is_set():
                 raise Cancelled()
+            if info["requests"] >= max_requests:
+                info["truncated"] = True
+                break
             pre, depth = stack.pop()
             with connection():
                 children = backend.walk_prefixes(target, pre, limit=5000)
@@ -258,7 +262,8 @@ def collect(backend, target: ContainerRef, *, mode: str = "sample", prefix: str 
             dirs = [c for c in children if c.endswith("/")]
             out.extend((pre + f, None) for f in files)
             if depth < max_depth:
-                for d in _spread(dirs, per_level):
+                # 深さ優先で、見本の階層を逆の順に積みます（先頭の階層から先にたどるため）
+                for d in reversed(_spread(dirs, per_level)):
                     stack.append((pre + d, depth + 1))
             elif dirs:
                 info["truncated"] = True
