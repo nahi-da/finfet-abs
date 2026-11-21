@@ -1,0 +1,310 @@
+{
+  "version": 1,
+  "notes": "Azure のサービスがストレージアカウントに書き出すログ・データのパス構造（7.2）。{名前} は入力した値（空なら文字列の変数）、{{…}} は変数です。パスパターンのひな形は正規表現です。",
+  "formats": [
+    {
+      "id": "resource-logs",
+      "group": "Azure Monitor",
+      "name": "リソースログ（診断設定）",
+      "description": "診断設定でストレージアカウントに送ったリソースログ。1時間ごとの PT1H.json です。",
+      "container_regex": "^insights-logs-[a-z0-9]+$",
+      "container_template": "insights-logs-{category}",
+      "path_template": "resourceId=/SUBSCRIPTIONS/{sub}/RESOURCEGROUPS/{rg}/PROVIDERS/{rtype}/y={{dt=YYYY}}/m={{dt=MM}}/d={{dt=DD}}/h={{dt=hh}}/m=00/PT1H\\.json",
+      "inputs": [
+        {"name": "category", "label": "ログのカテゴリ", "check": "^[A-Za-z0-9]+$", "lower": true, "required": true,
+         "suggest": ["StorageRead", "StorageWrite", "StorageDelete", "AuditEvent", "AzureFirewallApplicationRule", "AzureFirewallNetworkRule", "AppServiceHTTPLogs", "ApplicationGatewayAccessLog"]},
+        {"name": "sub", "label": "サブスクリプション ID", "check": "^[0-9A-Fa-f-]{36}$", "upper": true},
+        {"name": "rg", "label": "リソースグループ", "check": "^[-\\w._()]{1,90}$", "upper": true},
+        {"name": "rtype", "label": "リソースの種類", "kind": "select", "default": "storage-blob", "options": [
+          {"id": "storage-blob", "label": "Microsoft.Storage/storageAccounts（Blob）", "value": "MICROSOFT\\.STORAGE/STORAGEACCOUNTS/{resource}/BLOBSERVICES/DEFAULT"},
+          {"id": "storage-file", "label": "Microsoft.Storage/storageAccounts（File）", "value": "MICROSOFT\\.STORAGE/STORAGEACCOUNTS/{resource}/FILESERVICES/DEFAULT"},
+          {"id": "storage-queue", "label": "Microsoft.Storage/storageAccounts（Queue）", "value": "MICROSOFT\\.STORAGE/STORAGEACCOUNTS/{resource}/QUEUESERVICES/DEFAULT"},
+          {"id": "storage-table", "label": "Microsoft.Storage/storageAccounts（Table）", "value": "MICROSOFT\\.STORAGE/STORAGEACCOUNTS/{resource}/TABLESERVICES/DEFAULT"},
+          {"id": "keyvault", "label": "Microsoft.KeyVault/vaults", "value": "MICROSOFT\\.KEYVAULT/VAULTS/{resource}"},
+          {"id": "firewall", "label": "Microsoft.Network/azureFirewalls", "value": "MICROSOFT\\.NETWORK/AZUREFIREWALLS/{resource}"},
+          {"id": "appgw", "label": "Microsoft.Network/applicationGateways", "value": "MICROSOFT\\.NETWORK/APPLICATIONGATEWAYS/{resource}"},
+          {"id": "web", "label": "Microsoft.Web/sites", "value": "MICROSOFT\\.WEB/SITES/{resource}"},
+          {"id": "other", "label": "そのほか", "value": "[^/]+/[^/]+/{resource}(?:/[^/]+/[^/]+)*"}
+        ]},
+        {"name": "resource", "label": "リソース名", "check": "^[-\\w.]{1,80}$", "upper": true}
+      ],
+      "path_timezone": "utc",
+      "notes": ["resourceId の部分は大文字です。入力した値は大文字にします。", "現在の時間の Blob は書き込み中です。"],
+      "verified": true,
+      "verified_note": "構造は確認済み。リソースの種類ごとの子の階層は未確認です。",
+      "examples": [
+        {"inputs": {"category": "StorageRead", "sub": "00000000-0000-0000-0000-000000000000", "rg": "rg-example", "rtype": "storage-blob", "resource": "stexample01"},
+         "container": "insights-logs-storageread",
+         "blob": "resourceId=/SUBSCRIPTIONS/00000000-0000-0000-0000-000000000000/RESOURCEGROUPS/RG-EXAMPLE/PROVIDERS/MICROSOFT.STORAGE/STORAGEACCOUNTS/STEXAMPLE01/BLOBSERVICES/DEFAULT/y=2026/m=11/d=20/h=09/m=00/PT1H.json"},
+        {"inputs": {"category": "AuditEvent", "rtype": "keyvault"},
+         "container": "insights-logs-auditevent",
+         "blob": "resourceId=/SUBSCRIPTIONS/00000000-0000-0000-0000-000000000000/RESOURCEGROUPS/RG-EXAMPLE/PROVIDERS/MICROSOFT.KEYVAULT/VAULTS/KV-EXAMPLE/y=2026/m=11/d=20/h=09/m=00/PT1H.json"},
+        {"inputs": {"category": "AzureFirewallNetworkRule", "rtype": "other"},
+         "container": "insights-logs-azurefirewallnetworkrule",
+         "blob": "resourceId=/SUBSCRIPTIONS/00000000-0000-0000-0000-000000000000/RESOURCEGROUPS/RG-EXAMPLE/PROVIDERS/MICROSOFT.NETWORK/AZUREFIREWALLS/FW-EXAMPLE/y=2026/m=01/d=02/h=23/m=00/PT1H.json"}
+      ]
+    },
+    {
+      "id": "activity-logs",
+      "group": "Azure Monitor",
+      "name": "アクティビティログ",
+      "description": "診断設定でストレージアカウントに送ったアクティビティログ。",
+      "container_regex": "^insights-activity-logs$",
+      "container_template": "insights-activity-logs",
+      "path_template": "resourceId=/SUBSCRIPTIONS/{sub}/y={{dt=YYYY}}/m={{dt=MM}}/d={{dt=DD}}/h={{dt=hh}}/m=00/PT1H\\.json",
+      "inputs": [
+        {"name": "sub", "label": "サブスクリプション ID", "check": "^[0-9A-Fa-f-]{36}$", "upper": true}
+      ],
+      "path_timezone": "utc",
+      "notes": ["resourceId の部分は大文字です。入力した値は大文字にします。", "現在の時間の Blob は書き込み中です。"],
+      "verified": false,
+      "examples": [
+        {"inputs": {}, "container": "insights-activity-logs",
+         "blob": "resourceId=/SUBSCRIPTIONS/00000000-0000-0000-0000-000000000000/y=2026/m=11/d=20/h=09/m=00/PT1H.json"}
+      ]
+    },
+    {
+      "id": "metrics",
+      "group": "Azure Monitor",
+      "name": "メトリック（診断設定）",
+      "description": "診断設定でストレージアカウントに送ったメトリック。",
+      "container_regex": "^insights-metrics-[a-z0-9]+$",
+      "container_template": "insights-metrics-pt1m",
+      "path_template": "resourceId=/SUBSCRIPTIONS/{sub}/RESOURCEGROUPS/{rg}/PROVIDERS/[^/]+/[^/]+/{resource}(?:/[^/]+/[^/]+)*/y={{dt=YYYY}}/m={{dt=MM}}/d={{dt=DD}}/h={{dt=hh}}/m=00/PT1H\\.json",
+      "inputs": [
+        {"name": "sub", "label": "サブスクリプション ID", "check": "^[0-9A-Fa-f-]{36}$", "upper": true},
+        {"name": "rg", "label": "リソースグループ", "check": "^[-\\w._()]{1,90}$", "upper": true},
+        {"name": "resource", "label": "リソース名", "check": "^[-\\w.]{1,80}$", "upper": true}
+      ],
+      "path_timezone": "utc",
+      "notes": ["resourceId の部分は大文字です。入力した値は大文字にします。", "現在の時間の Blob は書き込み中です。"],
+      "verified": false,
+      "examples": [
+        {"inputs": {"resource": "kv-example"}, "container": "insights-metrics-pt1m",
+         "blob": "resourceId=/SUBSCRIPTIONS/00000000-0000-0000-0000-000000000000/RESOURCEGROUPS/RG-EXAMPLE/PROVIDERS/MICROSOFT.KEYVAULT/VAULTS/KV-EXAMPLE/y=2026/m=11/d=20/h=09/m=00/PT1H.json"}
+      ]
+    },
+    {
+      "id": "log-analytics-export",
+      "group": "Azure Monitor",
+      "name": "Log Analytics のエクスポート",
+      "description": "Log Analytics ワークスペースのデータのエクスポート。5 分ごとのフォルダーに PT05M.json が増えます。",
+      "container_regex": "^am-[a-z0-9]+$",
+      "container_template": "am-{table}",
+      "path_template": "WorkspaceResourceId=/subscriptions/{sub}/resourcegroups/{rg}/providers/microsoft\\.operationalinsights/workspaces/{ws}/y={{dt=YYYY}}/m={{dt=MM}}/d={{dt=DD}}/h={{dt=hh}}/m={{dt=mm}}/PT05M(?:_\\d+)?\\.json",
+      "inputs": [
+        {"name": "table", "label": "テーブル名", "check": "^[A-Za-z0-9_]+$", "lower": true, "required": true, "suggest": ["SecurityEvent", "Syslog", "AzureActivity", "AzureDiagnostics"]},
+        {"name": "sub", "label": "サブスクリプション ID", "check": "^[0-9A-Fa-f-]{36}$", "lower": true},
+        {"name": "rg", "label": "リソースグループ", "check": "^[-\\w._()]{1,90}$", "lower": true},
+        {"name": "ws", "label": "ワークスペース名", "check": "^[-\\w]{1,63}$", "lower": true}
+      ],
+      "path_timezone": "utc",
+      "notes": ["リソース ID の部分は小文字で書き出される見込みです（大文字・小文字は未確認）。", "現在の時間の Blob は書き込み中です。"],
+      "verified": true,
+      "verified_note": "構造は確認済み。リソース ID の部分の大文字・小文字は未確認です。",
+      "examples": [
+        {"inputs": {"table": "SecurityEvent", "ws": "law-example"}, "container": "am-securityevent",
+         "blob": "WorkspaceResourceId=/subscriptions/00000000-0000-0000-0000-000000000000/resourcegroups/rg-example/providers/microsoft.operationalinsights/workspaces/law-example/y=2026/m=11/d=20/h=09/m=05/PT05M_1.json"}
+      ]
+    },
+    {
+      "id": "entra-logs",
+      "group": "Microsoft Entra ID",
+      "name": "サインインログ・監査ログ",
+      "description": "Microsoft Entra ID の診断設定でストレージアカウントに送ったログ。",
+      "container_regex": "^insights-logs-(?:auditlogs|signinlogs|noninteractiveusersigninlogs|serviceprincipalsigninlogs|managedidentitysigninlogs|provisioninglogs|adfssigninlogs|riskyusers|userriskevents|microsoftgraphactivitylogs)$",
+      "container_template": "insights-logs-{category}",
+      "path_template": "tenantId={tenant}/y={{dt=YYYY}}/m={{dt=MM}}/d={{dt=DD}}/h={{dt=hh}}/m=00/PT1H\\.json",
+      "inputs": [
+        {"name": "category", "label": "ログのカテゴリ", "check": "^[A-Za-z]+$", "lower": true, "required": true,
+         "suggest": ["AuditLogs", "SignInLogs", "NonInteractiveUserSignInLogs", "ServicePrincipalSignInLogs", "ManagedIdentitySignInLogs", "ProvisioningLogs", "ADFSSignInLogs", "RiskyUsers", "UserRiskEvents", "MicrosoftGraphActivityLogs"]},
+        {"name": "tenant", "label": "テナント ID", "check": "^[0-9A-Fa-f-]{36}$"}
+      ],
+      "path_timezone": "utc",
+      "notes": ["パスの形は未確認です。見つからない場合は、パスパターンを直してください。"],
+      "verified": false,
+      "examples": [
+        {"inputs": {"category": "SignInLogs"}, "container": "insights-logs-signinlogs",
+         "blob": "tenantId=00000000-0000-0000-0000-000000000000/y=2026/m=11/d=20/h=09/m=00/PT1H.json"}
+      ]
+    },
+    {
+      "id": "vnet-flow-logs",
+      "group": "ネットワーク",
+      "name": "仮想ネットワークのフローログ",
+      "description": "Network Watcher の仮想ネットワークのフローログ。",
+      "container_regex": "^insights-logs-flowlogflowevent$",
+      "container_template": "insights-logs-flowlogflowevent",
+      "path_template": "flowLogResourceID=/{sub}_NETWORKWATCHERRG/NETWORKWATCHER_{region}_{flowlog}/y={{dt=YYYY}}/m={{dt=MM}}/d={{dt=DD}}/h={{dt=hh}}/m=00/macAddress={{mac}}/PT1H\\.json",
+      "inputs": [
+        {"name": "sub", "label": "サブスクリプション ID", "check": "^[0-9A-Fa-f-]{36}$", "upper": true},
+        {"name": "region", "label": "リージョン", "check": "^[A-Za-z0-9]+$", "upper": true},
+        {"name": "flowlog", "label": "フローログの名前", "check": "^[-\\w.]{1,80}$"}
+      ],
+      "path_timezone": "utc",
+      "notes": ["パスの形は未確認です（ドキュメントによって flowLogResourceID= の後の形が異なります）。"],
+      "verified": false,
+      "examples": [
+        {"inputs": {"region": "japaneast"}, "container": "insights-logs-flowlogflowevent",
+         "blob": "flowLogResourceID=/00000000-0000-0000-0000-000000000000_NETWORKWATCHERRG/NETWORKWATCHER_JAPANEAST_vnet-example-flowlog/y=2026/m=11/d=20/h=09/m=00/macAddress=000D3A000000/PT1H.json"}
+      ]
+    },
+    {
+      "id": "nsg-flow-logs",
+      "group": "ネットワーク",
+      "name": "NSG フローログ",
+      "description": "Network Watcher の NSG フローログ（廃止が予定されています）。",
+      "container_regex": "^insights-logs-networksecuritygroupflowevent$",
+      "container_template": "insights-logs-networksecuritygroupflowevent",
+      "path_template": "resourceId=/SUBSCRIPTIONS/{sub}/RESOURCEGROUPS/{rg}/PROVIDERS/MICROSOFT\\.NETWORK/NETWORKSECURITYGROUPS/{nsg}/y={{dt=YYYY}}/m={{dt=MM}}/d={{dt=DD}}/h={{dt=hh}}/m=00/macAddress={{mac}}/PT1H\\.json",
+      "inputs": [
+        {"name": "sub", "label": "サブスクリプション ID", "check": "^[0-9A-Fa-f-]{36}$", "upper": true},
+        {"name": "rg", "label": "リソースグループ", "check": "^[-\\w._()]{1,90}$", "upper": true},
+        {"name": "nsg", "label": "NSG の名前", "check": "^[-\\w.]{1,80}$", "upper": true}
+      ],
+      "path_timezone": "utc",
+      "notes": ["resourceId の部分は大文字です。入力した値は大文字にします。"],
+      "verified": false,
+      "examples": [
+        {"inputs": {"nsg": "nsg-example"}, "container": "insights-logs-networksecuritygroupflowevent",
+         "blob": "resourceId=/SUBSCRIPTIONS/00000000-0000-0000-0000-000000000000/RESOURCEGROUPS/RG-EXAMPLE/PROVIDERS/MICROSOFT.NETWORK/NETWORKSECURITYGROUPS/NSG-EXAMPLE/y=2026/m=11/d=20/h=09/m=00/macAddress=000D3A000000/PT1H.json"}
+      ]
+    },
+    {
+      "id": "storage-analytics",
+      "group": "Storage",
+      "name": "Storage Analytics（$logs）",
+      "description": "クラシックの Storage Analytics のログ。",
+      "container_regex": "^\\$logs$",
+      "container_template": "$logs",
+      "path_template": "{service}/{{dt=YYYY}}/{{dt=MM}}/{{dt=DD}}/{{dt=hh}}00/\\d{6}\\.log",
+      "inputs": [
+        {"name": "service", "label": "サービス", "kind": "select", "default": "", "var": "service", "options": [
+          {"id": "", "label": "すべて", "value": ""},
+          {"id": "blob", "label": "blob", "value": "blob"},
+          {"id": "table", "label": "table", "value": "table"},
+          {"id": "queue", "label": "queue", "value": "queue"}
+        ]}
+      ],
+      "path_timezone": "utc",
+      "notes": ["$logs はコンテナーの一覧に現れません。", "ログの時刻は、その時間に完了した要求の時刻です。書き込まれるまで最大 1 時間程度の遅れがあります。"],
+      "verified": true,
+      "examples": [
+        {"inputs": {}, "container": "$logs", "blob": "blob/2026/11/20/0900/000001.log"},
+        {"inputs": {"service": "queue"}, "container": "$logs", "blob": "queue/2026/11/20/2300/000012.log"}
+      ]
+    },
+    {
+      "id": "change-feed-log",
+      "group": "Storage",
+      "name": "変更フィード（ログ）",
+      "description": "BLOB の変更フィードのログ（.avro）。",
+      "container_regex": "^\\$blobchangefeed$",
+      "container_template": "$blobchangefeed",
+      "path_template": "log/\\d{2}/{{dt=YYYY}}/{{dt=MM}}/{{dt=DD}}/{{dt=hh}}00/\\d{5}\\.avro",
+      "inputs": [],
+      "path_timezone": "utc",
+      "notes": ["log/ の後の番号（シャード）の桁数は未確認です。"],
+      "verified": true,
+      "examples": [
+        {"inputs": {}, "container": "$blobchangefeed", "blob": "log/00/2026/11/20/0900/00000.avro"}
+      ]
+    },
+    {
+      "id": "change-feed-segment",
+      "group": "Storage",
+      "name": "変更フィード（セグメント）",
+      "description": "BLOB の変更フィードのセグメントのファイル（meta.json）。",
+      "container_regex": "^\\$blobchangefeed$",
+      "container_template": "$blobchangefeed",
+      "path_template": "idx/segments/{{dt=YYYY}}/{{dt=MM}}/{{dt=DD}}/{{dt=hh}}00/meta\\.json",
+      "inputs": [],
+      "path_timezone": "utc",
+      "notes": [],
+      "verified": true,
+      "examples": [
+        {"inputs": {}, "container": "$blobchangefeed", "blob": "idx/segments/2026/11/20/0900/meta.json"}
+      ]
+    },
+    {
+      "id": "inventory-data",
+      "group": "Storage",
+      "name": "BLOB インベントリ",
+      "description": "BLOB インベントリのデータ（CSV・Parquet）。",
+      "container_regex": null,
+      "container_template": "{container}",
+      "path_template": "{{dt=YYYY}}/{{dt=MM}}/{{dt=DD}}/{{dt=hh}}-{{dt=mm}}-{{dt=ss}}/{rule}/{rule}_\\d+\\.(?:csv|parquet)",
+      "inputs": [
+        {"name": "container", "label": "コンテナー", "check": "^[$a-z0-9][a-z0-9-]{1,62}$", "container_only": true},
+        {"name": "rule", "label": "規則の名前", "check": "^[-\\w]{1,256}$"}
+      ],
+      "path_timezone": "utc",
+      "notes": ["ファイル名の番号の形は未確認です。"],
+      "verified": true,
+      "examples": [
+        {"inputs": {"container": "inventory"}, "container": "inventory", "blob": "2026/11/20/01-23-45/daily-rule/daily-rule_1.csv"},
+        {"inputs": {"rule": "weekly"}, "container": "", "blob": "2026/11/20/01-23-45/weekly/weekly_12.parquet"}
+      ]
+    },
+    {
+      "id": "inventory-manifest",
+      "group": "Storage",
+      "name": "BLOB インベントリ（マニフェスト）",
+      "description": "BLOB インベントリのマニフェスト。",
+      "container_regex": null,
+      "container_template": "{container}",
+      "path_template": "{{dt=YYYY}}/{{dt=MM}}/{{dt=DD}}/{{dt=hh}}-{{dt=mm}}-{{dt=ss}}/{rule}/{rule}-manifest\\.(?:json|checksum)",
+      "inputs": [
+        {"name": "container", "label": "コンテナー", "check": "^[$a-z0-9][a-z0-9-]{1,62}$", "container_only": true},
+        {"name": "rule", "label": "規則の名前", "check": "^[-\\w]{1,256}$"}
+      ],
+      "path_timezone": "utc",
+      "notes": [],
+      "verified": true,
+      "examples": [
+        {"inputs": {}, "container": "", "blob": "2026/11/20/01-23-45/daily-rule/daily-rule-manifest.json"}
+      ]
+    },
+    {
+      "id": "eventhubs-capture",
+      "group": "そのほか",
+      "name": "Event Hubs のキャプチャ",
+      "description": "Event Hubs のキャプチャ（既定の名前の形式）。",
+      "container_regex": null,
+      "container_template": "{container}",
+      "path_template": "{namespace}/{eventhub}/{{partition}}/{{dt=YYYY}}/{{dt=MM}}/{{dt=DD}}/{{dt=hh}}/{{dt=mm}}/{{dt=ss}}\\.avro",
+      "inputs": [
+        {"name": "container", "label": "コンテナー", "check": "^[$a-z0-9][a-z0-9-]{1,62}$", "container_only": true},
+        {"name": "namespace", "label": "名前空間", "check": "^[-\\w]{1,50}$"},
+        {"name": "eventhub", "label": "イベントハブ", "check": "^[-\\w.]{1,256}$"}
+      ],
+      "path_timezone": "utc",
+      "notes": ["キャプチャの名前の形式を変えている場合は、作成の後でパスパターンを直してください。"],
+      "verified": true,
+      "verified_note": "要素は確認済み。名前空間・イベントハブの名前の大文字・小文字は未確認です。",
+      "examples": [
+        {"inputs": {"namespace": "ehns-example"}, "container": "", "blob": "ehns-example/eh-example/0/2026/11/20/09/15/00.avro"}
+      ]
+    },
+    {
+      "id": "sql-audit",
+      "group": "そのほか",
+      "name": "Azure SQL Database の監査ログ",
+      "description": "Azure SQL Database の監査ログ（.xel）。",
+      "container_regex": "^sqldbauditlogs$",
+      "container_template": "sqldbauditlogs",
+      "path_template": "{server}/{database}/{{audit}}/{{dt=YYYY-MM-DD}}/[^/]+\\.xel",
+      "inputs": [
+        {"name": "server", "label": "サーバー名", "check": "^[-a-z0-9]{1,63}$"},
+        {"name": "database", "label": "データベース名", "check": "^[^/]{1,128}$"}
+      ],
+      "path_timezone": "utc",
+      "notes": ["サーバーの監査は、新しい形式ではデータベースの部分が master になります。"],
+      "verified": true,
+      "verified_note": "構造は確認済み。ファイル名の形は未確認です。",
+      "examples": [
+        {"inputs": {"server": "sql-example"}, "container": "sqldbauditlogs", "blob": "sql-example/db-example/SqlDbAuditing_Audit/2026-11-20/09_15_00_123_0.xel"}
+      ]
+    }
+  ]
+}
