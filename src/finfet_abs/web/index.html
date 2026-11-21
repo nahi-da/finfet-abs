@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>FinFeT</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/css/tokens.css">
+  <link rel="stylesheet" href="/css/base.css">
+  <link rel="stylesheet" href="/css/layout.css">
+  <link rel="stylesheet" href="/css/parts.css">
+  <link rel="stylesheet" href="/css/pages.css">
+  <script type="module" src="/js/main.js"></script>
+</head>
+<body>
+  <header class="topbar">
+    <button type="button" class="icon-btn" id="nav-toggle" aria-label="ナビゲーションを開閉" title="ナビゲーションを開閉"><span class="icon icon-nav i20"></span></button>
+    <a class="app-name" href="/jobs">FinFeT</a>
+    <span class="demo-label" id="demo-label" hidden>デモモード</span>
+    <span class="spacer"></span>
+    <span class="conn-lost" id="conn-lost" hidden>本ツールに接続できません（終了した可能性があります）</span>
+    <button type="button" class="link-btn" id="notices-btn">お知らせ</button>
+    <button type="button" class="link-btn" id="account-btn">アカウント</button>
+  </header>
+  <div class="shell">
+    <nav class="nav" id="nav" aria-label="ナビゲーション">
+      <a href="/search" data-nav="search">検索</a>
+      <a href="/jobs" data-nav="jobs">ジョブ<span class="count" id="nav-jobs-count"></span></a>
+      <a href="/history" data-nav="history">検索履歴</a>
+      <a href="/connections" data-nav="connections">接続</a>
+      <a href="/settings" data-nav="settings">設定</a>
+      <div class="nav-bottom">
+        <a href="/docs/index.html" target="_blank" rel="noopener">ヘルプ<span class="icon icon-external" aria-hidden="true"></span></a>
+      </div>
+    </nav>
+    <main class="page" id="page"></main>
+  </div>
+  <div class="toasts" id="toasts" aria-live="polite"></div>
+</body>
+</html>

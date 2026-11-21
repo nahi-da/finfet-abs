@@ -23,11 +23,15 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     """本ツールを起動します。戻り値は終了コードです。"""
     args = build_parser().parse_args(argv)
+    from . import console
     if args.version:
-        print(f"{APP_NAME} {__version__}")
+        console.info(f"{APP_NAME} {__version__}")
         return 0
-    print(f"{APP_NAME} {__version__}: この版では、まだ起動できません。", file=sys.stderr)
-    return 1
+    if args.self_check:
+        from .app import self_check
+        return self_check()
+    from .app import run
+    return run(args)
 
 
 if __name__ == "__main__":
