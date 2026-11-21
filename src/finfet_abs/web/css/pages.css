@@ -18,3 +18,11 @@
 
 /* ---- 準備中のページ */
 .placeholder { color: var(--text-muted); }
+
+/* ---- 接続先の追加のダイアログ（4.4.2.2） */
+.td-split { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: var(--sp-4); margin-top: var(--sp-3); }
+.td-right { border-left: 1px solid var(--line); padding-left: var(--sp-4); min-width: 0; }
+.td-accounts { max-height: 320px; margin-top: var(--sp-2); }
+.td-accounts .vrow[aria-disabled="true"] { cursor: default; }
+.folder-check { display: flex; padding: var(--sp-1) var(--sp-3); }
+.folder-check:hover { background: var(--bg-hover); }

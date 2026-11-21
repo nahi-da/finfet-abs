@@ -105,6 +105,8 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--accent); width
 .check { display: inline-flex; align-items: center; gap: var(--sp-2); cursor: pointer; white-space: nowrap; }
 .radios { display: flex; flex-wrap: wrap; gap: var(--sp-2) var(--sp-4); align-items: center; min-height: 32px; }
 .inline { display: inline-flex; align-items: center; gap: var(--sp-2); flex-wrap: wrap; }
+.line { display: flex; align-items: center; gap: var(--sp-2); flex-wrap: wrap; min-height: 32px; }
+.line + .line { margin-top: var(--sp-1); }
 
 .field-error { color: var(--danger); margin-top: var(--sp-1); }
 .field-note { color: var(--text-muted); }

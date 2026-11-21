@@ -96,6 +96,16 @@ class MemoryBackend:
             # $logs はコンテナーの一覧に現れません（K16）
             return sorted(c for c in conts if c.startswith(prefix) and c != "$logs")[:limit]
 
+    def test_target(self, target) -> str:
+        """接続テスト（3.1.10）。"""
+        if isinstance(target, ContainerRef):
+            self.list_blobs_page(target, "", None, 1)
+            return "一覧を取得できました。"
+        self.account_info(target)
+        if (target.account, target.endpoint_suffix) not in self.data:
+            raise BackendError("ResourceNotFound", "ストレージアカウントが見つかりません。", status=404)
+        return "ストレージアカウントに接続できました。"
+
     def account_info(self, account: AccountRef) -> dict:
         return {"is_hns_enabled": (account.account, account.endpoint_suffix) in self.hns, "sku_name": "Standard_LRS",
                 "account_kind": "StorageV2"}

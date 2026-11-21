@@ -4,7 +4,7 @@
 /dist/
 /build/
 src/finfet_abs/data/prices.json
-.testenv.json
+.testenv*.json
 
 # Python
 __pycache__/
