@@ -204,5 +204,31 @@ class StartupCheckTest(JobTestBase):
         self.assertEqual(self.status(jid), "waiting_rehydrate")
 
 
+class SleepTest(JobTestBase):
+    """3.4.4 の L8: ダウンロード中・（設定で）リハイドレート待ちの間はスリープしない。"""
+
+    def test_prevent_sleep(self) -> None:
+        calls: list[bool] = []
+        self.engine.set_sleep_state = calls.append
+        self.add("logs", [blob("p/arc.log", tier="Archive")])
+        self.settings.update({"load.prevent_sleep_downloading": True, "load.prevent_sleep_waiting": False})
+        self.assertFalse(self.engine.wants_no_sleep())
+        jid = self.create(self.make_search(), method="rehydrate_only")
+        self.engine.schedule()
+        self.assertTrue(self.engine.wants_no_sleep())  # 実行中
+        self.engine.update_sleep()
+        self.run_until(lambda: self.status(jid) == "waiting_rehydrate" and not self.engine.running_ids())
+        self.engine.update_sleep()
+        self.assertEqual(calls, [True, False])
+        # リハイドレート待ちの間もスリープしない設定
+        self.settings.update({"load.prevent_sleep_waiting": True})
+        self.engine.update_sleep()
+        self.engine.update_sleep()
+        self.assertEqual(calls, [True, False, True])
+        self.settings.update({"load.prevent_sleep_downloading": False, "load.prevent_sleep_waiting": False})
+        self.engine.update_sleep()
+        self.assertEqual(calls[-1], False)
+
+
 if __name__ == "__main__":
     unittest.main()

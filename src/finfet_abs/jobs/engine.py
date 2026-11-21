@@ -148,6 +148,9 @@ class JobEngine:
         self._thread: threading.Thread | None = None
         self._last_poll = 0.0
         self._instance = {**windows_env(), "pid": os.getpid()}
+        #: スリープの抑止（3.4.4 の L8）。SetThreadExecutionState はスレッドごとなので、スケジューラーのスレッドで切り替えます
+        self.sleep_prevented = False
+        self.set_sleep_state: Callable[[bool], None] = _set_sleep_state
         service.on_change = self.wake
 
     # ------------------------------------------------------------ 開始・終了
@@ -264,10 +267,30 @@ class JobEngine:
                 elif time.monotonic() - self._last_poll >= (15 if self.time_scale() <= 1 else 5):
                     self._last_poll = time.monotonic()
                     self.poll()
+                self.update_sleep()
             except Exception:  # noqa: BLE001
                 log.exception("ジョブのスケジューラーでエラーが発生しました")
             self._wake.wait(1.0)
             self._wake.clear()
+        if self.sleep_prevented:
+            self.sleep_prevented = False
+            self.set_sleep_state(False)
+
+    def wants_no_sleep(self) -> bool:
+        """ダウンロード中（実行中のジョブがある）、または設定でリハイドレート待ちの間も、スリープしないか。"""
+        if self.settings.get("load.prevent_sleep_downloading") and self.running_ids():
+            return True
+        if self.settings.get("load.prevent_sleep_waiting") and self.db.scalar(
+                "SELECT 1 FROM jobs WHERE status='waiting_rehydrate' LIMIT 1"):
+            return True
+        return False
+
+    def update_sleep(self) -> None:
+        want = self.wants_no_sleep()
+        if want != self.sleep_prevented:
+            self.sleep_prevented = want
+            self.set_sleep_state(want)
+            log.info("スリープの抑止を%sにしました", "オン" if want else "オフ")
 
     # ------------------------------------------------------------ 実行の枠（3.3.4）
 
@@ -574,6 +597,11 @@ class JobEngine:
         self.service.recount(job_id)
         self.service._publish(job_id)
         self.wake()
+
+
+def _set_sleep_state(prevent: bool) -> None:
+    from ..core.winapi import set_thread_execution_state
+    set_thread_execution_state(prevent)
 
 
 def fetch_infos(backend, limits: Limits, rows: list) -> tuple[dict[int, BlobInfo], dict[int, tuple[str, str]]]:
