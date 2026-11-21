@@ -3,7 +3,7 @@
 import * as api from '../api.js';
 import { button, debounce, h, icon, iconButton, linkButton } from '../dom.js';
 import { on } from '../events.js';
-import { dateFull, dateShort, num, size } from '../format.js';
+import { dateFull, dateShort, num, size, statusClass } from '../format.js';
 import { confirmDialog, openDialog } from '../parts/dialog.js';
 import { openMenu } from '../parts/menu.js';
 import { formGrid, row, select, setError, textInput } from '../parts/form.js';
@@ -141,7 +141,7 @@ export async function render(ctx) {
   // 認証が使えないジョブは「サインインが必要です」などを状態の横に出します（3.3.9）
   const statusCell = (r) => {
     const authMsg = r.last_error && AUTH_CODES.has(r.last_error.code) ? r.last_error.message.replace(/。.*$/, '') : '';
-    return h('span', { class: WARN_STATES.has(r.status) || r.last_error ? 'status-warn' : '',
+    return h('span', { class: statusClass(r.status, !!authMsg || WARN_STATES.has(r.status)),
       text: authMsg ? `${r.status_label}・${authMsg}` : r.status_label, title: r.last_error ? r.last_error.message : null });
   };
 
@@ -150,20 +150,20 @@ export async function render(ctx) {
       render: (r) => h('span', { class: 'grip', draggable: 'true', title: 'ドラッグして順番を変える（Alt+↑ / Alt+↓）', 'aria-hidden': 'true',
         ondragstart: (e) => { dragId = r.id; e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', r.id); } }, icon('grip')) },
     { key: 'sel', label: '', width: 36, fixed: true, noResize: true, align: 'center', render: check },
-    { key: 'name', label: '名前', width: 260, flex: true, fixed: true, render: nameCell },
+    { key: 'name', label: '名前', width: 200, flex: true, fixed: true, render: nameCell },
     { key: 'status', label: '状態', width: 150, render: statusCell },
-    { key: 'progress', label: '進捗', width: 240, render: (r) => progressText(r) },
-    { key: 'targets', label: '接続先', width: 180, render: (r) => r.targets_summary },
+    { key: 'progress', label: '進捗', width: 220, render: (r) => progressText(r) },
+    { key: 'targets', label: '接続先', width: 160, render: (r) => r.targets_summary },
     { key: 'created', label: '追加', width: 110, render: (r) => dateShort(r.created_at), title: (r) => dateFull(r.created_at) },
     { key: 'menu', label: '', width: 40, fixed: true, noResize: true, align: 'center', render: menuCell },
   ];
   const endedCols = [
     { key: 'sel', label: '', width: 36, fixed: true, noResize: true, align: 'center', render: check },
-    { key: 'name', label: '名前', width: 260, flex: true, fixed: true, render: nameCell },
-    { key: 'result', label: '結果', width: 100, render: (r) => h('span', { class: r.status === 'completed' ? '' : 'status-warn', text: RESULT_LABELS[r.status] }) },
+    { key: 'name', label: '名前', width: 200, flex: true, fixed: true, render: nameCell },
+    { key: 'result', label: '結果', width: 100, render: (r) => h('span', { class: statusClass(r.status), text: RESULT_LABELS[r.status] }) },
     { key: 'count', label: '件数', width: 140, align: 'right', render: (r) => { const by = r.counts.by_status || {}; return `${num((by.completed || [0])[0])} / ${num(r.counts.total || 0)}`; } },
     { key: 'size', label: 'サイズ', width: 100, align: 'right', render: (r) => size(r.counts.bytes || 0) },
-    { key: 'targets', label: '接続先', width: 180, render: (r) => r.targets_summary },
+    { key: 'targets', label: '接続先', width: 160, render: (r) => r.targets_summary },
     { key: 'ended', label: '終了日時', width: 120, render: (r) => dateShort(r.ended_at), title: (r) => dateFull(r.ended_at) },
     { key: 'menu', label: '', width: 40, fixed: true, noResize: true, align: 'center', render: menuCell },
   ];

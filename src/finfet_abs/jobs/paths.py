@@ -16,7 +16,7 @@ BUILTINS = ("account", "container", "path", "dir", "name", "stem", "ext")
 MAX_SUGGEST_ELEMENTS = 3
 LONG_PATH = 240
 
-_BAD_CHARS = re.compile(r'[<>:"|?*\\\x00-\x1f]')
+_BAD_CHARS = re.compile(r'[<>:"/|?*\\\x00-\x1f]')
 _RESERVED = re.compile(r"^(?:CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])(?:\..*)?$", re.IGNORECASE)
 _PLACE = re.compile(r"\{\{(.*?)\}\}")
 UNIT_SYMBOL = {0: "YYYY", 1: "MM", 2: "DD", 3: "hh", 4: "mm", 5: "ss"}

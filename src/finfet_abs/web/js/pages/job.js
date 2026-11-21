@@ -3,7 +3,7 @@
 import * as api from '../api.js';
 import { button, clear, copyText, debounce, h, iconButton, linkButton } from '../dom.js';
 import { on } from '../events.js';
-import { dateFull, dateShort, mbps, num, size, speed, timeShort } from '../format.js';
+import { dateFull, dateShort, mbps, num, size, speed, statusClass, timeShort } from '../format.js';
 import { confirmDialog, infoDialog, openDialog } from '../parts/dialog.js';
 import { pickFolder } from '../parts/folder.js';
 import { checkbox, checkInput, formGrid, radios, radioValue, row, select, setError, textInput } from '../parts/form.js';
@@ -76,7 +76,7 @@ export async function render(ctx) {
       : code === 'NO_CREDENTIAL' ? h('a', { href: '/connections', text: '接続のページを開く' }) : null;
     const warn = job.last_error ? h('div', { class: 'line status-warn' }, h('span', { text: job.last_error.message }), fix) : null;
     head.append(...[h('div', { class: 'page-head' }, h('h1', { class: 'ellipsis', text: job.name, title: job.name }),
-      h('span', { class: ENDED.has(st) || st === 'running' ? '' : 'status-warn', text: job.status_label }),
+      h('span', { class: statusClass(st, !!job.last_error && !ENDED.has(st)), text: job.status_label }),
       h('div', { class: 'actions' }, ...btns, menu)), warn,
     job.source_job ? h('div', { class: 'muted' }, h('a', { href: `/jobs/${job.source_job.id}`, text: `「${job.source_job.name}」（${dateShort(job.source_job.created_at)}）` }), 'から作成') : null].filter(Boolean));
   }
@@ -161,7 +161,7 @@ export async function render(ctx) {
       columns: [
         { key: 'sel', label: '', width: 36, fixed: true, noResize: true, align: 'center', render: (r) => h('input', { type: 'checkbox', checked: selected.has(r.id), 'aria-label': '選択', onchange: (e) => { if (e.target.checked) selected.add(r.id); else selected.delete(r.id); } }) },
         { key: 'name', label: 'Blob 名', width: 280, flex: true, fixed: true, sortable: true, mono: true, render: (r) => h('span', { class: 'ellipsis', text: r.blob_name }), title: (r) => `${r.storage_account}/${r.container}/${r.blob_name}` },
-        { key: 'status', label: '状態', width: 140, sortable: true, render: (r) => h('span', { class: r.status === 'error' ? 'status-danger' : '', text: r.status_label, title: r.status_reason || null }) },
+        { key: 'status', label: '状態', width: 140, sortable: true, render: (r) => h('span', { class: statusClass(r.status), text: r.status_label, title: r.status_reason || null }) },
         { key: 'tier', label: '層', width: 90, sortable: true, render: (r) => r.tier || '—' },
         { key: 'size', label: 'サイズ', width: 90, align: 'right', sortable: true, render: (r) => size(r.size || 0) },
         { key: 'progress', label: '進捗', width: 100, align: 'right', render: (r) => (r.status === 'downloading' && r.size ? `${Math.floor(((r.progress_bytes ?? r.bytes_downloaded) / r.size) * 100)}%` : '') },
