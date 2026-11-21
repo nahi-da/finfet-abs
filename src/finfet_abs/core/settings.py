@@ -120,6 +120,11 @@ SCHEMA: list[Field] = [
     _i("history.max_entries", 200, 10, 2000),
     _c("log.level", "INFO", "DEBUG", "INFO", "WARNING", "ERROR"),
     _i("log.max_files", 30, 1, 365),
+    # デモモード（8.3.3。デモモードのときだけ画面に出します）
+    _i("demo.blob_count", 30000, 1000, 300000),
+    _i("demo.time_scale", 60, 1, 3600),
+    _i("demo.download_mbps", 50, 1, 10000),
+    _i("demo.error_percent", 0, 0, 50),
     # 画面には出さない項目
     _i("server.port", 0, 0, 65535),
     _b("dev.allow_development_storage", False),
