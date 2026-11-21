@@ -62,6 +62,25 @@ class DbTest(TempDirMixin):
         finally:
             d.close()
 
+    def test_reader_connections_reused(self) -> None:
+        """短い間だけ動くスレッドが多数読み取っても、接続が増え続けないこと（メモリマップの増加を防ぐ。N4）。"""
+        d = Database(self.tmp / "r.db")
+        d.start()
+        try:
+            def work():
+                for _ in range(5):
+                    d.scalar("SELECT 1")
+            for _ in range(50):
+                ts = [threading.Thread(target=work) for _ in range(4)]
+                for t in ts:
+                    t.start()
+                for t in ts:
+                    t.join()
+            # 書き込み用の 1 つと、置き場の読み取り用（同時に使った数まで）だけ
+            self.assertLessEqual(len(d._all_conns), 1 + dbmod.MAX_IDLE_READERS)
+        finally:
+            d.close()
+
     def test_batched_writes(self) -> None:
         d = Database(self.tmp / "d.db")
         d.start()

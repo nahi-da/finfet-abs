@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import logging
 import queue
 import sqlite3
@@ -20,6 +21,8 @@ log = logging.getLogger(__name__)
 BATCH_LIMIT = 500
 #: メモリマップで読む大きさの上限（ローカルのディスクのとき）
 MMAP_SIZE = 1 << 30
+#: 置き場に残す読み取り用の接続の数（同時に使う数がこれより多い間は、一時的に増えます）
+MAX_IDLE_READERS = 8
 
 
 SCHEMA_V1 = """
@@ -195,7 +198,9 @@ class Database:
         self.network = network
         self.migrations = migrations or MIGRATIONS
         self._queue: queue.Queue = queue.Queue()
-        self._local = threading.local()
+        #: 読み取り用の接続の置き場（使い回します）。スレッドごとに接続を作ると、短い間だけ動くスレッド（ThreadPoolExecutor）の
+        #: たびに接続とメモリマップが増え続けるため、使い終わった接続をここに戻します
+        self._idle: queue.LifoQueue = queue.LifoQueue()
         self._writer: threading.Thread | None = None
         self._stop = threading.Event()
         self._all_conns: list[sqlite3.Connection] = []
@@ -219,12 +224,23 @@ class Database:
             self._all_conns.append(conn)
         return conn
 
-    def _reader(self) -> sqlite3.Connection:
-        conn = getattr(self._local, "conn", None)
-        if conn is None:
+    @contextlib.contextmanager
+    def _reader(self):
+        """読み取り用の接続を借ります。置き場になければ作り、使い終わったら置き場に戻します（多すぎる分は閉じます）。"""
+        try:
+            conn = self._idle.get_nowait()
+        except queue.Empty:
             conn = self._connect()
-            self._local.conn = conn
-        return conn
+        try:
+            yield conn
+        finally:
+            if self._idle.qsize() < MAX_IDLE_READERS:
+                self._idle.put(conn)
+            else:
+                with self._conns_lock:
+                    if conn in self._all_conns:
+                        self._all_conns.remove(conn)
+                conn.close()
 
     # ------------------------------------------------------------ 起動・移行
 
@@ -239,7 +255,9 @@ class Database:
         self._writer.start()
 
     def schema_version(self, conn: sqlite3.Connection | None = None) -> int:
-        conn = conn or self._reader()
+        if conn is None:
+            with self._reader() as c:
+                return self.schema_version(c)
         try:
             row = conn.execute("SELECT value FROM meta WHERE key='schema_version'").fetchone()
         except sqlite3.OperationalError:
@@ -347,10 +365,12 @@ class Database:
     # ------------------------------------------------------------ 読み取り
 
     def query(self, sql: str, params: Iterable = ()) -> list[sqlite3.Row]:
-        return self._reader().execute(sql, tuple(params)).fetchall()
+        with self._reader() as c:
+            return c.execute(sql, tuple(params)).fetchall()
 
     def query_one(self, sql: str, params: Iterable = ()) -> sqlite3.Row | None:
-        return self._reader().execute(sql, tuple(params)).fetchone()
+        with self._reader() as c:
+            return c.execute(sql, tuple(params)).fetchone()
 
     def scalar(self, sql: str, params: Iterable = ()) -> Any:
         row = self.query_one(sql, params)
@@ -375,4 +395,4 @@ class Database:
                 except sqlite3.Error:
                     pass
             self._all_conns.clear()
-        self._local = threading.local()
+        self._idle = queue.LifoQueue()
