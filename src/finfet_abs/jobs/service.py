@@ -179,6 +179,12 @@ class JobService:
                 item.update(auth_kind="sas", sas_token=r["sas_token"], sas=r.get("sas"))
             else:
                 a = auth.get(f"{r['storage_account']}|{r['endpoint_suffix']}") or auth.get(r["storage_account"]) or {}
+                if isinstance(a, str):
+                    # 画面の選択の値（"entra_user" など、または "cred:<保存した認証情報の ID>"）
+                    a = {"credential_id": a[5:]} if a.startswith("cred:") else {"auth_kind": a}
+                if a.get("credential_id") and not a.get("auth_kind"):
+                    kind = self.db.scalar("SELECT auth_kind FROM credentials WHERE id=?", (a["credential_id"],))
+                    a = {**a, "auth_kind": kind}
                 if not a.get("auth_kind"):
                     raise AppError("AUTH_REQUIRED", f"ストレージアカウント「{r['storage_account']}」の認証方式を選んでください。")
                 item.update(auth_kind=a["auth_kind"], credential_id=a.get("credential_id"), tenant_id=a.get("tenant"))
@@ -239,6 +245,8 @@ class JobService:
                 "archive_count": tiers.get("Archive", {}).get("count", 0), "early_delete_count": early,
                 "free_bytes": free_bytes(expand_dir(self.settings.get("fetch.directory"))),
                 "default_name": self.default_name(items, ctx), "sas_warnings": sas,
+                "recent_templates": [r[0] for r in self.db.query(
+                    "SELECT value FROM recent_values WHERE kind='path_template' ORDER BY last_used_at DESC LIMIT 20")],
                 "variables": sorted(paths.variables_of(ctx.get("condition")).keys()), "url_mode": ctx["source"] == "urls"
                 or (ctx["source"] == "rerun" and ctx.get("condition") is None)}
 
