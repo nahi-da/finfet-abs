@@ -9,6 +9,7 @@
 .settings-body section { padding: var(--sp-4) 0 var(--sp-6); border-top: 1px solid var(--line); scroll-margin-top: calc(var(--topbar-h) + var(--sp-2)); }
 .settings-body section:first-child { border-top: 0; padding-top: 0; }
 .settings-body .form { --label-w: 16em; }
+.job-options .form { --label-w: 14em; }
 .settings-body .sub-row { display: inline-flex; gap: var(--sp-2); align-items: center; flex-wrap: wrap; }
 
 @media (max-width: 1100px) {

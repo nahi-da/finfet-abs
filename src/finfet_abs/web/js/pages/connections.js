@@ -8,7 +8,7 @@ import { confirmDialog, infoDialog } from '../parts/dialog.js';
 import { openMenu } from '../parts/menu.js';
 import { startSignIn } from '../parts/signin.js';
 import { VirtualTable } from '../parts/table.js';
-import { toast } from '../parts/toast.js';
+import { toast, toastError } from '../parts/toast.js';
 import { runTask } from '../task.js';
 
 /** サインアウトします（アカウントのメニューからも使います）。 */
@@ -93,7 +93,7 @@ export async function render(ctx) {
       danger: true,
     });
     if (!ok) return;
-    try { await removeConfirm(ids, !ids); } catch (e) { toast(e.message, { error: true }); }
+    try { await removeConfirm(ids, !ids); } catch (e) { toastError(e); }
   }
 
   const test = async (row) => {
@@ -146,7 +146,7 @@ export async function render(ctx) {
     ],
     fetch: async (offset, limit) => ({ total: items.length, items: items.slice(offset, offset + limit) }),
     onRowClick: (r) => { if (!r.usable) showReason(r); },
-    empty: '保存した認証情報はありません。',
+    empty: h('span', null, '保存した認証情報はありません。', h('a', { href: '/search', text: '検索のページで接続先を追加' })),
   });
 
   async function load() {

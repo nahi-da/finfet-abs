@@ -1,6 +1,6 @@
 // お知らせ（4.3.5）。操作の結果は左下に 5 秒間、後から確認したいものは上部のバーの「お知らせ」に残します。
 
-import { h } from '../dom.js';
+import { copyText, h } from '../dom.js';
 
 const MAX_NOTICES = 50;
 /** @type {{level: string, text: string, url?: string, at: Date, read: boolean}[]} */
@@ -21,8 +21,29 @@ export function toast(text, opt = {}) {
   const el = h('div', { class: `toast${opt.error ? ' error' : ''}`, role: 'status' },
     h('span', { text }),
     opt.href ? h('a', { href: opt.href, text: opt.linkText || '開く' }) : null);
+  if (opt.copy) {
+    el.append(h('button', { type: 'button', class: 'link-btn', text: '詳細をコピー', onclick: async () => {
+      if (await copyText(opt.copy)) toast('詳細をコピーしました');
+    } }));
+  }
   box.appendChild(el);
   setTimeout(() => el.remove(), opt.error ? 8000 : 5000);
+}
+
+/**
+ * 誤りを、文とエラーコードで左下に表示し、[詳細をコピー] で問い合わせ用の詳細をコピーできるようにします（3.7）。
+ * 詳細には、本ツールの版、日時、エラーコード、状態コード、要求 ID を含めます（秘密情報は含めません）。
+ * @param {any} e ApiError など
+ */
+export function toastError(e) {
+  const code = e && e.code && e.code !== 'ERROR' ? e.code : '';
+  const text = (e && e.message) || '要求に失敗しました。';
+  const lines = [`FinFeT ${window.__finfetVersion || ''}`.trim(), `日時: ${new Date().toISOString()}`, `内容: ${text}`];
+  if (code) lines.push(`エラーコード: ${code}`);
+  if (e && e.status) lines.push(`状態コード: ${e.status}`);
+  if (e && e.detail) lines.push(`詳細: ${e.detail}`);
+  if (e && e.data && e.data.request_id) lines.push(`要求 ID: ${e.data.request_id}`);
+  toast(code ? `${text}（${code}）` : text, { error: true, copy: lines.join('\n') });
 }
 
 /**

@@ -83,6 +83,9 @@ class TemplateTest(unittest.TestCase):
         self.assertEqual(paths.sanitize_segment("nul.txt"), "_nul.txt")
         self.assertEqual(paths.sanitize_segment("COM1"), "_COM1")
         self.assertEqual(paths.sanitize_segment("COM10"), "COM10")
+        # 1 つの階層の名前（ジョブのフォルダー名など）に区切りを含めません
+        self.assertEqual(paths.sanitize_segment("20261121_stexample01/logs"), "20261121_stexample01_logs")
+        self.assertEqual(paths.sanitize_segment("a\\b"), "a_b")
         self.assertEqual(paths.sanitize_segment("a\x01b"), "a_b")
         self.assertEqual(paths.sanitize_segment("..."), "_")
         self.assertEqual(paths.sanitize_segment("."), "_")

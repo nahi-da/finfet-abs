@@ -6,7 +6,7 @@ import { dateShort, num } from '../format.js';
 import { select } from '../parts/form.js';
 import { openAddTargetDialog } from '../parts/target-dialog.js';
 import { VirtualTable } from '../parts/table.js';
-import { toast } from '../parts/toast.js';
+import { toast, toastError } from '../parts/toast.js';
 
 let saved = { text: '', auth: {} };
 
@@ -25,13 +25,13 @@ export async function renderUrlsTab(ctx) {
     minHeight: 200,
     columns: [
       { key: 'line', label: '行', width: 56, align: 'right', fixed: true },
-      { key: 'storage_account', label: 'ストレージアカウント', width: 170 },
-      { key: 'container', label: 'コンテナー', width: 150 },
-      { key: 'blob_name', label: 'Blob 名', width: 320, flex: true, mono: true },
+      { key: 'storage_account', label: 'ストレージアカウント', width: 150 },
+      { key: 'container', label: 'コンテナー', width: 130 },
+      { key: 'blob_name', label: 'Blob 名', width: 240, flex: true, mono: true },
       { key: 'sas', label: 'SAS', width: 60, render: (r) => (r.sas ? 'あり' : r.error ? '' : 'なし') },
       { key: 'perm', label: '権限', width: 80, render: (r) => (r.sas ? (r.sas.permission_labels.join('・') || '—') : '') },
       { key: 'exp', label: '期限', width: 110, render: (r) => (r.sas && r.sas.expiry ? dateShort(r.sas.expiry) : '') },
-      { key: 'error', label: '誤り', width: 240, render: (r) => (r.error ? h('span', { class: 'danger', text: r.error }) : r.duplicate ? h('span', { class: 'muted', text: '重複（1件にまとめます）' }) : '') },
+      { key: 'error', label: '誤り', width: 180, render: (r) => (r.error ? h('span', { class: 'danger', text: r.error }) : r.duplicate ? h('span', { class: 'muted', text: '重複（1件にまとめます）' }) : '') },
     ],
     fetch: async (offset, limit) => ({ total: rows.length, items: rows.slice(offset, offset + limit) }),
     empty: 'URL を貼り付けてください。',
@@ -88,8 +88,8 @@ export async function renderUrlsTab(ctx) {
     try {
       const m = await import('../parts/job-dialog.js');
       m.openCreateJobDialog({ source: 'urls', token: parsed.token, auth: saved.auth });
-    } catch {
-      toast('ジョブの作成は、この版ではまだ使えません。', { error: true });
+    } catch (e) {
+      toastError(e);
     }
   }, { primary: true });
   root.append(h('section', { class: 'part' }, ta, info), authSec, h('section', { class: 'part' }, table.el), h('div', { class: 'sticky-bottom' }, h('span.push'), createBtn));

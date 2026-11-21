@@ -6,7 +6,7 @@ import { mbps } from '../format.js';
 import { confirmDialog } from '../parts/dialog.js';
 import { pickFolder } from '../parts/folder.js';
 import { checkbox, focusFirstError, formGrid, row, select, setError, showRow, textInput } from '../parts/form.js';
-import { toast } from '../parts/toast.js';
+import { toast, toastError } from '../parts/toast.js';
 
 const TZ = [['local', 'ローカル時刻'], ['utc', 'UTC']];
 
@@ -245,7 +245,7 @@ export async function render(ctx) {
       }
       case 'datadir': {
         const parts = [h('div', null, h('span', { class: 'mono', text: res.data_dir }), h('span', { class: 'muted', text: `　${res.mode_label}` })),
-          linkButton('フォルダーを開く', () => api.post('/api/v1/fs/open-folder', { path: res.data_dir }).catch((e) => toast(e.message, { error: true })))];
+          linkButton('フォルダーを開く', () => api.post('/api/v1/fs/open-folder', { path: res.data_dir }).catch((e) => toastError(e)))];
         if (session.acl_warning) parts.push(h('div', { class: 'warn', text: 'データのフォルダーに、ほかの人から読めないようにする設定（ACL）をできませんでした。ほかの人から読めるおそれがあります。' }));
         return row(label, parts);
       }
@@ -307,7 +307,7 @@ export async function render(ctx) {
         }
         focusFirstError(body);
       } else {
-        toast(e.message, { error: true });
+        toastError(e);
       }
     }
   }

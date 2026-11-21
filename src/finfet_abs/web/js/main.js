@@ -5,7 +5,7 @@ import { button, clear, h } from './dom.js';
 import * as events from './events.js';
 import { confirmDialog, infoDialog } from './parts/dialog.js';
 import { openMenu } from './parts/menu.js';
-import { addNotice, lastSeq, markAllRead, notices, setNoticeHandler, toast, unreadCount } from './parts/toast.js';
+import { addNotice, lastSeq, markAllRead, notices, setNoticeHandler, toast, toastError, unreadCount } from './parts/toast.js';
 import { dateShort } from './format.js';
 
 /** URL → ページ（4.2.2）。[正規表現, ページのモジュール, ナビゲーションの項目, ページ名] */
@@ -253,7 +253,7 @@ async function accountMenu(anchor) {
   }
   if (items.length) items.push('sep');
   items.push({ text: 'このツールについて', onClick: aboutDialog });
-  items.push({ text: '終了', onClick: () => shutdownApp().catch((e) => toast(e.message, { error: true })) });
+  items.push({ text: '終了', onClick: () => shutdownApp().catch((e) => toastError(e)) });
   openMenu(anchor, items);
 }
 
@@ -277,6 +277,7 @@ async function refreshAuth() {
 async function boot() {
   try {
     app.session = await api.initSession();
+    window.__finfetVersion = app.session.version;
   } catch (e) {
     clear(pageEl());
     pageEl().append(h('h1', { text: 'FinFeT' }), h('p', { text: e.status === 401 ? '本ツールの画面を開くには、finfet-abs.bat をもう一度実行してください。' : e.message }));

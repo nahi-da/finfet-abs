@@ -91,3 +91,16 @@ export function toLocalInput(iso) {
   if (!d) return '';
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
+
+/**
+ * 状態の文字の色のクラス（4.3.6）。attention は、利用者の操作を待つもの（サインインが必要など）。
+ * @param {string} status ジョブ・Blob・検索の状態
+ * @param {boolean} [attention]
+ */
+export function statusClass(status, attention = false) {
+  if (status === 'completed' || status === 'done') return 'status-ok';
+  if (['error', 'completed_with_errors', 'failed'].includes(status)) return 'status-danger';
+  if (attention || status === 'waiting_download') return 'status-warn';
+  if (['running', 'downloading', 'checking', 'searching'].includes(status)) return '';
+  return 'status-muted';
+}

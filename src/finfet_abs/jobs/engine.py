@@ -1086,8 +1086,8 @@ class JobRunner(threading.Thread):
         todo = [(s, min(e, s + chunk)) for gs, ge in missing(done, size) for s, e in [(x, ge) for x in range(gs, ge, chunk)]]
         mode = "r+b" if os.path.exists(paths.long_path(part)) and done else "wb"
         with open(paths.long_path(part), mode) as f:
-            if size and mode == "wb":
-                f.truncate(size)
+            # 先にファイルを最終の大きさにしません（Windows の truncate はゼロを書き込むため、100 GB では数分かかります）。
+            # 範囲の書き込みでファイルは伸び、最後にサイズを確かめます
             flock = threading.Lock()
             state = {"bytes": covered(done), "last_save": time.monotonic()}
             backend = self.engine.backend()

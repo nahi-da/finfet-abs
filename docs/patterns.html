@@ -23,11 +23,49 @@
 <main>
 <h1>パスパターンの書き方</h1>
 <h2>正規表現の基本</h2>
-<p>パスパターンは、Blob 名全体に一致する正規表現です。<code>.</code> は任意の 1 文字、<code>.*</code> は任意の文字列、<code>\.</code> は文字の「.」です。</p>
+<p>パスパターンは、Blob 名の<strong>全体</strong>に一致する正規表現（Python の正規表現）です。前後に <code>^</code>・<code>$</code> を書く必要はありません。大文字と小文字は区別します（検索のページのオプションで、区別しないこともできます）。<code>{{</code> は変数の始まりとして扱うため、文字の「{」は <code>\{</code> と書きます。</p>
+<table>
+<thead><tr><th>書き方</th><th>意味</th><th>例</th></tr></thead>
+<tbody>
+<tr><td><code>.</code></td><td>任意の 1 文字</td><td><code>a.c</code> は abc、a1c に一致</td></tr>
+<tr><td><code>.*</code></td><td>任意の文字列（空も含む）</td><td><code>logs/.*</code> は logs/ の下のすべて</td></tr>
+<tr><td><code>[^/]*</code></td><td>「/」を含まない文字列（1 つの階層）</td><td><code>logs/[^/]*\.json</code> は logs/ の直下の .json だけ</td></tr>
+<tr><td><code>\.</code></td><td>文字の「.」</td><td><code>PT1H\.json</code></td></tr>
+<tr><td><code>(a|b)</code></td><td>a か b</td><td><code>(app|web)/.*</code></td></tr>
+<tr><td><code>[0-9]{2}</code></td><td>数字 2 文字</td><td><code>h=[0-9]{2}</code></td></tr>
+</tbody>
+</table>
+<p class="note">先頭を文字そのもの（正規表現の記号を含まない部分）で始めると、その部分を prefix にして一覧を取得するため、検索が速くなります。<code>.*\.json</code> のように先頭が記号の場合は、コンテナーのすべての Blob を一覧します。</p>
 <h2>変数</h2>
-<p><code>{{名前}}</code> の形で変数を埋め込めます。日時の変数（例: <code>{{dt=YYYY}}/{{dt=MM}}/{{dt=DD}}</code>）は、期間を指定すると、その期間に当てはまる Blob だけを効率よく探します。</p>
+<p><code>{{名前}}</code> の形で、パスパターンに変数を埋め込めます。変数の値は検索のページの変数の欄で指定します。値を複数指定すると、それぞれの値で検索します。</p>
+<ul>
+<li>文字の変数: <code>locks/{{func}}/host</code> の <code>func</code> に「app1」「app2」を指定すると、<code>locks/app1/host</code> と <code>locks/app2/host</code> を探します。</li>
+<li>日時の変数: <code>{{dt=YYYY}}/{{dt=MM}}/{{dt=DD}}/{{dt=hh}}</code> のように、同じ名前の変数に書式を付けて使います。期間（開始と終了）を指定すると、その期間に当てはまる Blob だけを、日時ごとの prefix で取得します。</li>
+<li>書式: <code>YYYY</code>（年 4 桁）、<code>YY</code>（年の下 2 桁）、<code>MM</code>（月）、<code>DD</code>（日）、<code>hh</code>（時。24 時間）、<code>mm</code>（分）、<code>ss</code>（秒）。<code>M</code>・<code>D</code>・<code>h</code>・<code>m</code>・<code>s</code> の 1 文字のものは、ゼロで埋めません。</li>
+<li>同じ名前の変数を 2 回以上書くと、すべての箇所が同じ値のものだけに一致します（例: <code>{{rule}}/{{rule}}_\d+\.csv</code>）。</li>
+<li>時差: Blob 名の日時が UTC で、入力をローカル時刻で行う場合などは、検索のページで入力と Blob 名のタイムゾーンを指定します。</li>
+</ul>
 <h2>既知の形式</h2>
-<p>診断設定のログなど、決まった形で書き出される Blob は、検索のページの [既知の形式] から選べます。</p>
+<p>検索のページの [既知の形式] から選ぶと、コンテナーとパスパターンを組み立てます。リソース ID の部分は、大文字・小文字の違いがあっても見つかるようにしています。</p>
+<table>
+<thead><tr><th>分類</th><th>名前</th><th>コンテナー</th><th>説明</th></tr></thead>
+<tbody>
+<tr><td>Azure Monitor</td><td>リソースログ（診断設定）</td><td><code>insights-logs-{category}</code></td><td>診断設定でストレージアカウントに送ったリソースログ。1時間ごとの PT1H.json です。</td></tr>
+<tr><td>Azure Monitor</td><td>アクティビティログ</td><td><code>insights-activity-logs</code></td><td>診断設定でストレージアカウントに送ったアクティビティログ。</td></tr>
+<tr><td>Azure Monitor</td><td>メトリック（診断設定）</td><td><code>insights-metrics-pt1m</code></td><td>診断設定でストレージアカウントに送ったメトリック。</td></tr>
+<tr><td>Azure Monitor</td><td>Log Analytics のエクスポート</td><td><code>am-{table}</code></td><td>Log Analytics ワークスペースのデータのエクスポート。5 分ごとのフォルダーに PT05M.json が増えます。</td></tr>
+<tr><td>Microsoft Entra ID</td><td>サインインログ・監査ログ</td><td><code>insights-logs-{category}</code></td><td>Microsoft Entra ID の診断設定でストレージアカウントに送ったログ。</td></tr>
+<tr><td>ネットワーク</td><td>仮想ネットワークのフローログ</td><td><code>insights-logs-flowlogflowevent</code></td><td>Network Watcher の仮想ネットワークのフローログ。</td></tr>
+<tr><td>ネットワーク</td><td>NSG フローログ</td><td><code>insights-logs-networksecuritygroupflowevent</code></td><td>Network Watcher の NSG フローログ（廃止が予定されています）。</td></tr>
+<tr><td>Storage</td><td>Storage Analytics（$logs）</td><td><code>$logs</code></td><td>クラシックの Storage Analytics のログ。</td></tr>
+<tr><td>Storage</td><td>変更フィード（ログ）</td><td><code>$blobchangefeed</code></td><td>BLOB の変更フィードのログ（.avro）。</td></tr>
+<tr><td>Storage</td><td>変更フィード（セグメント）</td><td><code>$blobchangefeed</code></td><td>BLOB の変更フィードのセグメントのファイル（meta.json）。</td></tr>
+<tr><td>Storage</td><td>BLOB インベントリ</td><td><code>{container}</code></td><td>BLOB インベントリのデータ（CSV・Parquet）。</td></tr>
+<tr><td>Storage</td><td>BLOB インベントリ（マニフェスト）</td><td><code>{container}</code></td><td>BLOB インベントリのマニフェスト。</td></tr>
+<tr><td>そのほか</td><td>Event Hubs のキャプチャ</td><td><code>{container}</code></td><td>Event Hubs のキャプチャ（既定の名前の形式）。</td></tr>
+<tr><td>そのほか</td><td>Azure SQL Database の監査ログ</td><td><code>sqldbauditlogs</code></td><td>Azure SQL Database の監査ログ（.xel）。</td></tr>
+</tbody>
+</table>
 <footer>FinFeT <span data-fill="version">（開発版）</span></footer>
 </main>
 </div>

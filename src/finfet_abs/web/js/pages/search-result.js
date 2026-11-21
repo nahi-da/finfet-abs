@@ -3,12 +3,12 @@
 import * as api from '../api.js';
 import { button, clear, debounce, h, linkButton } from '../dom.js';
 import { on } from '../events.js';
-import { dateFull, dateShort, duration, num, size } from '../format.js';
+import { dateFull, dateShort, duration, num, size, statusClass } from '../format.js';
 import { confirmDialog } from '../parts/dialog.js';
 import { select, textInput } from '../parts/form.js';
 import { openMenu } from '../parts/menu.js';
 import { VirtualTable } from '../parts/table.js';
-import { toast } from '../parts/toast.js';
+import { toast, toastError } from '../parts/toast.js';
 
 const NOTE_TEXT = { rehydrating: 'リハイドレート中', downloaded: 'ダウンロード済み', writing: '更新中の可能性' };
 const NOTE_FULL = { rehydrating: 'すでにリハイドレート中です', downloaded: '過去のジョブでダウンロード済みです', writing: '更新中の可能性があります' };
@@ -70,11 +70,11 @@ export async function render(ctx) {
     if (running) {
       head.append(h('strong', { text: '検索中' }), h('span', { text: `取得 ${num(listed)} 件・一致 ${num(p.matched_count ?? p.matched)} 件` }), h('span.push'),
         button('中止', async () => {
-          try { await api.post(`/api/v1/searches/${sid}/cancel`, {}); } catch (e) { toast(e.message, { error: true }); }
+          try { await api.post(`/api/v1/searches/${sid}/cancel`, {}); } catch (e) { toastError(e); }
         }));
     } else {
       const label = { completed: '完了', cancelled: '中止', failed: '検索の失敗' }[p.status] || p.status;
-      head.append(h('strong', { class: p.status === 'failed' ? 'danger' : p.status === 'cancelled' ? 'muted' : '', text: label }),
+      head.append(h('strong', { class: statusClass(p.status), text: label }),
         h('span', { text: `一致 ${num(p.matched_count)} 件・要求 ${num(requests)} 回${p.elapsed_ms ? `・${duration(p.elapsed_ms)}` : ''}` }));
       if (targets.length > 1 || hasError) {
         head.append(h('button', { type: 'button', class: 'link-btn', 'aria-expanded': String(expanded || hasError), onclick: () => { expanded = !expanded; drawProgress(p); } }, expanded || hasError ? '接続先ごとの結果を隠す' : '接続先ごとの結果'));
@@ -89,13 +89,13 @@ export async function render(ctx) {
         const st = { waiting: '待機中', listing: '取得中', completed: '完了', error: 'エラー', skipped: 'スキップ', cancelled: '中止' }[t.status] || t.status;
         grid.append(h('div', { class: 'progress-row' },
           h('span', { text: `${t.storage_account} / ${t.container}` }),
-          h('span', { class: t.status === 'error' ? 'danger' : t.status === 'completed' ? '' : 'muted', text: st }),
+          h('span', { class: t.status === 'listing' ? '' : statusClass(t.status), text: st }),
           h('span', { class: 'num', text: `取得 ${num(t.listed)}` }), h('span', { class: 'num', text: `一致 ${num(t.matched)}` }), h('span', { class: 'num', text: `要求 ${num(t.requests)}` })));
         if (t.error && t.error.message) {
           const line = h('div', { class: 'progress-err' }, h('span', { class: t.status === 'error' ? 'danger' : 'muted', text: t.error.message + (t.error.code && /^[A-Za-z]/.test(t.error.code) ? `（${t.error.code}）` : '') }));
           if (t.status === 'error' && !running) {
             line.append(linkButton('再試行', async () => {
-              try { await api.post(`/api/v1/searches/${sid}/targets/${t.no}/retry`, {}); poll(); } catch (e) { toast(e.message, { error: true }); }
+              try { await api.post(`/api/v1/searches/${sid}/targets/${t.no}/retry`, {}); poll(); } catch (e) { toastError(e); }
             }), linkButton('この接続先を除く', async () => {
               await api.post(`/api/v1/searches/${sid}/targets/${t.no}/skip`, {});
               poll();
@@ -244,8 +244,8 @@ export async function render(ctx) {
     try {
       const m = await import('../parts/job-dialog.js');
       m.openCreateJobDialog({ source: 'search', searchId: sid, filter: onlyVisible ? filterBody() : null });
-    } catch {
-      toast('ジョブの作成は、この版ではまだ使えません。', { error: true });
+    } catch (e) {
+      toastError(e);
     }
   }
 

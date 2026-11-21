@@ -4,7 +4,7 @@ import * as api from '../api.js';
 import { button, copyText, h } from '../dom.js';
 import { on } from '../events.js';
 import { openDialog } from './dialog.js';
-import { toast } from './toast.js';
+import { toast, toastError } from './toast.js';
 
 /**
  * サインインを始めます（tenantId を指定すると、そのテナントにサインイン）。
@@ -19,7 +19,7 @@ export function startSignIn(tenantId) {
       res = tenantId ? await api.post(`/api/v1/auth/tenants/${encodeURIComponent(tenantId)}/sign-in`, {})
         : await api.post('/api/v1/auth/user/sign-in', {});
     } catch (e) {
-      toast(e.message, { error: true });
+      toastError(e);
       resolve(false);
       return;
     }

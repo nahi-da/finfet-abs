@@ -4,7 +4,7 @@ import * as api from '../api.js';
 import { button, h } from '../dom.js';
 import { confirmDialog, infoDialog, openDialog } from './dialog.js';
 import { checkbox, radios } from './form.js';
-import { toast } from './toast.js';
+import { toast, toastError } from './toast.js';
 
 const WARN = '認証情報は暗号化されずに、そのままファイルに書き込まれます。このファイルを持っている人は、ストレージアカウントにアクセスできます。ファイルの置き場所と渡す相手に注意し、不要になったら削除してください。';
 
@@ -44,7 +44,7 @@ export async function openExport(target, count) {
       d.close(true);
       toast(`${name} を保存しました`);
     } catch (e) {
-      toast(e.message, { error: true });
+      toastError(e);
     }
   }
   d.setFoot(h('span.push'), button('キャンセル', () => d.close(true)), saveBtn);
@@ -74,7 +74,7 @@ export function openImport(opt = {}) {
       try {
         pv = await api.post('/api/v1/history/import/preview', { content_base64: btoa(bin) });
       } catch (e) {
-        toast(e.message, { error: true });
+        toastError(e);
         return resolve(null);
       }
       resolve(await previewDialog(pv, opt));
@@ -124,7 +124,7 @@ function previewDialog(pv, opt) {
           toast(`検索履歴に追加しました（${res.added} 件）`, { href: '/history', linkText: '検索履歴を開く' });
         }
       } catch (e) {
-        toast(e.message, { error: true });
+        toastError(e);
       }
     };
     const foot = [h('span.push'), button('キャンセル', () => d.close(true)), button('検索履歴に追加', () => commit('history'), { primary: !opt.allowLoad || pv.items.length !== 1 })];
