@@ -29,6 +29,13 @@ class DemoBackend(MemoryBackend):
         self.rnd = rnd or random.Random()
         self._due: dict[tuple, float] = {}
         self._dlock = threading.Lock()
+        #: サインインしているか（Entra ID の方式は、サインインしていなければ NOT_SIGNED_IN。None なら確かめない）
+        self.signed_in = None
+
+    def _check(self, target, op: str) -> None:
+        if self.signed_in is not None and target.account.auth.kind in ("entra_user", "entra_key") and not self.signed_in():
+            raise BackendError("NOT_SIGNED_IN", "サインインしていません。")
+        super()._check(target, op)
 
     # ------------------------------------------------------------ 時間を縮めたリハイドレート
 

@@ -3,13 +3,31 @@
 from __future__ import annotations
 
 import threading
+from collections import deque
 
 from ..core.settings import DEFAULT_CLIENT_ID
 from ..server.http import Request, json_response
 from ..version import APP_NAME, __version__
 
 
+MAX_NOTICES = 50
+
+
 def register(router, app) -> None:
+    # お知らせ（4.3.5）: 起動している間だけ、最近の 50 件を覚えます（再読み込み・別のタブでも同じものを出すため）
+    notices: deque = deque(maxlen=MAX_NOTICES)
+    read = {"seq": 0}
+
+    def on_event(ev: dict) -> None:
+        if ev["type"] == "notify":
+            notices.appendleft({"seq": ev["seq"], "at": ev["at"], **ev["data"]})
+    app.events.subscribe(on_event)
+
+    @router.post("/api/v1/notices/read")
+    def notices_read(req: Request):
+        read["seq"] = max(read["seq"], int((req.json() or {}).get("seq") or app.events.last))
+        return json_response({"read_seq": read["seq"]})
+
     @router.get("/api/v1/session")
     def session(req: Request):
         loc = app.location
@@ -30,6 +48,8 @@ def register(router, app) -> None:
             "network_data_dir": loc.is_network,
             "warnings": warnings,
             "events_last": app.events.last,
+            "notices": list(notices),
+            "notices_read_seq": read["seq"],
             "jobs_attention": app.services["jobs"].attention_count() if "jobs" in (app.services or {}) else 0,
         })
 

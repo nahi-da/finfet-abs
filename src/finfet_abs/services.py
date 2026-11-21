@@ -27,6 +27,7 @@ def setup_services(app) -> None:
         setup_demo(app)
         s["auth"] = FakeAuthService(port, app.events)
         s["arm"] = FakeArm(s["auth"], s["backend"])
+        s["backend"].signed_in = lambda: s["auth"].signed_in
         s["network"] = None
     else:
         from .azure.arm import ArmClient
