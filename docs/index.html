@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>はじめに - FinFeT</title>
+<link rel="stylesheet" href="docs.css">
+</head>
+<body>
+<div class="layout">
+<nav aria-label="ドキュメント">
+<div class="title">FinFeT</div>
+<a href="index.html" aria-current="page">はじめに</a>
+<a href="setup.html">導入と更新</a>
+<a href="usage.html">使い方</a>
+<a href="patterns.html">パスパターンの書き方</a>
+<a href="permissions.html">必要な権限</a>
+<a href="costs.html">料金と注意</a>
+<a href="troubleshooting.html">困ったときは</a>
+<a href="data.html">データの取り扱い</a>
+<a href="licenses.html">ライセンス</a>
+</nav>
+<main>
+<h1>はじめに</h1>
+<p>FinFeT（Finding &amp; Fetching Tool for Azure Blob Storage）は、Azure ストレージアカウントの Blob を検索し、リハイドレートとダウンロードを行う Windows 向けのツールです。</p>
+<p class="note">本ツールは、Azure Blob Storage を利用するための非公式のツールです。Microsoft Corporation およびその関連会社が開発・提供するものではなく、Microsoft による提携、承認、後援を受けていません。Microsoft、Azure は、Microsoft グループの企業の商標です。</p>
+<p class="note" lang="en">This is an unofficial tool for Azure Blob Storage. It is not developed, provided, endorsed, or sponsored by Microsoft Corporation or its affiliates. Microsoft and Azure are trademarks of the Microsoft group of companies.</p>
+<h2>できること</h2>
+<ul>
+<li>パスパターン（正規表現と変数）で Blob を検索し、検索結果から Blob を選ぶ</li>
+<li>Archive 層の Blob のリハイドレートと、ダウンロードを「ジョブ」としてキューで順に行う（日をまたいでも続けられます）</li>
+<li>検索履歴、検索条件のエクスポート・インポート</li>
+</ul>
+<h2>できないこと</h2>
+<ul>
+<li>Blob のアップロード・削除・書き換え（読み取りと層の変更だけを行います）</li>
+<li>Windows 以外での実行</li>
+</ul>
+<h2>動作環境</h2>
+<ul>
+<li>Windows 11（x64）</li>
+<li>同梱の Python <span data-fill="python_version">（開発版）</span>（別に導入する必要はありません）</li>
+<li>本ツールの版: <span data-fill="version">（開発版）</span></li>
+</ul>
+<h2>起動の手順</h2>
+<ol>
+<li>全部入り版の ZIP を展開します（<a href="setup.html">導入と更新</a>）。</li>
+<li><code>finfet-abs.bat</code> をダブルクリックします。既定のブラウザで画面が開きます。</li>
+<li>終わるときは、画面の右上のメニューの [終了] を選びます。</li>
+</ol>
+<h2>最初の1回の流れ</h2>
+<ol>
+<li>接続のページで [サインイン] するか、接続先を追加します（アクセスキー・SAS）。</li>
+<li>検索のページで、ストレージアカウントとコンテナー、パスパターンを入れて [検索] します。</li>
+<li>検索結果で Blob を選び、[ジョブを作成] します。</li>
+</ol>
+<footer>FinFeT <span data-fill="version">（開発版）</span></footer>
+</main>
+</div>
+</body>
+</html>

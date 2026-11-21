@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>データの取り扱い - FinFeT</title>
+<link rel="stylesheet" href="docs.css">
+</head>
+<body>
+<div class="layout">
+<nav aria-label="ドキュメント">
+<div class="title">FinFeT</div>
+<a href="index.html">はじめに</a>
+<a href="setup.html">導入と更新</a>
+<a href="usage.html">使い方</a>
+<a href="patterns.html">パスパターンの書き方</a>
+<a href="permissions.html">必要な権限</a>
+<a href="costs.html">料金と注意</a>
+<a href="troubleshooting.html">困ったときは</a>
+<a href="data.html" aria-current="page">データの取り扱い</a>
+<a href="licenses.html">ライセンス</a>
+</nav>
+<main>
+<h1>データの取り扱い</h1>
+<h2>保存するもの</h2>
+<ul>
+<li>通常のモード: <code>%LOCALAPPDATA%\finfet-abs\</code>（設定、検索履歴、ジョブ、ログ、サインインのトークンキャッシュ）</li>
+<li>ポータブルモード: 本ツールのフォルダーの <code>data\</code></li>
+</ul>
+<h2>秘密情報</h2>
+<p>アクセスキー・SAS・接続文字列は、Windows の DPAPI で暗号化して保存します。暗号化したユーザー・PC でしか復号できません。</p>
+<h2>PC を返却するとき</h2>
+<p>本ツールを終了し、<code>%LOCALAPPDATA%\finfet-abs\</code>（ポータブルモードでは <code>data\</code>）を削除します。</p>
+<footer>FinFeT <span data-fill="version">（開発版）</span></footer>
+</main>
+</div>
+</body>
+</html>
