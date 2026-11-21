@@ -6,11 +6,12 @@ import json
 import logging
 import threading
 import time
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone
 
 from ..azure.backend import AccountRef, AuthRef, ContainerRef
 from ..azure.sas import ParseError, split_blob_url
 from ..core import recent
+from ..core.clock import to_iso
 from ..core.errors import AppError, NotFound, bad_request
 from ..history.condition import clean_condition, targets_summary, variables_summary
 from ..search import datetime_vars as dtv
@@ -198,6 +199,8 @@ def register(router, app) -> None:
     # ------------------------------------------------------------ Blob 名からパスパターンを作る（decisions.md）
 
     infer_cancels: dict[str, threading.Event] = {}
+    from ..search.infer import NameCache
+    name_cache = NameCache()
 
     @router.post("/api/v1/pattern/infer")
     def pattern_infer(req: Request):
@@ -215,8 +218,12 @@ def register(router, app) -> None:
         except (TypeError, ValueError):
             raise AppError("BAD_NUMBER", "件数は数で入力してください。") from None
         prefix = str(body.get("prefix") or "").lstrip("/")
+        refresh = bool(body.get("refresh"))
         cancel = threading.Event()
         holder: dict = {}
+        # 集めた名前の保持のキー（接続先と認証）。秘密情報は含めません
+        tkey = (target["storage_account"].lower(), target.get("endpoint_suffix") or "core.windows.net", target["container"],
+                target.get("auth_kind") or "entra_user", target.get("credential_id"), target.get("tenant"))
 
         def run():
             ref = AuthRef(target.get("auth_kind") or "entra_user", credential_id=target.get("credential_id"),
@@ -229,17 +236,26 @@ def register(router, app) -> None:
                 if time.monotonic() - last[0] >= 0.5:
                     last[0] = time.monotonic()
                     app.events.publish("infer.progress", {"id": holder.get("id"), "names": n, "requests": requests})
+            if refresh:
+                name_cache.clear_target(tkey)
+            hit = None if refresh else name_cache.get(tkey, mode, prefix, limit)
             try:
-                items, info = infer.collect(s["backend"], ct, mode=mode, prefix=prefix, limit=limit, per_level=per_level,
-                                            cancel=cancel, progress=progress, connection=s["limits"].request
-                                            if "limits" in s else None)
+                if hit is not None:
+                    fetched, items, info = hit
+                    info = dict(info, requests=0)
+                else:
+                    items, info = infer.collect(s["backend"], ct, mode=mode, prefix=prefix, limit=limit, per_level=per_level,
+                                                cancel=cancel, progress=progress, connection=s["limits"].request
+                                                if "limits" in s else None)
+                    fetched = name_cache.put(tkey, mode, prefix, limit, items, info)
             except infer.Cancelled:
                 raise AppError("CANCELLED", "中止しました。") from None
             finally:
                 infer_cancels.pop(holder.get("id"), None)
             cands = infer.infer(items)
             return {"candidates": cands, "names": len(items), "requests": info["requests"],
-                    "truncated": info["truncated"], "complete": info["complete"], "sizes_known": info["sizes_known"]}
+                    "truncated": info["truncated"], "complete": info["complete"], "sizes_known": info["sizes_known"],
+                    "from_cache": hit is not None, "fetched_at": to_iso(datetime.fromtimestamp(fetched, timezone.utc))}
         tid = s["tasks"].submit(run, "pattern-infer")
         holder["id"] = tid
         infer_cancels[tid] = cancel

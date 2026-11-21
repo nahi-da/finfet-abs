@@ -61,6 +61,17 @@ def string_values(value: dict) -> list[str] | None:
     return None
 
 
+def choice_as_string(name: str, value: dict) -> dict:
+    """選択肢の変数（依頼者の依頼。decisions.md）を、文字列の「次のうちいずれか・完全一致」の指定に直します。
+
+    value: {"options": [選択肢], "selected": [選んだ値]}。選んだ値が 1 つもなければ誤りです。
+    """
+    sel = [str(x) for x in (value or {}).get("selected") or [] if str(x) != ""]
+    if not sel:
+        raise VariableError(name, f"変数「{name}」の値を1つ以上選んでください。")
+    return {"mode": "one_of", "match": "exact", "values": [{"value": x, "enabled": True} for x in dict.fromkeys(sel)]}
+
+
 def _fmt_num(n: int, padding: int | None) -> str:
     return f"{n:0{padding}d}" if padding else str(n)
 
