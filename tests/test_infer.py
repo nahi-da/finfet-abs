@@ -29,15 +29,70 @@ class InferTest(unittest.TestCase):
     def test_plain_date_folders_and_compact(self) -> None:
         names = [f"logs/2026/11/{d:02d}/app_202611{d:02d}.log" for d in range(1, 10)]
         c = pats(names)
+        # 同じ日時を 2 回書いた名前は、値が食い違わなければ 1 つの dt にまとめます
+        self.assertEqual(c[0]["pattern"], r"logs/{{dt=YYYY}}/{{dt=MM}}/{{dt=DD}}/app_{{dt=YYYYMMDD}}\.log")
+        self.assertEqual(c[0]["variables"], {"dt": {"type": "datetime"}})
+        # 食い違う（フォルダーは 11 月、ファイル名は 10 月）なら別の日時の変数
+        names = [f"logs/2026/11/{d:02d}/app_202610{d:02d}.log" for d in range(1, 5)]
+        c = pats(names)
         self.assertEqual(c[0]["pattern"], r"logs/{{dt=YYYY}}/{{dt=MM}}/{{dt=DD}}/app_{{dt2=YYYYMMDD}}\.log")
-        self.assertEqual(c[0]["variables"], ["dt", "dt2"])
+        # まとめた場合は、細かい単位（時）まで期間に入ります
+        names = [f"vm/{d:02d}/app_202611{d:02d}{h:02d}.log" for d in (20, 21) for h in (0, 9)]
+        c = pats([f"x/2026/11/{n[3:]}" for n in names])
+        self.assertEqual(c[0]["last"], "2026-11-21T09:00:00")
 
     def test_choices_and_classes(self) -> None:
         names = [f"{app}/server{n}.txt" for app in ("web", "api") for n in range(1, 8)]
         c = pats(names)
-        self.assertEqual(c[0]["pattern"], r"(?:api|web)/server\d{1}\.txt")
+        # 英字が変わる階層は選択肢の変数、数字だけが変わる階層は \d の形
+        self.assertEqual(c[0]["pattern"], r"{{v1}}/server\d{1}\.txt")
+        self.assertEqual(c[0]["variables"]["v1"], {"type": "choice", "value": {"options": ["api", "web"], "selected": ["api", "web"]}})
         many = [f"{w}/x.txt" for w in ("alpha", "beta", "gamma", "delta", "epsilon", "zeta")]
-        self.assertEqual(pats(many)[0]["pattern"], r"[A-Za-z]+/x\.txt")
+        self.assertEqual(pats(many)[0]["pattern"], r"{{v1}}/x\.txt")
+        # 値の種類が多い階層は選択肢にしない
+        ids = [f"data/{i:08x}-guid.bin" for i in range(150)]
+        self.assertEqual(pats(ids)[0]["pattern"], r"data/[^/]+-guid\.bin")
+
+    def test_choice_named_by_key_and_natural_order(self) -> None:
+        names = [f"vm=web{n:02d}/2026/11/{d:02d}/app.log" for n in (1, 2, 10) for d in (1, 2)] + ["vm=db01/2026/11/03/app.log"]
+        c = pats(names)
+        self.assertEqual(len(c), 1)
+        self.assertEqual(c[0]["pattern"], r"vm={{vm}}/{{dt=YYYY}}/{{dt=MM}}/{{dt=DD}}/app\.log")
+        self.assertEqual(c[0]["variables"]["vm"]["value"]["options"], ["db01", "web01", "web02", "web10"])
+        self.assertEqual((c[0]["first"], c[0]["last"]), ("2026-11-01T00:00:00", "2026-11-03T00:00:00"))
+
+    def test_candidates_match_their_names(self) -> None:
+        from datetime import datetime, timezone
+
+        from finfet_abs.search import datetime_vars as dtv
+        from finfet_abs.search.pattern import CompileContext
+        ctx = CompileContext(now_utc=datetime(2026, 11, 22, tzinfo=timezone.utc), local_zone=dtv.FixedZone(9))
+        sets = [
+            [f"vm=web{n:02d}/2026/11/{d:02d}/app.log" for n in (1, 2, 10) for d in (1, 2)],
+            [f"vm-logs/{vm}/2026/11/{d:02d}/app_202611{d:02d}{h:02d}.log" for vm in ("web01", "db01") for d in (20, 21) for h in (0, 9)],
+            [f"logs/2026/11/{d:02d}/app_202610{d:02d}.log" for d in range(1, 5)],
+            [f"logs/{h}_PT1H.json" for h in ("host-a", "host-b", "host-c")],
+            [f"{app}/server{n}.txt" for app in ("web", "api") for n in range(1, 8)],
+            [f"data/{i:08x}-guid.bin" for i in range(150)],
+            [f"a/{i}.csv" for i in range(10)] + ["b/readme.md", "営業部/報告書 #1 (確定).pdf", "営業部/報告書 #2 (案).pdf"],
+            [f"resourceId=/SUBSCRIPTIONS/0000/RESOURCEGROUPS/RG/PROVIDERS/MICROSOFT.COMPUTE/VIRTUALMACHINES/{vm}/y=2026/m=11/d=21/h={h:02d}/m=00/PT1H.json"
+             for vm in ("VM-APP01", "VM-APP02", "VM-DB01") for h in range(3)],
+        ]
+        for names in sets:
+            cands = pats(names)
+            covered = 0
+            for c in cands:
+                defs = dict(c["variables"])
+                for k, v in defs.items():
+                    if v["type"] == "datetime":
+                        defs[k] = {"type": "datetime", "value": {"mode": "any"}}
+                cp = compile_path(c["pattern"], defs, ctx=ctx)
+                hits = [n for n in names if cp.match(n) is not None]
+                self.assertGreaterEqual(len(hits), c["count"], (c["pattern"], names[:2]))
+                for ex in c["examples"]:
+                    self.assertIsNotNone(cp.match(ex), (c["pattern"], ex))
+                covered += c["count"]
+            self.assertEqual(covered, len(names))
 
     def test_special_chars_escaped_and_valid(self) -> None:
         names = ["営業部/2025/10/報告書 #387 (確定版).pdf", "営業部/2025/11/報告書 #12 (確定版).pdf"]
@@ -105,6 +160,32 @@ class CollectTest(unittest.TestCase):
             infer.collect(self.be, self.t, mode="sample", cancel=ev)
 
 
+class NameCacheTest(unittest.TestCase):
+    def test_reuse_and_expiry(self) -> None:
+        now = [1000.0]
+        c = infer.NameCache(ttl=3600, clock=lambda: now[0])
+        tk = ("stexample01", "core.windows.net", "c", "account_key", None, None)
+        items = [(f"a/{i:03d}.log", 1) for i in range(100)] + [(f"b/{i:03d}.log", 1) for i in range(50)]
+        info = {"requests": 1, "truncated": False, "complete": True, "sizes_known": True}
+        self.assertIsNone(c.get(tk, "all", "", 10000))
+        c.put(tk, "all", "", 10000, items, info)
+        self.assertEqual(len(c.get(tk, "all", "", 10000)[1]), 150)
+        # 「すべて」から: より狭い prefix、先頭から N 件、見本
+        self.assertEqual(len(c.get(tk, "all", "b/", 10000)[1]), 50)
+        t, sub, inf = c.get(tk, "first", "a/", 10)
+        self.assertEqual((len(sub), inf["truncated"], inf["complete"]), (10, True, False))
+        self.assertTrue(c.get(tk, "sample", "", 10000)[2]["complete"])
+        # 別の接続先には使わない
+        self.assertIsNone(c.get(tk[:2] + ("other",) + tk[3:], "all", "", 10000))
+        # 期限が過ぎたら使わない
+        now[0] += 3601
+        self.assertIsNone(c.get(tk, "all", "", 10000))
+        # 取得し直し（clear_target）
+        c.put(tk, "first", "", 10, items[:10], info)
+        c.clear_target(tk)
+        self.assertIsNone(c.get(tk, "first", "", 10))
+
+
 class InferApiTest(unittest.TestCase):
     def test_api(self) -> None:
         import tempfile
@@ -126,16 +207,28 @@ class InferApiTest(unittest.TestCase):
             c.login(app.security)
             body = {"target": {"storage_account": "stexample01", "container": "backup", "auth_kind": "account_key"},
                     "mode": "first", "limit": 500}
-            r = c.post("/api/v1/pattern/infer", body)
-            self.assertEqual(r.status, 202)
-            tid = r.json()["task_id"]
-            end = time.time() + 15
-            while time.time() < end and not any(d["id"] == tid for d in done):
-                time.sleep(0.05)
-            res = next(d for d in done if d["id"] == tid)
-            self.assertTrue(res["ok"], res)
-            self.assertGreater(res["result"]["names"], 0)
-            self.assertTrue(res["result"]["candidates"])
+            def run(b):
+                r = c.post("/api/v1/pattern/infer", b)
+                self.assertEqual(r.status, 202)
+                tid = r.json()["task_id"]
+                end = time.time() + 15
+                while time.time() < end and not any(d["id"] == tid for d in done):
+                    time.sleep(0.05)
+                res = next(d for d in done if d["id"] == tid)
+                self.assertTrue(res["ok"], res)
+                return res["result"]
+            res = run(body)
+            self.assertGreater(res["names"], 0)
+            self.assertTrue(res["candidates"])
+            self.assertFalse(res["from_cache"])
+            # 2 回目は保持した名前を使う（要求 0 回）。refresh で取得し直す
+            again = run(body)
+            self.assertTrue(again["from_cache"])
+            self.assertEqual(again["requests"], 0)
+            self.assertEqual(again["fetched_at"], res["fetched_at"])
+            fresh = run({**body, "refresh": True})
+            self.assertFalse(fresh["from_cache"])
+            self.assertGreater(fresh["requests"], 0)
             self.assertEqual(c.post("/api/v1/pattern/infer", {**body, "mode": "bad"}).status, 400)
         finally:
             app.stop()

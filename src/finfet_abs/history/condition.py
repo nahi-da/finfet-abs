@@ -65,7 +65,7 @@ def clean_condition(raw: dict, *, keep_credential_ids: bool = True, keep_credent
     for name, v in (raw.get("variables") or {}).items():
         if not NAME_RE.match(str(name)) or not isinstance(v, dict):
             raise ValueError(f"変数「{name}」の形式が正しくありません")
-        if v.get("type") not in ("string", "number", "datetime"):
+        if v.get("type") not in ("string", "number", "datetime", "choice"):
             raise ValueError(f"変数「{name}」の種類が正しくありません")
         if len(json.dumps(v, ensure_ascii=False)) > 64 * 1024:
             raise ValueError(f"変数「{name}」が大きすぎます")
@@ -123,8 +123,9 @@ def value_summary(v: dict) -> str:
         if mode == "range":
             return f"{val.get('start')}〜{val.get('end')}"
         return ""
-    if mode == "one_of":
-        vals = [x.get("value", "") for x in val.get("values") or [] if x.get("enabled", True)]
+    if t == "choice" or mode == "one_of":
+        vals = [str(x) for x in val.get("selected") or []] if t == "choice" else \
+            [x.get("value", "") for x in val.get("values") or [] if x.get("enabled", True)]
         text = ", ".join(vals[:3]) + (f" ほか{len(vals) - 3}件" if len(vals) > 3 else "")
         return text[:60] + ("…" if len(text) > 60 else "")
     if mode == "chars":

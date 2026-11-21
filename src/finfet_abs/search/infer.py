@@ -28,6 +28,8 @@ _COMPACT = {8: ("YYYYMMDD", "%Y%m%d"), 10: ("YYYYMMDDhh", "%Y%m%d%H"), 12: ("YYY
 _UNIT_OF = {"YYYY": "Y", "MM": "M", "DD": "D", "hh": "h", "mm": "m", "ss": "s"}
 _ORDER = "YMDhms"
 MAX_CHOICES = 4
+#: 日時を含まない階層を選択肢の変数にする、値の種類の上限
+MAX_SEG_CHOICES = 100
 MAX_CANDIDATES = 30
 
 
@@ -119,7 +121,23 @@ def _in_range(fmt: str, v: int) -> bool:
     return {"MM": 1 <= v <= 12, "DD": 1 <= v <= 31, "hh": 0 <= v <= 23, "mm": 0 <= v <= 59, "ss": 0 <= v <= 59}.get(fmt, False)
 
 
-def _shape(toks: list[Tok]) -> tuple:
+def _split_segments(toks: list[Tok]) -> list[list[Tok]]:
+    """トークンの並びを「/」の階層ごとに分けます（「/」を含む区切りのトークンは、「/」の前後で分けます）。"""
+    segs: list[list[Tok]] = [[]]
+    for t in toks:
+        if t.kind == "lit" and "/" in t.text:
+            parts = t.text.split("/")
+            for k, p in enumerate(parts):
+                if k:
+                    segs.append([])
+                if p:
+                    segs[-1].append(Tok("lit", p))
+        else:
+            segs[-1].append(t)
+    return segs
+
+
+def _tok_shape(toks: list[Tok]) -> tuple:
     """まとめるためのキー: 区切りはそのまま、日時は書式、数字は桁数を問わず N、英字は A。"""
     out = []
     for t in toks:
@@ -134,56 +152,179 @@ def _shape(toks: list[Tok]) -> tuple:
     return tuple(out)
 
 
+_EXT = re.compile(r"\.([A-Za-z0-9]{1,5})$")
+
+
+def _seg_key(seg: list[Tok], last: bool):
+    """階層のキー: 日時を含む階層はトークンの形、含まない階層は "S"（値をまとめて扱う）。
+    最後の階層（ファイル名）は、拡張子が違えば別のグループにします（a/*.csv と b/readme.md をまとめないため）。"""
+    if any(t.kind == "date" for t in seg):
+        return ("D", _tok_shape(seg))
+    if last:
+        m = _EXT.search("".join(t.text for t in seg))
+        return "S." + (m.group(1).lower() if m else "")
+    return "S"
+
+
+@dataclass
+class SegStat:
+    """日時を含まない階層の値の集計。"""
+    values: dict[str, int] = field(default_factory=dict)
+    overflow: bool = False  # 値の種類が MAX_SEG_CHOICES を超えた
+    shapes: set = field(default_factory=set)  # トークンの形（2 種類まで）
+    tokvals: list[set] = field(default_factory=list)  # 最初の形のときのトークンごとの値
+    prefix: str | None = None  # すべての値に共通の先頭
+    suffix: str | None = None  # すべての値に共通の末尾
+    minlen: int = 1 << 30  # 値の長さの最小
+
+    def add(self, seg: list[Tok]) -> None:
+        text = "".join(t.text for t in seg)
+        self.minlen = min(self.minlen, len(text))
+        if not self.overflow:
+            self.values[text] = self.values.get(text, 0) + 1
+            if len(self.values) > MAX_SEG_CHOICES:
+                self.overflow = True
+        self.prefix = text if self.prefix is None else _common_prefix(self.prefix, text)
+        self.suffix = text if self.suffix is None else _common_suffix(self.suffix, text)
+        shape = _tok_shape(seg)
+        if not self.shapes:
+            self.tokvals = [set() for _ in seg]
+        if len(self.shapes) < 2:
+            self.shapes.add(shape)
+        if len(self.shapes) == 1:
+            for i, t in enumerate(seg):
+                if len(self.tokvals[i]) <= MAX_CHOICES + 1:
+                    self.tokvals[i].add(t.text)
+
+
+def _common_prefix(a: str, b: str) -> str:
+    n = 0
+    while n < len(a) and n < len(b) and a[n] == b[n]:
+        n += 1
+    return a[:n]
+
+
+def _common_suffix(a: str, b: str) -> str:
+    n = 0
+    while n < len(a) and n < len(b) and a[-1 - n] == b[-1 - n]:
+        n += 1
+    return a[len(a) - n:]
+
+
+def _cut_prefix(p: str) -> str:
+    """共通の先頭を、最後の区切りの文字（英数字以外）までに切り詰めます（「vm-web01」「vm-db01」→「vm-」）。"""
+    for i in range(len(p) - 1, -1, -1):
+        if not p[i].isalnum():
+            return p[:i + 1]
+    return ""
+
+
+def _cut_suffix(s: str) -> str:
+    """共通の末尾を、最初の区切りの文字（英数字以外）からに切り詰めます（「web01.log」「db01.log」→「.log」）。"""
+    for i, c in enumerate(s):
+        if not c.isalnum():
+            return s[i:]
+    return ""
+
+
 @dataclass
 class Group:
-    shape: tuple
+    key: tuple
     names: list[str] = field(default_factory=list)
     sizes: list[int] = field(default_factory=list)
-    values: list[set] = field(default_factory=list)
-    dates: list[datetime] = field(default_factory=list)
+    segs: list = field(default_factory=list)  # 階層ごと: 日時の階層はトークンごとの値の集合の並び、そのほかは SegStat
+    dates: list[datetime] = field(default_factory=list)  # 日時の変数 dt の値
+    dates_merged: list[datetime] = field(default_factory=list)  # dt と、dt2 以降を合わせた値
+    conflict: set = field(default_factory=set)  # dt と値が食い違うことがある日時の変数（dt2 など）
 
 
-def _date_of(toks: list[Tok]) -> datetime | None:
-    parts = {"Y": None, "M": 1, "D": 1, "h": 0, "m": 0, "s": 0}
+def _date_parts(toks: list[Tok]) -> dict[str, dict[str, int]]:
+    """日時の変数ごとの単位の値（{"dt": {"Y": 2026, "M": 11, ...}, "dt2": {...}}）。"""
+    out: dict[str, dict[str, int]] = {}
     for t in toks:
-        if t.kind == "date" and t.var == "dt":
+        if t.kind == "date":
+            parts = out.setdefault(t.var or "dt", {})
             pos = 0
             for f in re.findall(r"YYYY|MM|DD|hh|mm|ss", t.fmt or ""):
                 ln = 4 if f == "YYYY" else 2
                 parts[_UNIT_OF[f]] = int(t.text[pos:pos + ln])
                 pos += ln
-    if parts["Y"] is None:
+    return out
+
+
+def _to_datetime(parts: dict[str, int] | None) -> datetime | None:
+    if not parts or parts.get("Y") is None:
         return None
     try:
-        return datetime(parts["Y"], parts["M"], parts["D"], parts["h"], parts["m"], parts["s"])
+        return datetime(parts["Y"], parts.get("M", 1), parts.get("D", 1), parts.get("h", 0), parts.get("m", 0), parts.get("s", 0))
     except ValueError:
         return None
 
 
+def _date_of(toks: list[Tok]) -> datetime | None:
+    return _to_datetime(_date_parts(toks).get("dt"))
+
+
 def infer(items: Iterable[tuple[str, int | None]], *, max_candidates: int = MAX_CANDIDATES) -> list[dict]:
-    """Blob 名（と大きさ）から、パスパターンの候補を件数の多い順に返します。"""
+    """Blob 名（と大きさ）から、パスパターンの候補を件数の多い順に返します。
+
+    候補: pattern、count、bytes、examples、first・last（日時の変数 dt の最小・最大）、variables（変数の定義。
+    選択肢の変数は {"type": "choice", "value": {"options": [...], "selected": [...]}}、日時は {"type": "datetime"}）
+    """
     groups: dict[tuple, Group] = {}
     for name, size in items:
         toks = tokenize(name)
-        key = _shape(toks)
+        segs = _split_segments(toks)
+        key = tuple(_seg_key(s, i == len(segs) - 1) for i, s in enumerate(segs))
         g = groups.get(key)
         if g is None:
-            g = groups[key] = Group(key, values=[set() for _ in toks])
+            g = groups[key] = Group(key, segs=[[set() for _ in s] if not isinstance(k, str) else SegStat() for s, k in zip(segs, key)])
         g.names.append(name)
         g.sizes.append(size or 0)
-        for i, t in enumerate(toks):
-            if len(g.values[i]) <= MAX_CHOICES + 1:
-                g.values[i].add(t.text)
-        d = _date_of(toks)
+        for s, k, st in zip(segs, key, g.segs):
+            if isinstance(k, str):
+                st.add(s)
+            else:
+                for i, t in enumerate(s):
+                    if len(st[i]) <= MAX_CHOICES + 1:
+                        st[i].add(t.text)
+        parts = _date_parts(toks)
+        base = parts.get("dt")
+        d = _to_datetime(base)
         if d is not None:
             g.dates.append(d)
+        if len(parts) > 1:
+            # 同じ日時を 2 回書いた名前（2026/11/21/app_2026112109.log）は、値が食い違わなければ 1 つの dt にします
+            comb = dict(base or {})
+            for var, p in parts.items():
+                if var == "dt":
+                    continue
+                if base is None or any(base[u] != v for u, v in p.items() if u in base):
+                    g.conflict.add(var)
+                comb.update({u: v for u, v in p.items() if u not in comb})
+            dm = _to_datetime(comb)
+            if dm is not None:
+                g.dates_merged.append(dm)
     merged: dict[str, dict] = {}
     for g in groups.values():
-        pat = _pattern_of(g)
+        pat, variables = _pattern_of(g)
+        extra = [v for v in variables if v != "dt" and variables[v].get("type") == "datetime"]
+        same = [v for v in extra if v not in g.conflict] if "dt" in variables else []
+        for v in same:
+            pat = pat.replace("{{" + v + "=", "{{dt=")
+            del variables[v]
+        if same and len(same) == len(extra) and len(g.dates_merged) == len(g.dates):
+            g.dates = g.dates_merged
         c = merged.get(pat)
         if c is None:
             c = merged[pat] = {"pattern": pat, "count": 0, "bytes": 0, "examples": [], "first": None, "last": None,
-                               "variables": sorted({s.split(":")[1] for s in g.shape if s.startswith("D:")})}
+                               "variables": variables}
+        else:
+            for vn, vd in variables.items():
+                old = c["variables"].get(vn)
+                if old and old.get("type") == "choice" and vd.get("type") == "choice":
+                    opts = sorted(set(old["value"]["options"]) | set(vd["value"]["options"]), key=_natural)
+                    old["value"] = {"options": opts, "selected": list(opts)}
         c["count"] += len(g.names)
         c["bytes"] += sum(g.sizes)
         for n in g.names[:3]:
@@ -200,25 +341,96 @@ def infer(items: Iterable[tuple[str, int | None]], *, max_candidates: int = MAX_
     return out
 
 
-def _pattern_of(g: Group) -> str:
+def _natural(s: str):
+    """自然な順（web2 が web10 より前）の比較キー。"""
+    return [(0, int(p), "") if p.isdigit() else (1, 0, p.lower()) for p in re.findall(r"\d+|\D+", s)]
+
+
+def _tokens_pattern(shape: tuple, vals: list[set]) -> str:
     parts: list[str] = []
-    for key, vals in zip(g.shape, g.values):
+    for key, vs in zip(shape, vals):
         if key.startswith("D:"):
             _, var, fmt = key.split(":")
             parts.append("{{" + f"{var}={fmt}" + "}}")
         elif key in ("N", "A"):
-            if len(vals) == 1:
-                parts.append(escape(next(iter(vals))))
-            elif len(vals) <= MAX_CHOICES:
-                parts.append("(?:" + "|".join(escape(v) for v in sorted(vals)) + ")")
+            if len(vs) == 1:
+                parts.append(escape(next(iter(vs))))
+            elif len(vs) <= MAX_CHOICES:
+                parts.append("(?:" + "|".join(escape(v) for v in sorted(vs)) + ")")
             elif key == "N":
-                lens = {len(v) for v in vals}
+                lens = {len(v) for v in vs}
                 parts.append(f"\\d{{{lens.pop()}}}" if len(lens) == 1 else "\\d+")
             else:
                 parts.append("[A-Za-z]+")
         else:
             parts.append(escape(key))
     return "".join(parts)
+
+
+def _pattern_of(g: Group) -> tuple[str, dict]:
+    """グループのパスパターンと、変数の定義。"""
+    out: list[str] = []
+    variables: dict[str, dict] = {}
+    n_choice = 0
+    prev_lit = None  # 直前の階層が 1 種類の値のとき、その文字（選択肢の変数の表示名に使います）
+    for k, st in zip(g.key, g.segs):
+        prev, prev_lit = prev_lit, None
+        if not isinstance(k, str):
+            shape = k[1]
+            out.append(_tokens_pattern(shape, st))
+            for key in shape:
+                if key.startswith("D:"):
+                    variables.setdefault(key.split(":")[1], {"type": "datetime"})
+            continue
+        vals = list(st.values)
+        if not st.overflow and len(vals) == 1:
+            out.append(escape(vals[0]))
+            prev_lit = vals[0]
+            continue
+        any_pre, suf = _cut_prefix(st.prefix or ""), _cut_suffix(st.suffix or "")
+        # 選択肢では、共通の先頭は「vm=」の形のときだけ文字として残します（選択肢は、なるべく名前の全体で示すため）
+        pre = any_pre if any_pre.endswith("=") else ""
+        if len(st.shapes) == 1:
+            shape = next(iter(st.shapes))
+            if all(shape[i] == "N" for i, vs in enumerate(st.tokvals) if len(vs) > 1):
+                # 数字だけが変わる階層（server1、server2…）は、選択肢にせず \d の形にします
+                out.append(_tokens_pattern(shape, st.tokvals))
+                continue
+        if not st.overflow and "" not in vals:
+            # 値の種類が少ない階層は、選択肢の変数（共通の先頭・末尾の区切りまでは文字として残します）
+            core = [v[len(pre):len(v) - len(suf)] for v in vals]
+            if any(c == "" for c in core) or len(pre) + len(suf) >= st.minlen:
+                pre, suf, core = "", "", vals
+            n_choice += 1
+            name = _choice_name(pre, n_choice, variables)
+            opts = sorted(set(core), key=_natural)
+            variables[name] = {"type": "choice", "value": {"options": opts, "selected": list(opts)}}
+            if not pre and prev and len(prev) <= 32 and "=" not in prev:
+                variables[name]["label"] = prev
+            out.append(escape(pre) + "{{" + name + "}}" + escape(suf))
+            continue
+        if len(st.shapes) == 1:
+            out.append(_tokens_pattern(next(iter(st.shapes)), st.tokvals))
+        else:
+            if len(any_pre) + len(suf) >= st.minlen:
+                any_pre, suf = "", ""  # 先頭と末尾が重なる短い名前があるとき
+            out.append(escape(any_pre) + "[^/]+" + escape(suf))
+    return "/".join(out), variables
+
+
+_IDENT = re.compile(r"([A-Za-z_][A-Za-z0-9_]{0,31})=$")
+
+
+def _choice_name(prefix: str, n: int, used: dict) -> str:
+    """選択肢の変数の名前。「vm=」のような先頭があればその名前、なければ v1、v2…。"""
+    m = _IDENT.search(prefix)
+    if m and m.group(1) not in used and not m.group(1).lower().startswith("dt"):
+        return m.group(1)
+    name = f"v{n}"
+    while name in used:
+        n += 1
+        name = f"v{n}"
+    return name
 
 
 # ---------------------------------------------------------------- Blob 名の収集
@@ -228,6 +440,63 @@ MODES = ("sample", "first", "all")
 
 class Cancelled(Exception):
     pass
+
+
+class NameCache:
+    """集めた Blob 名の一時的な保持（依頼者の依頼。decisions.md）。
+
+    接続先と範囲（mode・prefix・limit）ごとに、ttl 秒の間、メモリにだけ保持します（保存しません）。
+    「すべて」で集めた名前があれば、同じ接続先のより狭い prefix・「先頭から N 件」・「見本」にも使います。
+    """
+
+    def __init__(self, ttl: float = 3600.0, max_entries: int = 3, max_names: int = 500_000,
+                 clock: Callable[[], float] | None = None) -> None:
+        import time
+        self.ttl, self.max_entries, self.max_names = ttl, max_entries, max_names
+        self.clock = clock or time.time
+        self._lock = threading.Lock()
+        self._items: dict[tuple, tuple[float, list, dict]] = {}
+
+    def _purge(self, now: float) -> None:
+        for k in [k for k, (t, _, _) in self._items.items() if now - t > self.ttl]:
+            del self._items[k]
+
+    def get(self, target_key: tuple, mode: str, prefix: str, limit: int):
+        """(集めた時刻, 名前の一覧, info) か None。"""
+        now = self.clock()
+        with self._lock:
+            self._purge(now)
+            hit = self._items.get((target_key, mode, prefix, limit if mode == "first" else None))
+            if hit is not None:
+                return hit
+            # 「すべて」の結果（prefix が要求の prefix の先頭と一致するもの）から作ります
+            for (tk, m, p, _), (t, items, info) in self._items.items():
+                if tk != target_key or m != "all" or not prefix.startswith(p):
+                    continue
+                sub = [x for x in items if x[0].startswith(prefix)] if prefix != p else items
+                out_info = dict(info)
+                if mode == "first" and len(sub) > limit:
+                    sub = sub[:limit]
+                    out_info.update(truncated=True, complete=False)
+                return t, sub, out_info
+        return None
+
+    def put(self, target_key: tuple, mode: str, prefix: str, limit: int, items: list, info: dict) -> float:
+        now = self.clock()
+        if len(items) > self.max_names:
+            return now
+        with self._lock:
+            self._purge(now)
+            self._items[(target_key, mode, prefix, limit if mode == "first" else None)] = (now, items, dict(info))
+            while len(self._items) > self.max_entries:
+                oldest = min(self._items, key=lambda k: self._items[k][0])
+                del self._items[oldest]
+        return now
+
+    def clear_target(self, target_key: tuple) -> None:
+        with self._lock:
+            for k in [k for k in self._items if k[0] == target_key]:
+                del self._items[k]
 
 
 def collect(backend, target: ContainerRef, *, mode: str = "sample", prefix: str = "", limit: int = 10000,

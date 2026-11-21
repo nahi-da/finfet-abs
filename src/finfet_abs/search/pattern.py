@@ -15,7 +15,8 @@ from typing import Callable
 from . import datetime_vars as dtv
 from . import prefix as prefixmod
 from .datetime_vars import FmtItem, Zone
-from .variables import MAX_ENUM, NAME_RE, VariableError, number_fragment, number_values, string_fragment, string_values
+from .variables import (MAX_ENUM, NAME_RE, VariableError, choice_as_string, number_fragment, number_values,
+                        string_fragment, string_values)
 
 #: コンテナー名の展開の上限（3.2.8）
 MAX_CONTAINERS = 100
@@ -323,6 +324,8 @@ def compile_path(pattern: str, variables: dict, *, ignore_case: bool = False, in
                     frags[name] = frag
                     if check is not None:
                         checks.append(lambda m, n=name, c=check: c(m.group(f"v_{n}")))
+                elif vtype == "choice":
+                    frags[name] = string_fragment(name, choice_as_string(name, defn.get("value") or {}))
                 else:
                     frags[name] = string_fragment(name, defn.get("value") or {})
                 extractors.append(lambda m, vals, n=name: vals.__setitem__(n, m.group(f"v_{n}")))
@@ -621,8 +624,12 @@ def expand_containers(template: str, variables: dict, *, input_timezone: str, ct
             choices[name] = [({u: v for u, v in enumerate(sl)}, {}) for sl in slots]
         else:
             vtype = defn.get("type", "string")
-            vals = number_values(defn.get("value") or {}, defn.get("padding")) if vtype == "number" \
-                else string_values(defn.get("value") or {})
+            if vtype == "number":
+                vals = number_values(defn.get("value") or {}, defn.get("padding"))
+            elif vtype == "choice":
+                vals = [str(x) for x in (defn.get("value") or {}).get("selected") or [] if str(x) != ""] or None
+            else:
+                vals = string_values(defn.get("value") or {})
             if not vals:
                 return None
             choices[name] = [(v, {}) for v in vals]

@@ -11,7 +11,7 @@ import { openMenu } from '../parts/menu.js';
 import { patternInput } from '../parts/pattern-input.js';
 import { openAddTargetDialog } from '../parts/target-dialog.js';
 import { toast, toastError } from '../parts/toast.js';
-import { variableRow } from '../parts/variables.js';
+import { periodFromFound, variableRow } from '../parts/variables.js';
 import { runTask } from '../task.js';
 import { renderUrlsTab } from './search-urls.js';
 
@@ -254,6 +254,23 @@ export async function render(ctx) {
     const r = await m.openInferDialog({ targets: state.targets });
     if (!r) return;
     state.path_pattern = r.path_pattern;
+    // 自動生成で作った変数（選択肢と、日時の変数の Blob がある期間）を入れます
+    for (const [k, v] of Object.entries(r.variables || {})) {
+      if (v.type === 'datetime') {
+        const def = { type: 'datetime', value: { mode: 'any' }, path_timezone: 'utc', touched: true };
+        if (k === 'dt' && r.found) {
+          def.found = r.found;
+          if (r.found.complete) {
+            // すべての Blob から分かった期間は、そのまま期間の初期値にします
+            const p = periodFromFound(r.found, 'utc', state.input_timezone);
+            def.value = { mode: 'period', start: p.start, end: p.end };
+          }
+        }
+        state.variables[k] = def;
+      } else {
+        state.variables[k] = { ...v, touched: true, ...(r.complete ? {} : { from_sample: true }) };
+      }
+    }
     save();
     pi.value = state.path_pattern;
     analyze();
@@ -293,7 +310,7 @@ export async function render(ctx) {
   const icWarn = h('span', { class: 'warn', text: '一覧の取得を絞り込めないため、件数が多いと遅くなります', hidden: !state.ignore_case });
   const ic = checkbox('大文字・小文字を区別しない', state.ignore_case, (on) => { state.ignore_case = on; icWarn.hidden = !on; save(); analyze(); });
   patternSec.append(h('h2', { text: 'パスパターン' }), pi.el, patternErr, hint,
-    h('div', { class: 'line' }, linkButton('既知の形式から作成', () => fromKnown(null)), linkButton('Blob 名から作成', () => fromNames()), linkButton('履歴から', (e) => historyMenu(e.currentTarget)), ic, icWarn),
+    h('div', { class: 'line' }, linkButton('既知の形式から作成', () => fromKnown(null)), linkButton('パスパターンを自動生成', () => fromNames()), linkButton('履歴から', (e) => historyMenu(e.currentTarget)), ic, icWarn),
     prefixLine);
 
   async function historyMenu(anchor) {
@@ -306,6 +323,7 @@ export async function render(ctx) {
   }
 
   // ---------------------------------------------------------------- 変数
+  const choiceFilters = new Map(); // 選択肢の変数の絞り込みの文字（行を描き直しても保つ）
   function drawVars() {
     clear(varsSec);
     const headRow = h('div', { class: 'line' }, h('h2', { text: '変数' }));
@@ -333,6 +351,8 @@ export async function render(ctx) {
         name: n, def, inPattern: analysis ? inPattern.has(n) : true, formats: formatsOf(n), inputTimezone: state.input_timezone,
         dtInfo: (analysis?.datetimes || []).find((x) => x.name === n) || null,
         onChange: () => { save(); drawVars(); analyzeSoon(); },
+        onQuietChange: () => { save(); analyzeSoon(); },
+        choiceFilter: { get: () => choiceFilters.get(n) || '', set: (f) => choiceFilters.set(n, f) },
         onInputTimezone: (tz) => { state.input_timezone = tz; save(); drawVars(); analyze(); },
         onRemove: () => { delete state.variables[n]; save(); drawVars(); },
         fetchCandidates: state.targets.length ? async () => {

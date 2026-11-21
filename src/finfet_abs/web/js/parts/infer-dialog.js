@@ -2,7 +2,7 @@
 // 接続先の Blob 名を集め（範囲を選べます）、パスパターンの候補を件数の多い順に示します。選んだ候補を返します。
 
 import * as api from '../api.js';
-import { button, h } from '../dom.js';
+import { button, h, linkButton } from '../dom.js';
 import { on } from '../events.js';
 import { dateShort, num, size } from '../format.js';
 import { runTask } from '../task.js';
@@ -24,7 +24,7 @@ export function openInferDialog(opt) {
     let closed = false;
     const offs = [];
     const d = openDialog({
-      title: 'Blob 名から作成', width: 960,
+      title: 'パスパターンを自動生成', width: 960,
       onClose: () => { closed = true; offs.forEach((f) => f()); if (taskId) api.post(`/api/v1/pattern/infer/${taskId}/cancel`, {}).catch(() => {}); resolve(result); },
     });
     if (!targets.length) {
@@ -36,12 +36,13 @@ export function openInferDialog(opt) {
     const modeR = radios('infer-mode', MODES, 'sample', () => { limitIn.disabled = radioValue(modeR) !== 'first'; });
     const limitIn = textInput('10000', { width: 'w-num', inputmode: 'numeric', 'aria-label': '件数', disabled: true });
     const prefixIn = textInput('', { width: 'w-full', placeholder: '例: logs/2026/', 'aria-label': 'prefix' });
-    const status = h('div', { class: 'line muted' });
+    const status = h('span', { class: 'muted' });
+    const cacheInfo = h('span', { class: 'line' });
     const list = h('div');
     d.body.append(formGrid(...row('接続先', tSel), ...row('範囲', h('div', null, modeR, h('div', { class: 'line' }, '件数', limitIn))),
-      ...row('prefix', prefixIn, { optional: true })), status, list);
+      ...row('prefix', prefixIn, { optional: true })), h('div', { class: 'line infer-status' }, status, cacheInfo), list);
 
-    const runBtn = button('実行', run, { primary: true });
+    const runBtn = button('実行', () => run(false), { primary: true });
     const stopBtn = button('中止', () => { if (taskId) api.post(`/api/v1/pattern/infer/${taskId}/cancel`, {}).catch(() => {}); });
     stopBtn.hidden = true;
     d.setFoot(h('span.push'), stopBtn, button('閉じる', () => d.close(true)), runBtn);
@@ -50,10 +51,11 @@ export function openInferDialog(opt) {
       if (p.id === taskId) status.textContent = `${num(p.names)} 件の名前を取得しました（要求 ${num(p.requests)} 回）`;
     }));
 
-    async function run() {
+    async function run(refresh) {
       const t = targets[Number(tSel.value)];
       const mode = radioValue(modeR);
       list.replaceChildren();
+      cacheInfo.replaceChildren();
       status.textContent = '取得しています…';
       runBtn.disabled = true;
       stopBtn.hidden = false;
@@ -62,7 +64,7 @@ export function openInferDialog(opt) {
         const r = await runTask('POST', '/api/v1/pattern/infer', {
           target: { storage_account: t.storage_account, endpoint_suffix: t.endpoint_suffix, container: t.container, auth_kind: t.auth_kind,
             tenant: t.tenant || null, credential_id: t.credential_id || null },
-          mode, prefix: prefixIn.value.trim(), limit: Number(limitIn.value) || 10000,
+          mode, prefix: prefixIn.value.trim(), limit: Number(limitIn.value) || 10000, refresh: !!refresh,
         }, (id) => { taskId = id; });
         taskId = null;
         if (closed) return;
@@ -82,6 +84,11 @@ export function openInferDialog(opt) {
       status.textContent = `${num(r.names)} 件の名前から、${num(r.candidates.length)} 個の候補を作りました（要求 ${num(r.requests)} 回）`
         + (r.truncated ? '。上限で打ち切ったため、すべての Blob ではありません' : '')
         + (!r.truncated && !r.complete ? '。見本のため、件数は見本の数です' : '');
+      if (r.from_cache) {
+        // 一度集めた名前は 60 分の間保持し、取得し直さずに使います（依頼者の依頼）
+        cacheInfo.append(h('span', { class: 'muted', text: `${dateShort(r.fetched_at)} に取得した名前を使いました。` }),
+          linkButton('取得し直す', () => run(true)));
+      }
       if (!r.candidates.length) {
         list.append(h('p', { text: 'Blob がありません。' }));
         return;
@@ -90,12 +97,21 @@ export function openInferDialog(opt) {
       const tb = h('tbody');
       for (const c of r.candidates) {
         const range = c.first ? `${dateShort(c.first)} 〜 ${dateShort(c.last)}` : '';
+        // 選択肢の変数の値（先頭の 3 個）を、パスパターンの下に示します
+        const choices = Object.entries(c.variables || {}).filter(([, v]) => v.type === 'choice').map(([k, v]) => {
+          const o = v.value.options;
+          return `${k}: ${o.slice(0, 3).join('、')}${o.length > 3 ? ` ほか ${num(o.length - 3)} 個` : ''}`;
+        });
         tb.append(h('tr', { title: c.examples.join('\n') },
-          h('td', { class: 'mono', text: c.pattern }),
+          h('td', null, h('div', { class: 'mono', text: c.pattern }), choices.length ? h('div', { class: 'muted', text: `選択肢　${choices.join('　')}` }) : null),
           h('td', { class: 'num', text: num(c.count) }),
           r.sizes_known ? h('td', { class: 'num', text: size(c.bytes) }) : null,
           h('td', { class: 'nowrap', text: range }),
-          h('td', null, button('使う', () => { result = { path_pattern: c.pattern, target: t }; d.close(true); }))));
+          h('td', null, button('使う', () => {
+            result = { path_pattern: c.pattern, target: t, variables: c.variables || {}, complete: !!r.complete,
+              found: c.first ? { first: c.first, last: c.last, complete: !!r.complete } : null };
+            d.close(true);
+          }))));
       }
       table.append(tb);
       list.append(table);
