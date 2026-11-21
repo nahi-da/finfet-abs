@@ -1,0 +1,49 @@
+name: 不具合の報告
+description: 本ツールの不具合を報告します
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ログやスクリーンショットに、ストレージアカウント名・SAS・アカウントキー・テナントの ID などが含まれていないか確認してください。
+        本ツールのログは秘密情報を伏せますが、ストレージアカウント名などは含まれます。
+  - type: input
+    id: version
+    attributes:
+      label: 本ツールの版
+      placeholder: 例 1.0.0（画面の「このツールについて」で確認できます）
+    validations:
+      required: true
+  - type: input
+    id: windows
+    attributes:
+      label: Windows の版
+      placeholder: 例 Windows 11 24H2
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: 手順
+      placeholder: |
+        1.
+        2.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: 期待した動作
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: 実際の動作
+    validations:
+      required: true
+  - type: textarea
+    id: log
+    attributes:
+      label: ログの抜粋
+      render: text
