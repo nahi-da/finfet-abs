@@ -11,12 +11,14 @@ import logging
 import threading
 import time
 import uuid
+from contextlib import nullcontext
 from datetime import timedelta
 from typing import Callable
 
 from ..azure.backend import AccountRef, AuthRef, BackendError, ContainerRef
 from ..core.clock import SYSTEM_CLOCK, Clock, to_iso
 from ..core.errors import AppError, NotFound
+from . import caseresolve
 from . import datetime_vars as dtv
 from .listing import Cancelled, LimitReached, ListingCache, ListStats, list_target
 from .pattern import CompileContext, PatternError, compile_path, container_literal_prefix, expand_containers
@@ -245,14 +247,28 @@ class SearchService:
     def _list_one(self, run: SearchRun, no: int, account: AccountRef, container: str, fixed: dict, backend, t: dict) -> None:
         cond = run.cond
         self._set_target(run, no, status="listing", error=None)
+        target = ContainerRef(account, container)
+        stats = ListStats()
+        pattern = cond.get("path_pattern", "")
+        if not cond.get("ignore_case"):
+            try:
+                pattern = self._resolve_case(pattern, backend, target, stats)
+            except BackendError as exc:
+                self._set_target(run, no, status="error", error=self._err(exc))
+                return
+            if pattern is None:
+                # 大文字・小文字を区別しない部分に一致する階層がない: 一致する Blob はありません
+                with run.lock:
+                    run.targets[no]["requests"] = stats.requests
+                self._set_target(run, no, status="completed")
+                return
         try:
-            compiled = compile_path(cond.get("path_pattern", ""), cond.get("variables") or {},
+            compiled = compile_path(pattern, cond.get("variables") or {},
                                     ignore_case=cond.get("ignore_case", False),
                                     input_timezone=cond.get("input_timezone", "local"), ctx=self.ctx(), fixed=fixed)
         except PatternError as exc:
             self._set_target(run, no, status="error", error={"message": exc.issues[0].message})
             return
-        target = ContainerRef(account, container)
         hns = False
         if self.settings.get("search.exclude_adls_directories"):
             key = (account.account, account.endpoint_suffix)
@@ -268,7 +284,6 @@ class SearchService:
         writing_after = now - timedelta(hours=1)
         buf: list[tuple] = []
         last_flush = [time.monotonic()]
-        stats = ListStats()
 
         def flush() -> None:
             if not buf:
@@ -342,6 +357,27 @@ class SearchService:
         self._set_target(run, no, status=status, error=error)
         log.info("一覧を取得しました: %s/%s（取得 %s 件・一致 %s 件・要求 %s 回）", account.account, container, stats.listed,
                  run.targets[no]["matched"], stats.requests)
+
+    def _resolve_case(self, pattern: str, backend, target: ContainerRef, stats: ListStats) -> str | None:
+        """先頭の大文字・小文字を区別しない部分を、実際の表記に置き換えます（caseresolve）。
+
+        一致する階層がなければ None を返します。置き換えられない場合は、元のパスパターンを返します。
+        """
+        found = caseresolve.find(pattern)
+        if found is None:
+            return pattern
+
+        def walk(prefix: str) -> list[str]:
+            with (self.connection or nullcontext)():
+                stats.add(requests=1)
+                return backend.walk_prefixes(target, prefix, 5000)
+        actual = caseresolve.resolve(walk, found.head, found.ci_literal)
+        if actual is None:
+            return pattern
+        if not actual:
+            log.info("大文字・小文字を区別しない部分に一致する階層がありません: %s", target.container)
+            return None
+        return caseresolve.apply(pattern, found, actual)
 
     def _cache(self, run: SearchRun) -> ListingCache:
         if not hasattr(run, "cache"):

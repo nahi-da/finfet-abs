@@ -202,6 +202,40 @@ class SearchRunTest(SearchTestBase):
         self.assertEqual(row["matched_count"], 25)
         self.assertEqual(self.targets(sid)[1]["status"], "skipped")
 
+    def test_resource_id_case(self) -> None:
+        """既知の形式のリソース ID の部分（大文字・小文字を区別しない）を、実際の表記に合わせて取得します。"""
+        from finfet_abs.search import formats
+        sub = "00000000-0000-0000-0000-00000000000a"
+        mixed = (f"resourceId=/subscriptions/{sub}/resourceGroups/rg-x/providers/Microsoft.Storage/storageAccounts/"
+                 "stexample01/blobServices/default")
+        upper = mixed.upper().replace("RESOURCEID=", "resourceId=")
+        other = mixed.replace("stexample01", "stexample02")
+        names = [f"{base}/y=2026/m=11/d=20/h={h:02d}/m=00/PT1H.json" for base in (mixed, upper, other) for h in range(24)]
+        self.be.add_blobs("stexample01", "insights-logs-storageread", [BlobInfo(n, size=10) for n in names])
+        b = formats.build("resource-logs", {"category": "StorageRead", "sub": sub, "rg": "RG-X", "resource": "STEXAMPLE01"})
+        c = cond(dict(target(b["container"])), pattern=b["path_pattern"])
+        c["variables"] = {**b["variables"], "dt": {"type": "datetime", "path_timezone": "utc",
+                                                  "value": {"mode": "period", "start": "2026-11-20", "end": "2026-11-20"}}}
+        self.be.requests.clear()
+        from unittest import mock
+        from finfet_abs.search import listing
+        with mock.patch.object(listing, "PAGE_SIZE", 10):  # 1 ページで足りず、prefix ごとの取得に切り替わる場合
+            sid = self.svc.start(c)
+            row = self.wait_done(sid)
+        self.assertEqual(row["matched_count"], 48)  # 混ざった表記と大文字の表記の両方（ほかのリソースは含めない）
+        prefixes = {r[2] for r in self.be.requests if r[0] == "list"}
+        self.assertTrue(any(p.startswith(mixed + "/y=2026") for p in prefixes), prefixes)
+        self.assertTrue(any(p.startswith(upper + "/y=2026") for p in prefixes), prefixes)
+        self.assertFalse(any(p.startswith(other) for p in prefixes))  # 実際の表記の prefix で取得します
+        # 一致する階層がなければ、一覧を取得せずに 0 件
+        b2 = formats.build("resource-logs", {"category": "StorageRead", "sub": sub, "rg": "rg-none", "resource": "x"})
+        c["path_pattern"] = b2["path_pattern"]
+        self.be.requests.clear()
+        sid = self.svc.start(c)
+        self.assertEqual(self.wait_done(sid)["matched_count"], 0)
+        self.assertEqual([r for r in self.be.requests if r[0] == "list"], [])
+        self.assertEqual(self.targets(sid)[0]["status"], "completed")
+
     def test_invalid_condition(self) -> None:
         with self.assertRaises(AppError) as cm:
             self.svc.start(cond(target("c1"), pattern="logs/{{x"))

@@ -9,27 +9,27 @@
       "description": "診断設定でストレージアカウントに送ったリソースログ。1時間ごとの PT1H.json です。",
       "container_regex": "^insights-logs-[a-z0-9]+$",
       "container_template": "insights-logs-{category}",
-      "path_template": "resourceId=/SUBSCRIPTIONS/{sub}/RESOURCEGROUPS/{rg}/PROVIDERS/{rtype}/y={{dt=YYYY}}/m={{dt=MM}}/d={{dt=DD}}/h={{dt=hh}}/m=00/PT1H\\.json",
+      "path_template": "resourceId=/(?i:subscriptions/{sub}/resourceGroups/{rg}/providers/{rtype}/)y={{dt=YYYY}}/m={{dt=MM}}/d={{dt=DD}}/h={{dt=hh}}/m=00/PT1H\\.json",
       "inputs": [
         {"name": "category", "label": "ログのカテゴリ", "check": "^[A-Za-z0-9]+$", "lower": true, "required": true,
          "suggest": ["StorageRead", "StorageWrite", "StorageDelete", "AuditEvent", "AzureFirewallApplicationRule", "AzureFirewallNetworkRule", "AppServiceHTTPLogs", "ApplicationGatewayAccessLog"]},
-        {"name": "sub", "label": "サブスクリプション ID", "check": "^[0-9A-Fa-f-]{36}$", "upper": true},
-        {"name": "rg", "label": "リソースグループ", "check": "^[-\\w._()]{1,90}$", "upper": true},
+        {"name": "sub", "label": "サブスクリプション ID", "check": "^[0-9A-Fa-f-]{36}$"},
+        {"name": "rg", "label": "リソースグループ", "check": "^[-\\w._()]{1,90}$"},
         {"name": "rtype", "label": "リソースの種類", "kind": "select", "default": "storage-blob", "options": [
-          {"id": "storage-blob", "label": "Microsoft.Storage/storageAccounts（Blob）", "value": "MICROSOFT\\.STORAGE/STORAGEACCOUNTS/{resource}/BLOBSERVICES/DEFAULT"},
-          {"id": "storage-file", "label": "Microsoft.Storage/storageAccounts（File）", "value": "MICROSOFT\\.STORAGE/STORAGEACCOUNTS/{resource}/FILESERVICES/DEFAULT"},
-          {"id": "storage-queue", "label": "Microsoft.Storage/storageAccounts（Queue）", "value": "MICROSOFT\\.STORAGE/STORAGEACCOUNTS/{resource}/QUEUESERVICES/DEFAULT"},
-          {"id": "storage-table", "label": "Microsoft.Storage/storageAccounts（Table）", "value": "MICROSOFT\\.STORAGE/STORAGEACCOUNTS/{resource}/TABLESERVICES/DEFAULT"},
-          {"id": "keyvault", "label": "Microsoft.KeyVault/vaults", "value": "MICROSOFT\\.KEYVAULT/VAULTS/{resource}"},
-          {"id": "firewall", "label": "Microsoft.Network/azureFirewalls", "value": "MICROSOFT\\.NETWORK/AZUREFIREWALLS/{resource}"},
-          {"id": "appgw", "label": "Microsoft.Network/applicationGateways", "value": "MICROSOFT\\.NETWORK/APPLICATIONGATEWAYS/{resource}"},
-          {"id": "web", "label": "Microsoft.Web/sites", "value": "MICROSOFT\\.WEB/SITES/{resource}"},
+          {"id": "storage-blob", "label": "Microsoft.Storage/storageAccounts（Blob）", "value": "Microsoft\\.Storage/storageAccounts/{resource}/blobServices/default"},
+          {"id": "storage-file", "label": "Microsoft.Storage/storageAccounts（File）", "value": "Microsoft\\.Storage/storageAccounts/{resource}/fileServices/default"},
+          {"id": "storage-queue", "label": "Microsoft.Storage/storageAccounts（Queue）", "value": "Microsoft\\.Storage/storageAccounts/{resource}/queueServices/default"},
+          {"id": "storage-table", "label": "Microsoft.Storage/storageAccounts（Table）", "value": "Microsoft\\.Storage/storageAccounts/{resource}/tableServices/default"},
+          {"id": "keyvault", "label": "Microsoft.KeyVault/vaults", "value": "Microsoft\\.KeyVault/vaults/{resource}"},
+          {"id": "firewall", "label": "Microsoft.Network/azureFirewalls", "value": "Microsoft\\.Network/azureFirewalls/{resource}"},
+          {"id": "appgw", "label": "Microsoft.Network/applicationGateways", "value": "Microsoft\\.Network/applicationGateways/{resource}"},
+          {"id": "web", "label": "Microsoft.Web/sites", "value": "Microsoft\\.Web/sites/{resource}"},
           {"id": "other", "label": "そのほか", "value": "[^/]+/[^/]+/{resource}(?:/[^/]+/[^/]+)*"}
         ]},
-        {"name": "resource", "label": "リソース名", "check": "^[-\\w.]{1,80}$", "upper": true}
+        {"name": "resource", "label": "リソース名", "check": "^[-\\w.]{1,80}$"}
       ],
       "path_timezone": "utc",
-      "notes": ["resourceId の部分は大文字です。入力した値は大文字にします。", "現在の時間の Blob は書き込み中です。"],
+      "notes": ["リソース ID の部分は、大文字・小文字を区別せずに照合します（Azure が書き出す表記は、リソースの種類や作られた時期によって、すべて大文字のものと混ざったものがあります）。検索のときに、実際の表記を調べて取得します。", "現在の時間の Blob は書き込み中です。"],
       "verified": true,
       "verified_note": "構造は確認済み。リソースの種類ごとの子の階層は未確認です。",
       "examples": [
@@ -51,12 +51,12 @@
       "description": "診断設定でストレージアカウントに送ったアクティビティログ。",
       "container_regex": "^insights-activity-logs$",
       "container_template": "insights-activity-logs",
-      "path_template": "resourceId=/SUBSCRIPTIONS/{sub}/y={{dt=YYYY}}/m={{dt=MM}}/d={{dt=DD}}/h={{dt=hh}}/m=00/PT1H\\.json",
+      "path_template": "resourceId=/(?i:subscriptions/{sub}/)y={{dt=YYYY}}/m={{dt=MM}}/d={{dt=DD}}/h={{dt=hh}}/m=00/PT1H\\.json",
       "inputs": [
-        {"name": "sub", "label": "サブスクリプション ID", "check": "^[0-9A-Fa-f-]{36}$", "upper": true}
+        {"name": "sub", "label": "サブスクリプション ID", "check": "^[0-9A-Fa-f-]{36}$"}
       ],
       "path_timezone": "utc",
-      "notes": ["resourceId の部分は大文字です。入力した値は大文字にします。", "現在の時間の Blob は書き込み中です。"],
+      "notes": ["リソース ID の部分は、大文字・小文字を区別せずに照合します（Azure が書き出す表記は、リソースの種類や作られた時期によって、すべて大文字のものと混ざったものがあります）。検索のときに、実際の表記を調べて取得します。", "現在の時間の Blob は書き込み中です。"],
       "verified": false,
       "examples": [
         {"inputs": {}, "container": "insights-activity-logs",
@@ -70,14 +70,14 @@
       "description": "診断設定でストレージアカウントに送ったメトリック。",
       "container_regex": "^insights-metrics-[a-z0-9]+$",
       "container_template": "insights-metrics-pt1m",
-      "path_template": "resourceId=/SUBSCRIPTIONS/{sub}/RESOURCEGROUPS/{rg}/PROVIDERS/[^/]+/[^/]+/{resource}(?:/[^/]+/[^/]+)*/y={{dt=YYYY}}/m={{dt=MM}}/d={{dt=DD}}/h={{dt=hh}}/m=00/PT1H\\.json",
+      "path_template": "resourceId=/(?i:subscriptions/{sub}/resourceGroups/{rg}/providers/[^/]+/[^/]+/{resource}(?:/[^/]+/[^/]+)*/)y={{dt=YYYY}}/m={{dt=MM}}/d={{dt=DD}}/h={{dt=hh}}/m=00/PT1H\\.json",
       "inputs": [
-        {"name": "sub", "label": "サブスクリプション ID", "check": "^[0-9A-Fa-f-]{36}$", "upper": true},
-        {"name": "rg", "label": "リソースグループ", "check": "^[-\\w._()]{1,90}$", "upper": true},
-        {"name": "resource", "label": "リソース名", "check": "^[-\\w.]{1,80}$", "upper": true}
+        {"name": "sub", "label": "サブスクリプション ID", "check": "^[0-9A-Fa-f-]{36}$"},
+        {"name": "rg", "label": "リソースグループ", "check": "^[-\\w._()]{1,90}$"},
+        {"name": "resource", "label": "リソース名", "check": "^[-\\w.]{1,80}$"}
       ],
       "path_timezone": "utc",
-      "notes": ["resourceId の部分は大文字です。入力した値は大文字にします。", "現在の時間の Blob は書き込み中です。"],
+      "notes": ["リソース ID の部分は、大文字・小文字を区別せずに照合します（Azure が書き出す表記は、リソースの種類や作られた時期によって、すべて大文字のものと混ざったものがあります）。検索のときに、実際の表記を調べて取得します。", "現在の時間の Blob は書き込み中です。"],
       "verified": false,
       "examples": [
         {"inputs": {"resource": "kv-example"}, "container": "insights-metrics-pt1m",
@@ -91,15 +91,15 @@
       "description": "Log Analytics ワークスペースのデータのエクスポート。5 分ごとのフォルダーに PT05M.json が増えます。",
       "container_regex": "^am-[a-z0-9]+$",
       "container_template": "am-{table}",
-      "path_template": "WorkspaceResourceId=/subscriptions/{sub}/resourcegroups/{rg}/providers/microsoft\\.operationalinsights/workspaces/{ws}/y={{dt=YYYY}}/m={{dt=MM}}/d={{dt=DD}}/h={{dt=hh}}/m={{dt=mm}}/PT05M(?:_\\d+)?\\.json",
+      "path_template": "WorkspaceResourceId=/(?i:subscriptions/{sub}/resourcegroups/{rg}/providers/microsoft\\.operationalinsights/workspaces/{ws}/)y={{dt=YYYY}}/m={{dt=MM}}/d={{dt=DD}}/h={{dt=hh}}/m={{dt=mm}}/PT05M(?:_\\d+)?\\.json",
       "inputs": [
         {"name": "table", "label": "テーブル名", "check": "^[A-Za-z0-9_]+$", "lower": true, "required": true, "suggest": ["SecurityEvent", "Syslog", "AzureActivity", "AzureDiagnostics"]},
-        {"name": "sub", "label": "サブスクリプション ID", "check": "^[0-9A-Fa-f-]{36}$", "lower": true},
-        {"name": "rg", "label": "リソースグループ", "check": "^[-\\w._()]{1,90}$", "lower": true},
-        {"name": "ws", "label": "ワークスペース名", "check": "^[-\\w]{1,63}$", "lower": true}
+        {"name": "sub", "label": "サブスクリプション ID", "check": "^[0-9A-Fa-f-]{36}$"},
+        {"name": "rg", "label": "リソースグループ", "check": "^[-\\w._()]{1,90}$"},
+        {"name": "ws", "label": "ワークスペース名", "check": "^[-\\w]{1,63}$"}
       ],
       "path_timezone": "utc",
-      "notes": ["リソース ID の部分は小文字で書き出される見込みです（大文字・小文字は未確認）。", "現在の時間の Blob は書き込み中です。"],
+      "notes": ["リソース ID の部分は、大文字・小文字を区別せずに照合します（Azure が書き出す表記は、リソースの種類や作られた時期によって、すべて大文字のものと混ざったものがあります）。検索のときに、実際の表記を調べて取得します。", "現在の時間の Blob は書き込み中です。"],
       "verified": true,
       "verified_note": "構造は確認済み。リソース ID の部分の大文字・小文字は未確認です。",
       "examples": [
@@ -135,10 +135,10 @@
       "description": "Network Watcher の仮想ネットワークのフローログ。",
       "container_regex": "^insights-logs-flowlogflowevent$",
       "container_template": "insights-logs-flowlogflowevent",
-      "path_template": "flowLogResourceID=/{sub}_NETWORKWATCHERRG/NETWORKWATCHER_{region}_{flowlog}/y={{dt=YYYY}}/m={{dt=MM}}/d={{dt=DD}}/h={{dt=hh}}/m=00/macAddress={{mac}}/PT1H\\.json",
+      "path_template": "flowLogResourceID=/(?i:{sub}_NETWORKWATCHERRG/NETWORKWATCHER_{region}_{flowlog}/)y={{dt=YYYY}}/m={{dt=MM}}/d={{dt=DD}}/h={{dt=hh}}/m=00/macAddress={{mac}}/PT1H\\.json",
       "inputs": [
-        {"name": "sub", "label": "サブスクリプション ID", "check": "^[0-9A-Fa-f-]{36}$", "upper": true},
-        {"name": "region", "label": "リージョン", "check": "^[A-Za-z0-9]+$", "upper": true},
+        {"name": "sub", "label": "サブスクリプション ID", "check": "^[0-9A-Fa-f-]{36}$"},
+        {"name": "region", "label": "リージョン", "check": "^[A-Za-z0-9]+$"},
         {"name": "flowlog", "label": "フローログの名前", "check": "^[-\\w.]{1,80}$"}
       ],
       "path_timezone": "utc",
@@ -156,14 +156,14 @@
       "description": "Network Watcher の NSG フローログ（廃止が予定されています）。",
       "container_regex": "^insights-logs-networksecuritygroupflowevent$",
       "container_template": "insights-logs-networksecuritygroupflowevent",
-      "path_template": "resourceId=/SUBSCRIPTIONS/{sub}/RESOURCEGROUPS/{rg}/PROVIDERS/MICROSOFT\\.NETWORK/NETWORKSECURITYGROUPS/{nsg}/y={{dt=YYYY}}/m={{dt=MM}}/d={{dt=DD}}/h={{dt=hh}}/m=00/macAddress={{mac}}/PT1H\\.json",
+      "path_template": "resourceId=/(?i:subscriptions/{sub}/resourceGroups/{rg}/providers/Microsoft\\.Network/networkSecurityGroups/{nsg}/)y={{dt=YYYY}}/m={{dt=MM}}/d={{dt=DD}}/h={{dt=hh}}/m=00/macAddress={{mac}}/PT1H\\.json",
       "inputs": [
-        {"name": "sub", "label": "サブスクリプション ID", "check": "^[0-9A-Fa-f-]{36}$", "upper": true},
-        {"name": "rg", "label": "リソースグループ", "check": "^[-\\w._()]{1,90}$", "upper": true},
-        {"name": "nsg", "label": "NSG の名前", "check": "^[-\\w.]{1,80}$", "upper": true}
+        {"name": "sub", "label": "サブスクリプション ID", "check": "^[0-9A-Fa-f-]{36}$"},
+        {"name": "rg", "label": "リソースグループ", "check": "^[-\\w._()]{1,90}$"},
+        {"name": "nsg", "label": "NSG の名前", "check": "^[-\\w.]{1,80}$"}
       ],
       "path_timezone": "utc",
-      "notes": ["resourceId の部分は大文字です。入力した値は大文字にします。"],
+      "notes": ["リソース ID の部分は、大文字・小文字を区別せずに照合します（Azure が書き出す表記は、リソースの種類や作られた時期によって、すべて大文字のものと混ざったものがあります）。検索のときに、実際の表記を調べて取得します。"],
       "verified": false,
       "examples": [
         {"inputs": {"nsg": "nsg-example"}, "container": "insights-logs-networksecuritygroupflowevent",
