@@ -326,6 +326,7 @@ dialog.w960 { width: 960px; }
 
 /* Blob 名から作成のダイアログの候補の表（4.1.2 の表の規則） */
 .infer-table { width: 100%; border-collapse: collapse; margin-top: var(--sp-3); font-size: var(--fs-table); }
-.infer-table th { text-align: left; color: var(--text-muted); font-weight: 400; border-bottom: 1px solid var(--line); height: var(--row-h); padding: 0 var(--sp-2); }
+.infer-table th { white-space: nowrap; text-align: left; color: var(--text-muted); font-weight: 400; border-bottom: 1px solid var(--line); height: var(--row-h); padding: 0 var(--sp-2); }
 .infer-table td { border-bottom: 1px solid var(--line); height: var(--row-h); padding: 0 var(--sp-2); word-break: break-all; }
 .infer-table td.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.infer-table td.nowrap { white-space: nowrap; word-break: normal; }
