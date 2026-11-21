@@ -10,7 +10,7 @@ from unittest import mock
 
 from finfet_abs.azure.backend import AccountRef, AuthRef, BlobInfo, ContainerRef
 from finfet_abs.demo.memory import MemoryBackend
-from finfet_abs.search import detect, formats, listing, prefix, shortener
+from finfet_abs.search import caseresolve, detect, formats, listing, prefix, shortener
 from finfet_abs.search.datetime_vars import FixedZone
 from finfet_abs.search.pattern import CompileContext, compile_path
 from finfet_abs.search.sortkey import sort_key
@@ -77,6 +77,35 @@ def blobs(names, tier="Archive"):
     return [BlobInfo(n, 10, tier=tier) for n in names]
 
 
+class CaseResolveTest(unittest.TestCase):
+    """大文字・小文字を区別しない部分の、実際の表記の求め方（caseresolve）。"""
+
+    def test_find(self) -> None:
+        f = caseresolve.find(r"resourceId=/(?i:subscriptions/AB/resourceGroups/rg\-x/providers/[^/]+/x/)y=\d{4}/.*")
+        self.assertEqual((f.head, f.ci_literal), ("resourceId=/", "subscriptions/AB/resourceGroups/rg-x/providers/"))
+        self.assertIsNone(caseresolve.find(r"resourceId=/subscriptions/.*"))  # (?i: がない
+        self.assertIsNone(caseresolve.find(r"a/(?i:x/|y/)z"))  # (?i: の中の直下の選択
+        self.assertIsNone(caseresolve.find(r"a/(?i:x/)z|b"))  # 全体の選択
+        self.assertIsNone(caseresolve.find(r"[ab]/(?i:x/)z"))  # 前が文字そのものでない
+        self.assertIsNone(caseresolve.find(r"a/(?i:x+/)z"))  # 量指定子
+        self.assertIsNotNone(caseresolve.find(r"a/(?i:x/)z(?:1|2)"))  # 後ろの選択はかまいません
+        self.assertEqual(caseresolve.find(r"/a/(?i:x/y)").ci_literal, "x/")  # 先頭の / は取り除きます
+
+    def test_resolve_and_apply(self) -> None:
+        tree = {"r=/": ["SUBS/", "subs/", "Other/"], "r=/SUBS/": ["AB/"], "r=/subs/": ["ab/", "cd/"],
+                "r=/SUBS/AB/": ["X/"], "r=/subs/ab/": ["x/"]}
+        walk = lambda p: tree.get(p, [])  # noqa: E731
+        self.assertEqual(caseresolve.resolve(walk, "r=/", "subs/ab/"), ["SUBS/AB/", "subs/ab/"])
+        self.assertEqual(caseresolve.resolve(walk, "r=/", "subs/zz/"), [])
+        pat = r"r=/(?i:subs/ab/x/)y/\d+"
+        f = caseresolve.find(pat)
+        out = caseresolve.apply(pat, f, caseresolve.resolve(walk, f.head, f.ci_literal))
+        self.assertEqual(out, r"r=/(?:SUBS/AB/X/|subs/ab/x/)y/\d+")
+        pat = r"r=/(?i:subs/ab/[^/]+/)y"
+        f = caseresolve.find(pat)
+        self.assertEqual(caseresolve.apply(pat, f, ["subs/ab/"]), r"r=/(?:subs/ab/)(?i:[^/]+/)y")
+
+
 class ListingTest(unittest.TestCase):
     def setUp(self) -> None:
         self.be = MemoryBackend()
@@ -117,6 +146,21 @@ class ListingTest(unittest.TestCase):
         self.assertTrue(listing.covered_by_trial("a/", "b/1"))
         self.assertFalse(listing.covered_by_trial("b/", "b/1"))
         self.assertFalse(listing.covered_by_trial("c/", "b/1"))
+        # Azure の順（UTF-16 の符号単位）: 😀（U+1F600）は Ａ（U+FF21）より前。Python の文字列の比較では後
+        self.assertTrue(listing.covered_by_trial("😀/", "Ａ/1"))
+        self.assertFalse(listing.covered_by_trial("Ａ/", "😀/1"))
+
+    def test_azure_order_split(self) -> None:
+        """絵文字と全角の名前が混ざるとき、まとめて取得から切り替えても取りこぼさない（実環境で確認した順）。"""
+        names = [f"x/😀/{i:05d}" for i in range(3000)] + [f"x/Ａ/{i:05d}" for i in range(3000)] + \
+                [f"x/ﾆ/{i:05d}" for i in range(3000)]
+        self.be.add_blobs("stexample01", "logs", blobs(names))
+        listed = [b.name for b in self.be.list_blobs_page(self.t, "x/", page_size=10000).items]
+        self.assertEqual(listed[0][:3], "x/😀")  # 架空の実装も Azure と同じ順
+        self.assertEqual(listed, sorted(names, key=listing.azure_order))
+        with mock.patch.object(listing, "PAGE_SIZE", 5000):
+            self.run_list(["x/😀/", "x/Ａ/", "x/ﾆ/"], concurrency=1)
+        self.assertEqual(set(self.got), set(names))
 
     def test_cache(self) -> None:
         self.be.add_blobs("stexample01", "logs", blobs([f"a/{i}" for i in range(10)] + [f"b/{i}" for i in range(10)]))
@@ -210,12 +254,22 @@ class FormatsTest(unittest.TestCase):
                                             for i in f.get("inputs", [])})
             compile_path(built["path_pattern"], built["variables"], input_timezone="utc", ctx=CTX)
 
-    def test_upper_and_errors(self) -> None:
+    def test_case_insensitive_resource_id(self) -> None:
         b = formats.build("resource-logs", {"category": "StorageRead", "sub": "00000000-0000-0000-0000-00000000000a",
                                             "rg": "rg-x", "resource": "stexample01"})
-        self.assertIn("/SUBSCRIPTIONS/00000000-0000-0000-0000-00000000000A/RESOURCEGROUPS/RG-X/", b["path_pattern"])
-        self.assertIn("STORAGEACCOUNTS/STEXAMPLE01/BLOBSERVICES", b["path_pattern"])
+        self.assertTrue(b["path_pattern"].startswith("resourceId=/(?i:subscriptions/00000000-0000-0000-0000-00000000000a/"
+                                                     "resourceGroups/rg-x/providers/"))
         self.assertEqual(b["container"], "insights-logs-storageread")
+        # Azure が書き出す表記は、すべて大文字のものと混ざったものがあります（実環境で確認）。どちらにも一致します
+        tail = "/y=2026/m=11/d=20/h=09/m=00/PT1H.json"
+        mixed = ("resourceId=/subscriptions/00000000-0000-0000-0000-00000000000a/resourceGroups/rg-x/providers/"
+                 "Microsoft.Storage/storageAccounts/stexample01/blobServices/default" + tail)
+        c = compile_path(b["path_pattern"], b["variables"] | {"dt": {"type": "datetime", "path_timezone": "utc",
+                         "value": {"mode": "period", "start": "2026-11-20", "end": "2026-11-20"}}}, input_timezone="utc", ctx=CTX)
+        self.assertIsNotNone(c.match(mixed))
+        self.assertIsNotNone(c.match(mixed.upper().replace("RESOURCEID=", "resourceId=").replace("/Y=", "/y=")
+                                     .replace("/M=", "/m=").replace("/D=", "/d=").replace("/H=", "/h=").replace("PT1H.JSON", "PT1H.json")))
+        self.assertIsNone(c.match(mixed.replace("resourceId=", "RESOURCEID=")))  # resourceId= の部分は区別します
         with self.assertRaises(formats.FormatInputError):
             formats.build("resource-logs", {"category": ""})
         with self.assertRaises(formats.FormatInputError):

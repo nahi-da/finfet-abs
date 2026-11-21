@@ -32,9 +32,18 @@ class LimitReached(Exception):
     """上限件数に達した。"""
 
 
+def azure_order(name: str) -> bytes:
+    """Azure の一覧の名前の順の比較キー。
+
+    Azure は UTF-16 の符号単位の順で返します（実環境で確認。U+10000 以上の文字（絵文字など）は、
+    U+E000〜U+FFFF の文字（全角・半角カナなど）より前になり、Python の文字列の比較とは違います）。
+    """
+    return name.encode("utf-16-be", "surrogatepass")
+
+
 def covered_by_trial(prefix: str, last: str) -> bool:
     """まとめて取得したページ（最後の名前 last まで）で、prefix の Blob をすべて取得済みか。"""
-    return prefix < last and not last.startswith(prefix)
+    return azure_order(prefix) < azure_order(last) and not last.startswith(prefix)
 
 
 @dataclass

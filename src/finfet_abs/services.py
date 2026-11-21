@@ -69,3 +69,16 @@ def setup_services(app) -> None:
     s["job_secrets"] = lambda sid: (_ for _ in ()).throw(LookupError(sid))
     s["targets"] = TargetService(backend=s["backend"], credstore=s["credstore"], auth=s["auth"], arm=s["arm"],
                                  settings=app.settings, clock=app.clock)
+
+    # 検索・検索結果・検索履歴（M4）
+    from .history.exchange import ImportSession
+    from .history.service import HistoryService
+    from .search.engine import SearchService
+    from .search.results import ResultsService
+    from .search.urls import UrlSessions
+    s["history"] = HistoryService(app.db, app.settings, app.clock)
+    s["search"] = SearchService(db=app.db, events=app.events, settings=app.settings, backend=lambda: s["backend"],
+                                history=s["history"], clock=app.clock)
+    s["results"] = ResultsService(app.db)
+    s["url_sessions"] = UrlSessions()
+    s["import_sessions"] = ImportSession()

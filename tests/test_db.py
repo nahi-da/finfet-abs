@@ -19,7 +19,7 @@ class DbTest(TempDirMixin):
             self.assertEqual(d.schema_version(), dbmod.LATEST_VERSION)
             names = {r[0] for r in d.query("SELECT name FROM sqlite_master WHERE type='table'")}
             for t in ("meta", "searches", "search_targets", "search_results", "jobs", "job_items", "job_secrets",
-                      "credentials", "search_history", "recent_values"):
+                      "credentials", "search_history", "recent_values", "search_selection"):
                 self.assertIn(t, names)
             self.assertEqual(d.journal_mode, "WAL")
             self.assertEqual(d.scalar("PRAGMA foreign_keys"), 1)

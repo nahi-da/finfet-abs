@@ -65,11 +65,14 @@ def populate(backend: MemoryBackend, total: int = 30000, *, now: datetime | None
         key = f"{account}/{container}"
         counts[key] = counts.get(key, 0) + len(blobs)
 
-    hours = max(48, int(total * 0.1))
-    # Log Analytics のエクスポート（5 分ごと。件数の半分をここに置きます）
+    # ほかのコンテナーの件数は、設定の件数が大きくても 3 万件分までにします（大きな件数は下のコンテナーに置きます）
+    base = min(total, 30000)
+    hours = max(48, int(base * 0.1))
+    # Log Analytics のエクスポート（5 分ごと。設定の件数の半分、10 万件以上の設定ではすべてをここに置きます）
     blobs = []
     k = 0
-    while len(blobs) < max(100, total // 2):
+    target = total if total >= 100000 else max(100, total // 2)
+    while len(blobs) < target:
         t = now - timedelta(minutes=5 * k)
         for n in range(1 + k % 3):
             suffix = "" if n == 0 else f"_{n}"
@@ -104,14 +107,14 @@ def populate(backend: MemoryBackend, total: int = 30000, *, now: datetime | None
     add("stexample01", "insights-activity-logs", blobs)
     # Storage Analytics（$logs）
     blobs = []
-    for k in range(max(24, total // 20)):
+    for k in range(max(24, base // 20)):
         t = now - timedelta(hours=k // 3)
         svc = ("blob", "queue", "table")[k % 3]
         blobs.append(_blob(rnd, f"{svc}/{t:%Y/%m/%d/%H}00/{k % 7:06d}.log", t))
     add("stexample02", "$logs", blobs)
     # 仮想ネットワークのフローログ
     blobs = []
-    for k in range(max(24, total // 30)):
+    for k in range(max(24, base // 30)):
         t = now - timedelta(hours=k)
         for mac in ("000D3A000001", "000D3A000002"):
             blobs.append(_blob(rnd, f"flowLogResourceID=/{SUB.upper()}_NETWORKWATCHERRG/NETWORKWATCHER_JAPANEAST_"
@@ -120,7 +123,7 @@ def populate(backend: MemoryBackend, total: int = 30000, *, now: datetime | None
     # バックアップ（日本語・記号を含む名前、大きな Blob）
     blobs = []
     depts = ["営業部", "開発部", "総務部"]
-    for k in range(max(30, total // 50)):
+    for k in range(max(30, base // 50)):
         t = now - timedelta(days=k % 400, hours=k % 24)
         d = depts[k % 3]
         blobs.append(_blob(rnd, f"{d}/{t:%Y}/{t:%m}/報告書 #{k} (確定版).pdf", t))
