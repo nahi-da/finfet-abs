@@ -143,7 +143,17 @@ class SearchService:
             except Exception:  # noqa: BLE001
                 log.exception("検索でエラーが発生しました")
             finally:
+                self._mark_cancelled(run)
                 self._finish(run)
+
+    def _mark_cancelled(self, run: SearchRun) -> None:
+        """中止したとき、まだ取得を始めていない接続先を「中止」にします。"""
+        if not run.cancel.is_set():
+            return
+        with run.lock:
+            waiting = [no for no, t in run.targets.items() if t["status"] in ("waiting", "listing")]
+        for no in waiting:
+            self._set_target(run, no, status="cancelled")
 
     def _set_target(self, run: SearchRun, no: int, **kw) -> None:
         with run.lock:
@@ -460,7 +470,22 @@ class SearchService:
 
     def skip_target(self, sid: str, no: int) -> None:
         """この接続先を除きます（結果から除きます）。"""
-        self.db.write(lambda c: (c.execute("DELETE FROM search_results WHERE search_id=? AND target_no=?", (sid, no)),
-                                 c.execute("UPDATE search_targets SET status='skipped' WHERE search_id=? AND target_no=?",
-                                           (sid, no))))
+        # ほかの接続先の取得が続いている間も除けます（3.2.10）。一致の件数は、検索の終わりにも数え直します
+        with self._lock:
+            run = self._runs.get(sid)
+        if run is not None:
+            with run.lock:
+                t = run.targets.get(no)
+                if t is not None and t["status"] in ("listing", "waiting"):
+                    raise AppError("TARGET_RUNNING", "取得中の接続先は除けません。", status=409)
+                if t is not None:
+                    run.matched -= t["matched"]
+                    t.update(status="skipped", matched=0)
+
+        def fn(c):
+            c.execute("DELETE FROM search_results WHERE search_id=? AND target_no=?", (sid, no))
+            c.execute("UPDATE search_targets SET status='skipped' WHERE search_id=? AND target_no=?", (sid, no))
+            r = c.execute("SELECT COUNT(*), IFNULL(SUM(size),0) FROM search_results WHERE search_id=?", (sid,)).fetchone()
+            c.execute("UPDATE searches SET matched_count=?, matched_bytes=? WHERE id=?", (r[0], r[1], sid))
+        self.db.write(fn)
         self.events.publish("search.done", {"id": sid, "status": "updated"})

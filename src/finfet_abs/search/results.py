@@ -259,9 +259,7 @@ class ResultsService:
         where, params = build_where(sid, f)
         if selected_only:
             where += " AND EXISTS(SELECT 1 FROM search_selection s WHERE s.search_id=r.search_id AND s.result_id=r.id)"
-        desc = sort.startswith("-")
-        col = SORTS.get(sort.lstrip("-"), "r.sort_key")
-        order = ", ".join(f"{c.strip()} {'DESC' if desc else 'ASC'}" for c in col.split(",")) + ", r.id"
+        order = order_by(sort)
         buf = io.StringIO()
         w = csv.writer(buf, lineterminator="\r\n")
         w.writerow(["ストレージアカウント", "コンテナー", "Blob 名", "層", "リハイドレートの状態", "サイズ", "最終更新日時",
