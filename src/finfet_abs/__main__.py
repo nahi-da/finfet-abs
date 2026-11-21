@@ -27,6 +27,11 @@ def main(argv: list[str] | None = None) -> int:
     if args.version:
         console.info(f"{APP_NAME} {__version__}")
         return 0
+    from .core import runtime
+    problem = runtime.check()
+    if problem:
+        console.error(problem)
+        return 1
     if args.self_check:
         from .app import self_check
         return self_check()

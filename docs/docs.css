@@ -1,0 +1,52 @@
+/* 同梱のドキュメントの見た目（6.8.1）。本ツールの画面と同じ基準（4.1）。明るい・暗いはブラウザの設定に合わせます。 */
+:root {
+  color-scheme: light dark;
+  --bg: #ffffff;
+  --bg-raised: #f4f5f7;
+  --line: #d5d8de;
+  --text: #1f2328;
+  --text-muted: #59616b;
+  --link: #1f5fcc;
+  --focus: #1f5fcc;
+  --warn: #8a5a00;
+  --code-bg: #f1f2f4;
+  --font: "Segoe UI", "Yu Gothic UI", "Meiryo UI", sans-serif;
+  --font-mono: "Cascadia Mono", Consolas, "BIZ UDGothic", monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #16181c;
+    --bg-raised: #1d2026;
+    --line: #30343c;
+    --text: #e4e6ea;
+    --text-muted: #a3a9b3;
+    --link: #7fb0ff;
+    --focus: #8ab4ff;
+    --warn: #e0b04f;
+    --code-bg: #121417;
+  }
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--bg); color: var(--text); font-family: var(--font); font-size: 14px; line-height: 1.7; }
+a { color: var(--link); }
+a:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.layout { display: flex; max-width: 1100px; margin: 0 auto; }
+nav { width: 200px; flex: none; padding: 24px 16px; border-right: 1px solid var(--line); }
+nav .title { font-weight: 600; margin-bottom: 12px; }
+nav a { display: block; padding: 4px 8px; text-decoration: none; color: var(--text); border-left: 2px solid transparent; }
+nav a[aria-current="page"] { border-left-color: var(--link); background: var(--bg-raised); }
+main { flex: 1; min-width: 0; padding: 24px 32px 48px; }
+h1 { font-size: 20px; margin: 0 0 16px; }
+h2 { font-size: 16px; margin: 32px 0 8px; padding-bottom: 4px; border-bottom: 1px solid var(--line); }
+h3 { font-size: 14px; margin: 24px 0 8px; }
+p, ul, ol { margin: 8px 0; }
+code, pre { font-family: var(--font-mono); font-size: 13px; background: var(--code-bg); }
+code { padding: 1px 4px; }
+pre { padding: 8px 12px; overflow-x: auto; border: 1px solid var(--line); }
+table { border-collapse: collapse; margin: 8px 0; font-size: 13px; }
+th, td { border: 1px solid var(--line); padding: 4px 8px; text-align: left; vertical-align: top; }
+th { background: var(--bg-raised); font-weight: 600; }
+.note { border-left: 2px solid var(--warn); padding: 4px 12px; margin: 12px 0; }
+.muted { color: var(--text-muted); }
+footer { margin-top: 48px; color: var(--text-muted); font-size: 12px; }
+@media (max-width: 800px) { .layout { display: block; } nav { width: auto; border-right: 0; border-bottom: 1px solid var(--line); } }

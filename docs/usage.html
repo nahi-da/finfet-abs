@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>使い方 - FinFeT</title>
+<link rel="stylesheet" href="docs.css">
+</head>
+<body>
+<div class="layout">
+<nav aria-label="ドキュメント">
+<div class="title">FinFeT</div>
+<a href="index.html">はじめに</a>
+<a href="setup.html">導入と更新</a>
+<a href="usage.html" aria-current="page">使い方</a>
+<a href="patterns.html">パスパターンの書き方</a>
+<a href="permissions.html">必要な権限</a>
+<a href="costs.html">料金と注意</a>
+<a href="troubleshooting.html">困ったときは</a>
+<a href="data.html">データの取り扱い</a>
+<a href="licenses.html">ライセンス</a>
+</nav>
+<main>
+<h1>使い方</h1>
+<h2>検索</h2>
+<p>検索のページで、接続先（ストレージアカウントとコンテナー）、パスパターン、変数の値を入れて [検索] します。検索はすぐに実行され、検索結果のページで Blob を選びます。</p>
+<h2>キューとジョブ</h2>
+<p>選んだ Blob のリハイドレートとダウンロードを「ジョブ」としてキューに追加します。前のジョブが終わると、次のジョブを開始します。リハイドレートを待っている間は、次のジョブが進みます。</p>
+<h2>後日のダウンロード</h2>
+<p>取得の方法で「リハイドレートのみ」を選ぶと、リハイドレートが終わった後に「ダウンロード待ち」になります。ジョブの詳細の [ダウンロードを開始] でダウンロードします。本ツールを起動していない間は確認しません。起動したときに確認します。</p>
+<h2>再開と再実行</h2>
+<ul>
+<li>[再開]: 同じジョブの、未完了の Blob だけを処理します。リハイドレートを要求済みの Blob は、要求し直さずに完了の確認から続けます。</li>
+<li>[すべて再実行]: 同じ Blob の一覧と取得の設定で、新しいジョブを作ります。元のジョブの記録は残ります。</li>
+</ul>
+<footer>FinFeT <span data-fill="version">（開発版）</span></footer>
+</main>
+</div>
+</body>
+</html>

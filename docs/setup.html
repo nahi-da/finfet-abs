@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>導入と更新 - FinFeT</title>
+<link rel="stylesheet" href="docs.css">
+</head>
+<body>
+<div class="layout">
+<nav aria-label="ドキュメント">
+<div class="title">FinFeT</div>
+<a href="index.html">はじめに</a>
+<a href="setup.html" aria-current="page">導入と更新</a>
+<a href="usage.html">使い方</a>
+<a href="patterns.html">パスパターンの書き方</a>
+<a href="permissions.html">必要な権限</a>
+<a href="costs.html">料金と注意</a>
+<a href="troubleshooting.html">困ったときは</a>
+<a href="data.html">データの取り扱い</a>
+<a href="licenses.html">ライセンス</a>
+</nav>
+<main>
+<h1>導入と更新</h1>
+<h2>ダウンロードとハッシュの確認</h2>
+<ol>
+<li>インターネットに接続できる環境で、GitHub の Release のページから <code>finfet-abs-&lt;版&gt;-win-x64.zip</code> と <code>SHA256SUMS.txt</code> をダウンロードします。</li>
+<li>ZIP の SHA-256 を計算し、<code>SHA256SUMS.txt</code> の値と比べます。
+<pre>certutil -hashfile finfet-abs-&lt;版&gt;-win-x64.zip SHA256</pre></li>
+<li>（任意）GitHub CLI で、このリポジトリの GitHub Actions で作られたことを確かめます。
+<pre>gh attestation verify finfet-abs-&lt;版&gt;-win-x64.zip --repo &lt;所有者&gt;/finfet-abs</pre></li>
+</ol>
+<h2>インターネットに接続できない環境への持ち込み</h2>
+<p>組織の規程に従って、ZIP を使う PC に運びます。Python やパッケージは ZIP に含まれているため、使う PC での導入はありません。</p>
+<h2>展開と起動</h2>
+<ol>
+<li>ZIP のプロパティで [許可する] にチェックを入れてから、任意のフォルダー（例: <code>C:\Tools\finfet-abs</code>）に展開します。</li>
+<li><code>finfet-abs.bat</code> を実行します。</li>
+</ol>
+<p>ポータブルモードで使う場合は、起動の前に、展開したフォルダーに空の <code>data</code> フォルダーを作ります。</p>
+<h2>更新</h2>
+<ol>
+<li>新しい版の ZIP を、上の手順で<strong>新しいフォルダー</strong>に展開します（古いフォルダーに上書きしません）。</li>
+<li>本ツールを終了します。</li>
+<li>ポータブルモードの場合は、古いフォルダーの <code>data</code> を新しいフォルダーに移します。</li>
+<li>新しいフォルダーの <code>finfet-abs.bat</code> を起動します。動作を確かめたら、古いフォルダーを削除してかまいません。</li>
+</ol>
+<h2>pip の使い方</h2>
+<ul>
+<li>導入済みのパッケージの確認: <code>runtime\pip.bat list</code>、<code>runtime\pip.bat check</code></li>
+<li>インターネットに接続できない環境での追加・更新: インターネットに接続できる環境で、Windows x64・Python 3.14 用の wheel を取得して持ち込み、次のように導入します。
+<pre>runtime\pip.bat install --no-index --find-links &lt;wheel のフォルダー&gt; &lt;パッケージ&gt;</pre></li>
+</ul>
+<p class="note">パッケージを個別に更新すると、本ツールが確認していない版の組み合わせになります。通常は、新しい版の全部入り版で更新してください。</p>
+<footer>FinFeT <span data-fill="version">（開発版）</span></footer>
+</main>
+</div>
+</body>
+</html>
