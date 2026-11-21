@@ -1,0 +1,7 @@
+version: 2
+updates:
+  # Python のパッケージは、ハッシュ付きの requirements.txt を tools/lock_requirements.py で作り直すため対象にしません（6.11.6）
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly

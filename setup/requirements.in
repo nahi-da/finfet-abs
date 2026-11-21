@@ -1,0 +1,6 @@
+# 直接使うパッケージ（2.8、6.9）。版を上げたら tools/lock_requirements.py で requirements.txt を作り直します。
+azure-storage-blob>=12.24,<13
+azure-core>=1.32,<2
+msal>=1.31,<2
+msal-extensions>=1.2,<2
+waitress>=3.0.1,<4
