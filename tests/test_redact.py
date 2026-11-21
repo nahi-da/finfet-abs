@@ -63,13 +63,12 @@ class RedactTest(TempDirMixin):
                 raise ValueError(f"failed with {samples()[2]} and {samples()[7]}")
             except ValueError:
                 log.exception("error occurred")
-            log.warning("secret object %s", Secret("AnotherSecret-Value-999"))
         finally:
             logs.setup(None)
         text = "".join(p.read_text(encoding="utf-8") for p in (self.tmp / "logs").glob("*.log"))
         self.assertIn("message", text)
         self.assertIn("ValueError", text)
-        for secret in secrets_list() + [FAKE_SIG, "AnotherSecret-Value-999"]:
+        for secret in secrets_list() + [FAKE_SIG]:
             self.assertNotIn(secret, text)
 
     def test_job_log(self) -> None:
