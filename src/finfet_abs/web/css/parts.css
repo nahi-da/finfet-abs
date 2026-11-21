@@ -324,7 +324,7 @@ dialog.w960 { width: 960px; }
 .folder-list .group { padding: var(--sp-1) var(--sp-3); color: var(--text-muted); border-top: 1px solid var(--line); }
 .folder-list .group:first-child { border-top: 0; }
 
-/* Blob 名から作成のダイアログの候補の表（4.1.2 の表の規則） */
+/* パスパターンを自動生成のダイアログの候補の表（4.1.2 の表の規則） */
 .infer-table { width: 100%; border-collapse: collapse; margin-top: var(--sp-3); font-size: var(--fs-table); }
 .infer-table th { white-space: nowrap; text-align: left; color: var(--text-muted); font-weight: 400; border-bottom: 1px solid var(--line); height: var(--row-h); padding: 0 var(--sp-2); }
 .infer-table td { border-bottom: 1px solid var(--line); height: var(--row-h); padding: 0 var(--sp-2); word-break: break-all; }

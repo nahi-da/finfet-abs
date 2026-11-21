@@ -107,3 +107,9 @@
 .rehydrate-note { border: 1px solid var(--warn); border-radius: var(--radius); padding: var(--sp-3); margin-top: var(--sp-3); }
 .rehydrate-note p { margin: 0 0 var(--sp-2); }
 .log-view { height: 60vh; overflow: auto; border: 1px solid var(--line); padding: var(--sp-2); background: var(--bg-sunken, var(--bg)); }
+
+/* 選択肢の変数（依頼者の依頼）: チェックボックスの一覧。多いときは枠の中でスクロールします */
+.choice-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(12em, 1fr)); gap: 0 var(--sp-3); max-height: 168px; overflow: auto; border: 1px solid var(--line); padding: var(--sp-1) var(--sp-2); }
+.choice-item { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: block; }
+.choice-item input { margin-right: var(--sp-1); }
+.choice-empty { grid-column: 1 / -1; padding: var(--sp-1) 0; }

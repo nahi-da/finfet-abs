@@ -34,6 +34,25 @@ function unitsInFormats(formats) {
 }
 
 /**
+ * 自動生成で分かった期間（パス上の日時。`2026-11-01T00:00:00`）を、期間の入力の基準の文字（`2026-11-01 00:00`）にします。
+ * @param {{first: string, last: string}} found
+ * @param {string} pathTz 'utc' / 'local'
+ * @param {string} inputTz 'utc' / 'local'
+ * @returns {{start: string, end: string}}
+ */
+export function periodFromFound(found, pathTz, inputTz) {
+  const p = (x) => String(x).padStart(2, '0');
+  const conv = (iso) => {
+    const s = String(iso).slice(0, 19);
+    if (pathTz === inputTz) return s.slice(0, 16).replace('T', ' ');
+    const dt = pathTz === 'utc' ? new Date(`${s}Z`) : new Date(s);
+    if (inputTz === 'utc') return `${dt.getUTCFullYear()}-${p(dt.getUTCMonth() + 1)}-${p(dt.getUTCDate())} ${p(dt.getUTCHours())}:${p(dt.getUTCMinutes())}`;
+    return `${dt.getFullYear()}-${p(dt.getMonth() + 1)}-${p(dt.getDate())} ${p(dt.getHours())}:${p(dt.getMinutes())}`;
+  };
+  return { start: conv(found.first), end: conv(found.last) };
+}
+
+/**
  * 変数の行を描きます。
  * @param {Object} ctx
  * @param {string} ctx.name
@@ -75,13 +94,23 @@ export function variableRow(ctx) {
     inp.focus();
   }
 
-  const typeSel = d.type === 'datetime' ? h('span', { class: 'var-type', text: '日時' }) : select([['string', '文字列'], ['number', '数値']], d.type || 'string', {
+  const typeSel = d.type === 'datetime' ? h('span', { class: 'var-type', text: '日時' }) : select([['string', '文字列'], ['number', '数値'], ['choice', '選択肢']], d.type || 'string', {
     'aria-label': `${ctx.name} の種類`,
-    onchange: (e) => { d.type = e.target.value; d.value = { mode: 'any' }; changed(); },
+    onchange: (e) => {
+      const t = e.target.value;
+      // 「次のうちいずれか」の値は、選択肢に移します（逆も同じ）
+      const prevVals = d.type === 'choice' ? (d.value.options || []) : d.value.mode === 'one_of' ? (d.value.values || []).map((x) => x.value) : [];
+      d.type = t;
+      if (t === 'choice') d.value = { options: [...prevVals], selected: [...prevVals] };
+      else if (t === 'string' && prevVals.length) d.value = { mode: 'one_of', match: 'exact', values: prevVals.map((x) => ({ value: x, enabled: true })) };
+      else d.value = { mode: 'any' };
+      changed();
+    },
   });
 
   if (d.type === 'datetime') drawDatetime();
   else if (d.type === 'number') drawNumber();
+  else if (d.type === 'choice') drawChoice();
   else drawString();
 
   function numIn(v, label, onv, cls = 'w-num') {
@@ -152,6 +181,70 @@ export function variableRow(ctx) {
     }
   }
 
+  // 選択肢（依頼者の依頼。decisions.md）: 選択肢の一覧から、検索する値を選びます。複数選択とキーワードでの絞り込み
+  function drawChoice() {
+    const v = d.value;
+    v.options = v.options || [];
+    v.selected = v.selected || [];
+    let filter = ctx.choiceFilter?.get?.() || '';
+    // 選択の変更では行を描き直しません（絞り込みと一覧のスクロールの位置を保つため）
+    const quiet = () => { d.touched = true; (ctx.onQuietChange || ctx.onChange)(); };
+    const count = h('span', { class: 'muted' });
+    const list = h('div', { class: 'choice-list', role: 'group', 'aria-label': `${ctx.name} の選択肢` });
+    const filterIn = textInput(filter, { width: 'w-mid', placeholder: 'キーワードで絞り込み', 'aria-label': `${ctx.name} の選択肢の絞り込み`, type: 'search' });
+    const shown = () => v.options.filter((o) => !filter || o.toLowerCase().includes(filter.toLowerCase()));
+    const drawList = () => {
+      clear(list);
+      const sel = new Set(v.selected);
+      const items = shown();
+      for (const o of items) {
+        const cb = checkbox(o, sel.has(o), (on) => {
+          v.selected = on ? [...new Set([...v.selected, o])] : v.selected.filter((x) => x !== o);
+          drawCount();
+          quiet();
+        });
+        cb.classList.add('choice-item');
+        cb.title = o;
+        list.append(cb);
+      }
+      if (!v.options.length) list.append(h('div', { class: 'muted choice-empty', text: '選択肢がありません。値を入力して追加してください。' }));
+      else if (!items.length) list.append(h('div', { class: 'muted choice-empty', text: '絞り込みに一致する選択肢はありません。' }));
+      drawCount();
+    };
+    const drawCount = () => {
+      count.textContent = `${v.selected.length} / ${v.options.length} 件を選択` + (filter ? `（${shown().length} 件を表示）` : '');
+    };
+    filterIn.addEventListener('input', () => { filter = filterIn.value.trim(); ctx.choiceFilter?.set?.(filter); drawList(); });
+    const setShown = (on) => {
+      const items = new Set(shown());
+      v.selected = on ? [...new Set([...v.selected, ...items])] : v.selected.filter((x) => !items.has(x));
+      drawList();
+      quiet();
+    };
+    const addIn = textInput('', { width: 'w-mid', placeholder: '選択肢を追加', 'aria-label': `${ctx.name} の選択肢を追加` });
+    const addValues = (vals) => {
+      for (const x of vals.map((y) => y.trim()).filter(Boolean)) {
+        if (!v.options.includes(x)) v.options.push(x);
+        if (!v.selected.includes(x)) v.selected.push(x);
+      }
+      drawList();
+      quiet();
+    };
+    addIn.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); addValues([addIn.value]); addIn.value = ''; } });
+    addIn.addEventListener('paste', (e) => {
+      const t = e.clipboardData.getData('text');
+      if (t.includes('\n')) { e.preventDefault(); addValues(t.split(/\r?\n/)); }
+    });
+    body.append(h('div', { class: 'line' }, typeSel, filterIn, linkButton('すべて選ぶ', () => setShown(true)),
+      linkButton('選択を外す', () => setShown(false)), count));
+    body.append(list);
+    const foot = h('div', { class: 'line' }, addIn);
+    if (ctx.fetchCandidates) foot.append(linkButton('Azure から候補を取得', () => candidates(addValues)));
+    if (d.from_sample) foot.append(h('span', { class: 'muted', text: '見本の Blob 名から作った選択肢です。ほかの値は、追加するか Azure から取得してください。' }));
+    body.append(foot);
+    drawList();
+  }
+
   async function candidates(add) {
     const box = h('div', { class: 'folder-list' }, h('div', { class: 'group', text: '読み込み中…' }));
     const dlg = openDialog({ title: `候補（${ctx.name}）`, width: 720, body: box });
@@ -205,6 +298,15 @@ export function variableRow(ctx) {
     });
     const line = h('div', { class: 'line' }, typeSel, h('span', { text: '期間の入力' }), tzSel, modeSel);
     body.append(line);
+    if (d.found && d.found.first && d.found.last) {
+      // パスパターンの自動生成で分かった、Blob がある期間（依頼者の依頼。decisions.md）
+      const p = periodFromFound(d.found, d.path_timezone || 'utc', ctx.inputTimezone);
+      const tzName = ctx.inputTimezone === 'utc' ? 'UTC' : 'ローカル時刻';
+      const already = v.mode === 'period' && v.start === p.start && v.end === p.end;
+      body.append(h('div', { class: 'line found-range' },
+        h('span', { class: 'muted', text: `Blob がある期間（${tzName}）: ${p.start} 〜 ${p.end}${d.found.complete ? '' : '（見本の Blob 名から。実際はもっと広いことがあります）'}` }),
+        already ? null : linkButton('この期間にする', () => { d.value = { mode: 'period', start: p.start, end: p.end }; changed(); })));
+    }
     if (v.mode === 'relative') {
       const kind = select(REL, v.kind || 'last_days', { 'aria-label': '相対的な期間', onchange: (e) => { v.kind = e.target.value; if (!v.n) v.n = 7; changed(); } });
       line.append(kind);

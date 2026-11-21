@@ -29,8 +29,17 @@ class InferTest(unittest.TestCase):
     def test_plain_date_folders_and_compact(self) -> None:
         names = [f"logs/2026/11/{d:02d}/app_202611{d:02d}.log" for d in range(1, 10)]
         c = pats(names)
+        # 同じ日時を 2 回書いた名前は、値が食い違わなければ 1 つの dt にまとめます
+        self.assertEqual(c[0]["pattern"], r"logs/{{dt=YYYY}}/{{dt=MM}}/{{dt=DD}}/app_{{dt=YYYYMMDD}}\.log")
+        self.assertEqual(c[0]["variables"], {"dt": {"type": "datetime"}})
+        # 食い違う（フォルダーは 11 月、ファイル名は 10 月）なら別の日時の変数
+        names = [f"logs/2026/11/{d:02d}/app_202610{d:02d}.log" for d in range(1, 5)]
+        c = pats(names)
         self.assertEqual(c[0]["pattern"], r"logs/{{dt=YYYY}}/{{dt=MM}}/{{dt=DD}}/app_{{dt2=YYYYMMDD}}\.log")
-        self.assertEqual(c[0]["variables"], {"dt": {"type": "datetime"}, "dt2": {"type": "datetime"}})
+        # まとめた場合は、細かい単位（時）まで期間に入ります
+        names = [f"vm/{d:02d}/app_202611{d:02d}{h:02d}.log" for d in (20, 21) for h in (0, 9)]
+        c = pats([f"x/2026/11/{n[3:]}" for n in names])
+        self.assertEqual(c[0]["last"], "2026-11-21T09:00:00")
 
     def test_choices_and_classes(self) -> None:
         names = [f"{app}/server{n}.txt" for app in ("web", "api") for n in range(1, 8)]
@@ -60,6 +69,8 @@ class InferTest(unittest.TestCase):
         ctx = CompileContext(now_utc=datetime(2026, 11, 22, tzinfo=timezone.utc), local_zone=dtv.FixedZone(9))
         sets = [
             [f"vm=web{n:02d}/2026/11/{d:02d}/app.log" for n in (1, 2, 10) for d in (1, 2)],
+            [f"vm-logs/{vm}/2026/11/{d:02d}/app_202611{d:02d}{h:02d}.log" for vm in ("web01", "db01") for d in (20, 21) for h in (0, 9)],
+            [f"logs/2026/11/{d:02d}/app_202610{d:02d}.log" for d in range(1, 5)],
             [f"logs/{h}_PT1H.json" for h in ("host-a", "host-b", "host-c")],
             [f"{app}/server{n}.txt" for app in ("web", "api") for n in range(1, 8)],
             [f"data/{i:08x}-guid.bin" for i in range(150)],

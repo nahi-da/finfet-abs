@@ -233,24 +233,36 @@ class Group:
     names: list[str] = field(default_factory=list)
     sizes: list[int] = field(default_factory=list)
     segs: list = field(default_factory=list)  # 階層ごと: 日時の階層はトークンごとの値の集合の並び、そのほかは SegStat
-    dates: list[datetime] = field(default_factory=list)
+    dates: list[datetime] = field(default_factory=list)  # 日時の変数 dt の値
+    dates_merged: list[datetime] = field(default_factory=list)  # dt と、dt2 以降を合わせた値
+    conflict: set = field(default_factory=set)  # dt と値が食い違うことがある日時の変数（dt2 など）
 
 
-def _date_of(toks: list[Tok]) -> datetime | None:
-    parts = {"Y": None, "M": 1, "D": 1, "h": 0, "m": 0, "s": 0}
+def _date_parts(toks: list[Tok]) -> dict[str, dict[str, int]]:
+    """日時の変数ごとの単位の値（{"dt": {"Y": 2026, "M": 11, ...}, "dt2": {...}}）。"""
+    out: dict[str, dict[str, int]] = {}
     for t in toks:
-        if t.kind == "date" and t.var == "dt":
+        if t.kind == "date":
+            parts = out.setdefault(t.var or "dt", {})
             pos = 0
             for f in re.findall(r"YYYY|MM|DD|hh|mm|ss", t.fmt or ""):
                 ln = 4 if f == "YYYY" else 2
                 parts[_UNIT_OF[f]] = int(t.text[pos:pos + ln])
                 pos += ln
-    if parts["Y"] is None:
+    return out
+
+
+def _to_datetime(parts: dict[str, int] | None) -> datetime | None:
+    if not parts or parts.get("Y") is None:
         return None
     try:
-        return datetime(parts["Y"], parts["M"], parts["D"], parts["h"], parts["m"], parts["s"])
+        return datetime(parts["Y"], parts.get("M", 1), parts.get("D", 1), parts.get("h", 0), parts.get("m", 0), parts.get("s", 0))
     except ValueError:
         return None
+
+
+def _date_of(toks: list[Tok]) -> datetime | None:
+    return _to_datetime(_date_parts(toks).get("dt"))
 
 
 def infer(items: Iterable[tuple[str, int | None]], *, max_candidates: int = MAX_CANDIDATES) -> list[dict]:
@@ -276,12 +288,33 @@ def infer(items: Iterable[tuple[str, int | None]], *, max_candidates: int = MAX_
                 for i, t in enumerate(s):
                     if len(st[i]) <= MAX_CHOICES + 1:
                         st[i].add(t.text)
-        d = _date_of(toks)
+        parts = _date_parts(toks)
+        base = parts.get("dt")
+        d = _to_datetime(base)
         if d is not None:
             g.dates.append(d)
+        if len(parts) > 1:
+            # 同じ日時を 2 回書いた名前（2026/11/21/app_2026112109.log）は、値が食い違わなければ 1 つの dt にします
+            comb = dict(base or {})
+            for var, p in parts.items():
+                if var == "dt":
+                    continue
+                if base is None or any(base[u] != v for u, v in p.items() if u in base):
+                    g.conflict.add(var)
+                comb.update({u: v for u, v in p.items() if u not in comb})
+            dm = _to_datetime(comb)
+            if dm is not None:
+                g.dates_merged.append(dm)
     merged: dict[str, dict] = {}
     for g in groups.values():
         pat, variables = _pattern_of(g)
+        extra = [v for v in variables if v != "dt" and variables[v].get("type") == "datetime"]
+        same = [v for v in extra if v not in g.conflict] if "dt" in variables else []
+        for v in same:
+            pat = pat.replace("{{" + v + "=", "{{dt=")
+            del variables[v]
+        if same and len(same) == len(extra) and len(g.dates_merged) == len(g.dates):
+            g.dates = g.dates_merged
         c = merged.get(pat)
         if c is None:
             c = merged[pat] = {"pattern": pat, "count": 0, "bytes": 0, "examples": [], "first": None, "last": None,

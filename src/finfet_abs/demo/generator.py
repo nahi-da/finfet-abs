@@ -138,6 +138,15 @@ def populate(backend: MemoryBackend, total: int = 30000, *, now: datetime | None
             blobs.append(_blob(rnd, f"{t:%Y/%m/%d/%H-%M-%S}/{rule}/{rule}_1.csv", t, tier="Hot"))
             blobs.append(_blob(rnd, f"{t:%Y/%m/%d/%H-%M-%S}/{rule}/{rule}-manifest.json", t, tier="Hot", size=800))
     add("stexample02", "inventory", blobs)
+    # 仮想マシンごとのアプリのログ（選択肢の変数の例。VM の名前の階層）
+    blobs = []
+    for k in range(24 * 30):
+        t = (now - timedelta(hours=k)).replace(minute=0, second=0, microsecond=0)
+        for vm in ("web01", "web02", "web03", "db01", "batch01"):
+            if vm == "batch01" and t.hour % 6:
+                continue
+            blobs.append(_blob(rnd, f"vm-logs/{vm}/{t:%Y}/{t:%m}/{t:%d}/app_{t:%Y%m%d%H}.log", t, tier="Cool" if k > 24 * 7 else "Hot"))
+    add("stexample01", "applogs", blobs)
     # 別のドメインのストレージアカウント
     blobs = [_blob(rnd, f"logs/{(now - timedelta(days=k)):%Y%m%d}.log", now - timedelta(days=k)) for k in range(90)]
     add("stexample04", "logs", blobs, "core.chinacloudapi.cn")
