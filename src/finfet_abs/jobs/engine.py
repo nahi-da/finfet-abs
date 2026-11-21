@@ -37,6 +37,9 @@ HEARTBEAT_SECONDS = 30
 DOWNLOAD_RESUME_TRIES = 3
 FREE_MARGIN = 1024 ** 3
 _READY_TIERS = ("Hot", "Cool", "Cold", "Premium")
+#: 認証が使えないことを表すエラー（3.1.9・3.3.9）
+SIGNIN_CODES = ("NOT_SIGNED_IN", "INTERACTION_REQUIRED")
+CREDENTIAL_CODES = ("NO_CREDENTIAL",)
 
 
 class JobLog:
@@ -121,7 +124,8 @@ class Speed:
 
 class JobEngine:
     def __init__(self, *, db, settings, events, service: JobService, backend: Callable[[], object], limits: Limits,
-                 logs_dir: Path, clock: Clock = SYSTEM_CLOCK, time_scale: Callable[[], float] | None = None) -> None:
+                 logs_dir: Path, clock: Clock = SYSTEM_CLOCK, time_scale: Callable[[], float] | None = None,
+                 resolve_auth: Callable[[dict], dict] | None = None) -> None:
         self.db = db
         self.settings = settings
         self.events = events
@@ -132,6 +136,9 @@ class JobEngine:
         self.clock = clock
         #: デモモードで、完了の確認の間隔を縮める割合（8.3.3。1 分 = 1 時間なら 60）
         self.time_scale = time_scale or (lambda: 1.0)
+        #: 呼び出したときの認証の決め方（3.1.9）。保存した認証情報が削除されたときの探し直しに使います
+        self.resolve_auth = resolve_auth
+        self._startup_poll = False
         self.speed = Speed()
         self.md5_lock = threading.Lock()
         self._runners: dict[str, JobRunner] = {}
@@ -146,6 +153,8 @@ class JobEngine:
     # ------------------------------------------------------------ 開始・終了
 
     def start(self) -> None:
+        # 起動時に、リハイドレート待ちのジョブを確認します（3.3.9。設定でオフにできます）
+        self._startup_poll = bool(self.settings.get("rehydrate.check_on_startup"))
         if self._thread is None:
             self._thread = threading.Thread(target=self._loop, name="job-scheduler", daemon=True)
             self._thread.start()
@@ -165,6 +174,53 @@ class JobEngine:
     def wake(self) -> None:
         self._wake.set()
 
+    def notify(self, level: str, text: str, job_id: str | None = None) -> None:
+        """上部のバーの「お知らせ」に残すもの（4.3.5。リハイドレートの完了、ジョブの終了、エラー）。"""
+        self.events.publish("notify", {"level": level, "text": text, "url": f"/jobs/{job_id}" if job_id else None})
+
+    def auth_problem(self, job_id: str, code: str, message: str) -> None:
+        """認証が使えないことを、ジョブの一覧と詳細に表示します（3.3.9）。"""
+        text = "サインインが必要です。" if code in SIGNIN_CODES else "認証情報がありません。接続先を追加してください。"
+        row = self.db.query_one("SELECT last_error_json FROM jobs WHERE id=?", (job_id,))
+        cur = json.loads(row["last_error_json"]) if row and row["last_error_json"] else None
+        if cur and cur.get("code") == code:
+            return
+        self.db.execute("UPDATE jobs SET last_error_json=? WHERE id=?",
+                        (json.dumps({"code": code, "message": text, "detail": message}, ensure_ascii=False), job_id))
+        self.notify("warn", f"「{self.job_name(job_id)}」: {text}", job_id)
+        self.service._publish(job_id)
+
+    def clear_auth_problem(self, job_id: str) -> None:
+        self.db.execute("UPDATE jobs SET last_error_json=NULL WHERE id=? AND last_error_json LIKE '%\"code\"%' AND "
+                        "(last_error_json LIKE '%NOT_SIGNED_IN%' OR last_error_json LIKE '%INTERACTION_REQUIRED%' OR "
+                        "last_error_json LIKE '%NO_CREDENTIAL%')", (job_id,))
+
+    def reauth(self, rows: list) -> bool:
+        """保存した認証情報が削除された Blob の認証を、3.1.9 の規則で探し直します。変えたものがあれば True。"""
+        if self.resolve_auth is None:
+            return False
+        changed = False
+        cache: dict[tuple, dict] = {}
+        for r in rows:
+            if not r["credential_id"] or r["secret_id"]:
+                continue
+            key = (r["storage_account"], r["endpoint_suffix"], r["container"], r["auth_kind"], r["credential_id"])
+            if key not in cache:
+                cache[key] = self.resolve_auth({"storage_account": r["storage_account"], "endpoint_suffix": r["endpoint_suffix"],
+                                                "container": r["container"], "auth_kind": r["auth_kind"],
+                                                "credential_id": r["credential_id"], "tenant": r["tenant_id"]})
+            res = cache[key]
+            if res.get("resolved") and (res.get("credential_id") != r["credential_id"] or res.get("auth_kind") != r["auth_kind"]):
+                self.db.execute("UPDATE job_items SET auth_kind=?, credential_id=? WHERE id=?",
+                                (res.get("auth_kind"), res.get("credential_id"), r["id"]))
+                changed = True
+        if changed:
+            JobLog(self.logs_dir, rows[0]["job_id"], self.clock).write("INFO", "削除された認証情報の代わりに、使える認証情報を使います")
+        return changed
+
+    def job_name(self, job_id: str) -> str:
+        return self.db.scalar("SELECT name FROM jobs WHERE id=?", (job_id,)) or "ジョブ"
+
     def running_ids(self) -> list[str]:
         with self._lock:
             return [k for k, r in self._runners.items() if r.is_alive()]
@@ -174,7 +230,13 @@ class JobEngine:
             try:
                 self.schedule()
                 self.heartbeat()
-                if time.monotonic() - self._last_poll >= (15 if self.time_scale() <= 1 else 5):
+                if self._startup_poll:
+                    self._startup_poll = False
+                    self._last_poll = time.monotonic()
+                    n = self.poll(force=True)
+                    if n:
+                        log.info("起動時にリハイドレートの完了を確認しました（%s 件）", n)
+                elif time.monotonic() - self._last_poll >= (15 if self.time_scale() <= 1 else 5):
                     self._last_poll = time.monotonic()
                     self.poll()
             except Exception:  # noqa: BLE001
@@ -268,6 +330,16 @@ class JobEngine:
         backend = self.backend()
         for items in groups.values():
             infos, errors = fetch_infos(backend, self.limits, items)
+            auth_errs = {errors[r["id"]] for r in items if r["id"] in errors and errors[r["id"]][0] in SIGNIN_CODES + CREDENTIAL_CODES}
+            if auth_errs:
+                if any(c in CREDENTIAL_CODES for c, _m in auth_errs) and self.reauth(items):
+                    continue  # 次の確認で、新しい認証情報で確かめます
+                for jid in {r["job_id"] for r in items}:
+                    code, msg = sorted(auth_errs)[0]
+                    self.auth_problem(jid, code, msg)
+            else:
+                for jid in {r["job_id"] for r in items}:
+                    self.clear_auth_problem(jid)
             updates = []
             for r in items:
                 jobs_touched.add(r["job_id"])
@@ -325,6 +397,11 @@ class JobEngine:
             JobLog(self.logs_dir, r["job_id"], self.clock).write("INFO", "リハイドレートが完了しました", r["blob_name"])
         if done:
             self.events.publish("rehydrate.done", {"count": len(done), "job_ids": sorted({r["job_id"] for r in done})})
+            by_job: dict[str, int] = {}
+            for r in done:
+                by_job[r["job_id"]] = by_job.get(r["job_id"], 0) + 1
+            for jid, n in by_job.items():
+                self.notify("ok", f"「{self.job_name(jid)}」のリハイドレートが完了しました（{n:,} 件）", jid)
 
     def _after_poll(self, job_id: str) -> None:
         """リハイドレート待ちのジョブを、状態に合わせて進めます。"""
@@ -341,8 +418,9 @@ class JobEngine:
                 self.db.execute("UPDATE jobs SET status='queued', updated_at=? WHERE id=? AND status='waiting_rehydrate'",
                                 (now, job_id))
             elif method == "rehydrate_only" and n_active - n_ready == 0:
-                self.db.execute("UPDATE jobs SET status='waiting_download', updated_at=? WHERE id=? AND "
-                                "status='waiting_rehydrate'", (now, job_id))
+                if self.db.execute("UPDATE jobs SET status='waiting_download', updated_at=? WHERE id=? AND "
+                                   "status='waiting_rehydrate'", (now, job_id)):
+                    self.notify("warn", f"「{row['name']}」のリハイドレートが終わりました。ダウンロードを開始できます", job_id)
             elif n_active == 0:
                 self.finish(job_id)
         self.service.recount(job_id)
@@ -357,6 +435,10 @@ class JobEngine:
         self.db.execute("UPDATE jobs SET status=?, ended_at=?, updated_at=?, lock_json=NULL, lock_heartbeat_at=NULL WHERE id=?",
                         (status, now, now, job_id))
         JobLog(self.logs_dir, job_id, self.clock).write("INFO", f"ジョブが終わりました（{STATUS_LABELS[status]}）")
+        if status == "completed":
+            self.notify("ok", f"「{self.job_name(job_id)}」が完了しました", job_id)
+        else:
+            self.notify("error", f"「{self.job_name(job_id)}」は一部が失敗しました（エラー {n_err:,} 件）", job_id)
         log.info("ジョブが終わりました（%s）", STATUS_LABELS[status])
         return status
 
@@ -583,6 +665,9 @@ class JobRunner(threading.Thread):
         self.db.execute("UPDATE jobs SET status=?, updated_at=?, lock_json=NULL, lock_heartbeat_at=NULL WHERE id=? AND "
                         "status='running'", (new, now, self.job_id))
         self.log.write("INFO", STATUS_LABELS[new] + "になりました")
+        if new == "waiting_download":
+            self.engine.notify("warn", f"「{self.engine.job_name(self.job_id)}」のリハイドレートが終わりました。ダウンロードを開始できます",
+                               self.job_id)
 
     def _job_error(self, message: str, *, pause: bool) -> None:
         now = to_iso(self.clock.now())
@@ -590,6 +675,7 @@ class JobRunner(threading.Thread):
                         "updated_at=?, lock_json=NULL WHERE id=?",
                         (json.dumps({"message": message}, ensure_ascii=False), 1 if pause else 0, now, self.job_id))
         self.log.write("ERROR", message)
+        self.engine.notify("error", f"「{self.engine.job_name(self.job_id)}」: {message}", self.job_id)
 
     def _stage(self, name: str, fn: Callable[[], int]) -> None:
         """段階ごとの処理。処理する Blob がなくなり、ほかの段階も止まったら終わります。"""
