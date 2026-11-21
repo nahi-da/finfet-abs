@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import json
 import logging
+import threading
+import time
 from datetime import timedelta
 
 from ..azure.backend import AccountRef, AuthRef, ContainerRef
@@ -192,6 +194,63 @@ def register(router, app) -> None:
                     break
             return {"values": values[:1000], "prefixes": prefixes}
         return task(run, "suggest-values")
+
+    # ------------------------------------------------------------ Blob 名からパスパターンを作る（decisions.md）
+
+    infer_cancels: dict[str, threading.Event] = {}
+
+    @router.post("/api/v1/pattern/infer")
+    def pattern_infer(req: Request):
+        from ..search import infer
+        body = req.json()
+        target = body.get("target") or {}
+        mode = body.get("mode") or "sample"
+        if mode not in infer.MODES:
+            raise AppError("BAD_MODE", "範囲の指定が正しくありません。")
+        if not target.get("storage_account") or not target.get("container"):
+            raise AppError("NO_TARGET", "接続先を選んでください。")
+        try:
+            limit = max(1, min(1_000_000, int(body.get("limit") or 10000)))
+            per_level = max(1, min(100, int(body.get("per_level") or 10)))
+        except (TypeError, ValueError):
+            raise AppError("BAD_NUMBER", "件数は数で入力してください。") from None
+        prefix = str(body.get("prefix") or "").lstrip("/")
+        cancel = threading.Event()
+        holder: dict = {}
+
+        def run():
+            ref = AuthRef(target.get("auth_kind") or "entra_user", credential_id=target.get("credential_id"),
+                          tenant_id=target.get("tenant"))
+            ct = ContainerRef(AccountRef(target["storage_account"], target.get("endpoint_suffix") or "core.windows.net", ref),
+                              target["container"])
+            last = [0.0]
+
+            def progress(n: int, requests: int) -> None:
+                if time.monotonic() - last[0] >= 0.5:
+                    last[0] = time.monotonic()
+                    app.events.publish("infer.progress", {"id": holder.get("id"), "names": n, "requests": requests})
+            try:
+                items, info = infer.collect(s["backend"], ct, mode=mode, prefix=prefix, limit=limit, per_level=per_level,
+                                            cancel=cancel, progress=progress, connection=s["limits"].request
+                                            if "limits" in s else None)
+            except infer.Cancelled:
+                raise AppError("CANCELLED", "中止しました。") from None
+            finally:
+                infer_cancels.pop(holder.get("id"), None)
+            cands = infer.infer(items)
+            return {"candidates": cands, "names": len(items), "requests": info["requests"],
+                    "truncated": info["truncated"], "sizes_known": mode != "sample"}
+        tid = s["tasks"].submit(run, "pattern-infer")
+        holder["id"] = tid
+        infer_cancels[tid] = cancel
+        return json_response({"task_id": tid}, 202)
+
+    @router.post("/api/v1/pattern/infer/{tid}/cancel")
+    def pattern_infer_cancel(req: Request):
+        ev = infer_cancels.get(req.params["tid"])
+        if ev is not None:
+            ev.set()
+        return json_response({"ok": ev is not None})
 
     # ------------------------------------------------------------ 検索
 

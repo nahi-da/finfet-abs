@@ -82,5 +82,41 @@ class CollectTest(unittest.TestCase):
             infer.collect(self.be, self.t, mode="sample", cancel=ev)
 
 
+class InferApiTest(unittest.TestCase):
+    def test_api(self) -> None:
+        import tempfile
+        import time
+        from pathlib import Path
+
+        from finfet_abs.services import setup_services
+
+        from .helpers import Client, make_app, quiet_logs
+        quiet_logs()
+        tmp = Path(tempfile.mkdtemp())
+        app = make_app(tmp, demo=True)
+        app.settings.update({"demo.blob_count": 1000})
+        setup_services(app)
+        try:
+            done: list[dict] = []
+            app.events.subscribe(lambda ev: done.append(ev["data"]) if ev["type"] == "task.done" else None)
+            c = Client(app.build_wsgi())
+            c.login(app.security)
+            body = {"target": {"storage_account": "stexample01", "container": "backup", "auth_kind": "account_key"},
+                    "mode": "first", "limit": 500}
+            r = c.post("/api/v1/pattern/infer", body)
+            self.assertEqual(r.status, 202)
+            tid = r.json()["task_id"]
+            end = time.time() + 15
+            while time.time() < end and not any(d["id"] == tid for d in done):
+                time.sleep(0.05)
+            res = next(d for d in done if d["id"] == tid)
+            self.assertTrue(res["ok"], res)
+            self.assertGreater(res["result"]["names"], 0)
+            self.assertTrue(res["result"]["candidates"])
+            self.assertEqual(c.post("/api/v1/pattern/infer", {**body, "mode": "bad"}).status, 400)
+        finally:
+            app.stop()
+
+
 if __name__ == "__main__":
     unittest.main()
