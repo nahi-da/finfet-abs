@@ -4,6 +4,8 @@ name: release
 on:
   push:
     tags: ["v*"]
+  # 手動の実行では、全部入り版を作ってアーティファクトに置くだけです（Release は作りません。確認用）
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -28,12 +30,24 @@ jobs:
           python-version: "3.14"
       - name: 全部入り版の作成
         shell: pwsh
-        run: python -X utf8 tools/build_release.py --tag "$env:TAG" --out dist
+        run: |
+          if ('${{ github.event_name }}' -eq 'push') { python -X utf8 tools/build_release.py --tag "$env:TAG" --out dist }
+          else { python -X utf8 tools/build_release.py --out dist }
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: アーティファクト（手動の実行）
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: release-build
+          path: dist/
+          retention-days: 3
       - name: 構成証明
+        if: github.event_name == 'push'
         uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:
           subject-path: dist/finfet-abs-*-win-x64.zip
       - name: Release の下書き
+        if: github.event_name == 'push'
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
