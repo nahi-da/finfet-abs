@@ -146,7 +146,7 @@ export async function render(ctx) {
     ],
     fetch: async (offset, limit) => ({ total: items.length, items: items.slice(offset, offset + limit) }),
     onRowClick: (r) => { if (!r.usable) showReason(r); },
-    empty: '保存した認証情報はありません。',
+    empty: h('span', null, '保存した認証情報はありません。', h('a', { href: '/search', text: '検索のページで接続先を追加' })),
   });
 
   async function load() {

@@ -170,8 +170,14 @@ export class VirtualTable {
     if (!this.el.isConnected) return;
     const top = this.el.getBoundingClientRect().top;
     const reserve = this.opt.bottomReserve ?? 24;
-    const hgt = Math.max(this.opt.minHeight || 160, window.innerHeight - top - reserve);
+    const min = this.opt.minHeight || 160;
+    const hgt = Math.max(min, window.innerHeight - top - reserve);
     this.el.style.height = `${hgt}px`;
+    // ページの下の余白などで、ページ全体にスクロールバーが出る場合は、その分だけ表を低くします
+    if (!this.el.closest('dialog')) {
+      const over = document.documentElement.scrollHeight - window.innerHeight;
+      if (over > 0) this.el.style.height = `${Math.max(min, hgt - over)}px`;
+    }
   }
 
   /** データを取得し直します。 */

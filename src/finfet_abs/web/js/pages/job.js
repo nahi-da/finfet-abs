@@ -228,7 +228,7 @@ export async function render(ctx) {
     const d = { ...await api.get(`/api/v1/jobs/${id}/items/${r.id}`), status_label: r.status_label };
     const body = h('div');
     for (const [title, fields] of ITEM_GROUPS) {
-      const kv = h('dl', { class: 'kv' });
+      const kv = h('dl', { class: 'kv', style: { gridTemplateColumns: '14em 1fr' } });
       for (const [k, label, kind] of fields) {
         let v = d[k];
         if (k === 'rehydrate_requested_at' && !v && d.rehydrate_requested_known === 0) v = '不明（ジョブの開始前から要求済み）';
