@@ -5,6 +5,7 @@ import * as api from '../api.js';
 import { button, h } from '../dom.js';
 import { on } from '../events.js';
 import { dateShort, num, size } from '../format.js';
+import { runTask } from '../task.js';
 import { openDialog } from './dialog.js';
 import { formGrid, radios, radioValue, row, select, textInput } from './form.js';
 import { toastError } from './toast.js';
@@ -20,10 +21,11 @@ export function openInferDialog(opt) {
     const targets = (opt.targets || []).filter((t) => t.storage_account && t.container);
     let taskId = null;
     let result = null;
+    let closed = false;
     const offs = [];
     const d = openDialog({
       title: 'Blob 名から作成', width: 960,
-      onClose: () => { offs.forEach((f) => f()); if (taskId) api.post(`/api/v1/pattern/infer/${taskId}/cancel`, {}).catch(() => {}); resolve(result); },
+      onClose: () => { closed = true; offs.forEach((f) => f()); if (taskId) api.post(`/api/v1/pattern/infer/${taskId}/cancel`, {}).catch(() => {}); resolve(result); },
     });
     if (!targets.length) {
       d.body.append(h('p', { text: '先に、検索のページで接続先（コンテナー）を選んでください。' }));
@@ -56,17 +58,17 @@ export function openInferDialog(opt) {
       runBtn.disabled = true;
       stopBtn.hidden = false;
       try {
-        const res = await api.post('/api/v1/pattern/infer', {
+        // 結果の待ち合わせは runTask（処理がすぐ終わって、待ち受けより先に task.done が届いても取りこぼさない）
+        const r = await runTask('POST', '/api/v1/pattern/infer', {
           target: { storage_account: t.storage_account, endpoint_suffix: t.endpoint_suffix, container: t.container, auth_kind: t.auth_kind,
             tenant: t.tenant || null, credential_id: t.credential_id || null },
           mode, prefix: prefixIn.value.trim(), limit: Number(limitIn.value) || 10000,
-        });
-        taskId = res.task_id;
-        const done = await new Promise((ok) => { offs.push(on('task.done', (e) => { if (e.id === taskId) ok(e); })); });
+        }, (id) => { taskId = id; });
         taskId = null;
-        if (!done.ok) throw new api.ApiError(400, done.error || {});
-        draw(done.result, t);
+        if (closed) return;
+        draw(r, t);
       } catch (e) {
+        taskId = null;
         status.textContent = '';
         if (e.code !== 'CANCELLED') toastError(e);
         else status.textContent = '中止しました。';
@@ -79,7 +81,7 @@ export function openInferDialog(opt) {
     function draw(r, t) {
       status.textContent = `${num(r.names)} 件の名前から、${num(r.candidates.length)} 個の候補を作りました（要求 ${num(r.requests)} 回）`
         + (r.truncated ? '。上限で打ち切ったため、すべての Blob ではありません' : '')
-        + (r.sizes_known ? '' : '。見本のため、件数は見本の数です');
+        + (!r.truncated && !r.complete ? '。見本のため、件数は見本の数です' : '');
       if (!r.candidates.length) {
         list.append(h('p', { text: 'Blob がありません。' }));
         return;

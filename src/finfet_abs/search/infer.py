@@ -15,6 +15,7 @@ from datetime import datetime
 from typing import Callable, Iterable
 
 from ..azure.backend import ContainerRef
+from .listing import covered_by_trial
 
 #: 正規表現で文字として扱うために「\」を付ける文字（{ は {{ を避けるため）
 _SPECIAL = set(".^$*+?{}[]\\|()")
@@ -235,42 +236,71 @@ def collect(backend, target: ContainerRef, *, mode: str = "sample", prefix: str 
             connection: Callable[[], object] | None = None) -> tuple[list[tuple[str, int | None]], dict]:
     """Blob 名を集めます。戻り値は [(名前, 大きさ)] と、要求の回数・打ち切ったかの情報。
 
-    - sample: 階層をたどり、各階層で最大 per_level 件の見本（先頭・末尾・等間隔）だけを下へたどります（大きさは不明。
-      要求は最大 max_requests 回）
+    - sample: 階層ごとに、まず名前の順の一覧の 1 ページ（最大 5,000 件）を取ります。1 ページで終われば、その下は
+      すべて取れたので、たどりません。終わらなければ、下の階層の名前を取り、最大 per_level 件の見本（先頭・末尾・
+      等間隔）のうち、1 ページに含まれなかった階層だけを下へたどります（要求は最大 max_requests 回）
     - first: 名前の順に、先頭から limit 件
     - all: すべて（limit は無視）
+
+    info: requests（要求の回数）、truncated（上限で打ち切った）、complete（すべての Blob を集めた。sample で見本だけを
+    たどった場合は False）、sizes_known（すべての大きさが分かっている。sample で階層の名前だけ取れた Blob は不明）
     """
     from contextlib import nullcontext
     cancel = cancel or threading.Event()
     connection = connection or nullcontext
     progress = progress or (lambda n, r: None)
     out: list[tuple[str, int | None]] = []
-    info = {"requests": 0, "truncated": False}
+    info = {"requests": 0, "truncated": False, "sizes_known": True, "complete": True}
     if mode == "sample":
+        seen: set[str] = set()
+
+        def add(name: str, size: int | None) -> None:
+            if name not in seen:
+                seen.add(name)
+                out.append((name, size))
+                if size is None:
+                    info["sizes_known"] = False
+
         stack = [(prefix, 0)]
         while stack:
             if cancel.is_set():
                 raise Cancelled()
-            if info["requests"] >= max_requests:
+            if info["requests"] + 2 > max_requests:
                 info["truncated"] = True
                 break
             pre, depth = stack.pop()
             with connection():
+                page = backend.list_blobs_page(target, pre, None)
+            info["requests"] += 1
+            for b in page.items:
+                add(b.name, b.size)
+            if page.continuation is None:
+                progress(len(out), info["requests"])
+                continue
+            last = page.items[-1].name if page.items else pre
+            with connection():
                 children = backend.walk_prefixes(target, pre, limit=5000)
             info["requests"] += 1
-            files = [c for c in children if not c.endswith("/")]
-            dirs = [c for c in children if c.endswith("/")]
-            out.extend((pre + f, None) for f in files)
+            dirs = []
+            for c in children:
+                if not c.endswith("/"):
+                    add(pre + c, None)
+                elif not covered_by_trial(pre + c, last):
+                    dirs.append(c)
             if depth < max_depth:
                 # 深さ優先で、見本の階層を逆の順に積みます（先頭の階層から先にたどるため）
                 for d in reversed(_spread(dirs, per_level)):
                     stack.append((pre + d, depth + 1))
+                if len(dirs) > per_level or len(children) >= 5000:
+                    info["complete"] = False
             elif dirs:
                 info["truncated"] = True
             progress(len(out), info["requests"])
             if len(out) >= 200000:
                 info["truncated"] = True
                 break
+        if info["truncated"]:
+            info["complete"] = False
         return out, info
     cont = None
     cap = None if mode == "all" else max(1, int(limit))
@@ -284,6 +314,7 @@ def collect(backend, target: ContainerRef, *, mode: str = "sample", prefix: str 
             out.append((b.name, b.size))
             if cap is not None and len(out) >= cap:
                 info["truncated"] = page.continuation is not None or b is not page.items[-1]
+                info["complete"] = not info["truncated"]
                 progress(len(out), info["requests"])
                 return out, info
         progress(len(out), info["requests"])
@@ -300,3 +331,4 @@ def _spread(items: list[str], k: int) -> list[str]:
         return items[:1]
     step = (len(items) - 1) / (k - 1)
     return [items[round(i * step)] for i in range(k)]
+

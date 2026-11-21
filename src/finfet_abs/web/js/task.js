@@ -22,11 +22,13 @@ on('task.done', (d) => {
  * @param {string} method
  * @param {string} url
  * @param {any} [body]
+ * @param {(taskId: string) => void} [onStart] 処理の ID が決まったときに呼びます（中止や進み具合の表示に使います）
  * @returns {Promise<any>} 処理の結果
  */
-export async function runTask(method, url, body) {
+export async function runTask(method, url, body, onStart) {
   const res = await request(method, url, method === 'GET' ? undefined : (body ?? {}));
   if (!res || !res.task_id) return res;
+  if (onStart) onStart(res.task_id);
   const d = await new Promise((resolve) => {
     if (done.has(res.task_id)) {
       resolve(done.get(res.task_id));
