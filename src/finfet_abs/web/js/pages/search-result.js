@@ -8,7 +8,7 @@ import { confirmDialog } from '../parts/dialog.js';
 import { select, textInput } from '../parts/form.js';
 import { openMenu } from '../parts/menu.js';
 import { VirtualTable } from '../parts/table.js';
-import { toast } from '../parts/toast.js';
+import { toast, toastError } from '../parts/toast.js';
 
 const NOTE_TEXT = { rehydrating: 'リハイドレート中', downloaded: 'ダウンロード済み', writing: '更新中の可能性' };
 const NOTE_FULL = { rehydrating: 'すでにリハイドレート中です', downloaded: '過去のジョブでダウンロード済みです', writing: '更新中の可能性があります' };
@@ -70,7 +70,7 @@ export async function render(ctx) {
     if (running) {
       head.append(h('strong', { text: '検索中' }), h('span', { text: `取得 ${num(listed)} 件・一致 ${num(p.matched_count ?? p.matched)} 件` }), h('span.push'),
         button('中止', async () => {
-          try { await api.post(`/api/v1/searches/${sid}/cancel`, {}); } catch (e) { toast(e.message, { error: true }); }
+          try { await api.post(`/api/v1/searches/${sid}/cancel`, {}); } catch (e) { toastError(e); }
         }));
     } else {
       const label = { completed: '完了', cancelled: '中止', failed: '検索の失敗' }[p.status] || p.status;
@@ -95,7 +95,7 @@ export async function render(ctx) {
           const line = h('div', { class: 'progress-err' }, h('span', { class: t.status === 'error' ? 'danger' : 'muted', text: t.error.message + (t.error.code && /^[A-Za-z]/.test(t.error.code) ? `（${t.error.code}）` : '') }));
           if (t.status === 'error' && !running) {
             line.append(linkButton('再試行', async () => {
-              try { await api.post(`/api/v1/searches/${sid}/targets/${t.no}/retry`, {}); poll(); } catch (e) { toast(e.message, { error: true }); }
+              try { await api.post(`/api/v1/searches/${sid}/targets/${t.no}/retry`, {}); poll(); } catch (e) { toastError(e); }
             }), linkButton('この接続先を除く', async () => {
               await api.post(`/api/v1/searches/${sid}/targets/${t.no}/skip`, {});
               poll();
@@ -244,8 +244,8 @@ export async function render(ctx) {
     try {
       const m = await import('../parts/job-dialog.js');
       m.openCreateJobDialog({ source: 'search', searchId: sid, filter: onlyVisible ? filterBody() : null });
-    } catch {
-      toast('ジョブの作成は、この版ではまだ使えません。', { error: true });
+    } catch (e) {
+      toastError(e);
     }
   }
 

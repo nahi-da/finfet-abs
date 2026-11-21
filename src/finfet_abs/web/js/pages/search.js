@@ -10,7 +10,7 @@ import { openKnownFormats } from '../parts/known-formats.js';
 import { openMenu } from '../parts/menu.js';
 import { patternInput } from '../parts/pattern-input.js';
 import { openAddTargetDialog } from '../parts/target-dialog.js';
-import { toast } from '../parts/toast.js';
+import { toast, toastError } from '../parts/toast.js';
 import { variableRow } from '../parts/variables.js';
 import { runTask } from '../task.js';
 import { renderUrlsTab } from './search-urls.js';
@@ -103,7 +103,7 @@ export async function render(ctx) {
       return;
     }
   } catch (e) {
-    toast(e.message, { error: true });
+    toastError(e);
   }
 
   const head = h('div', { class: 'page-head' }, h('h1', { text: '検索' }),
@@ -454,9 +454,9 @@ export async function render(ctx) {
         patternErr.textContent = iss.pos ? `${iss.pos} 文字目: ${iss.message}` : iss.message;
         pi.focus();
       } else if (e.data && e.data.target_index !== undefined) {
-        toast(e.message, { error: true });
+        toastError(e);
       } else {
-        toast(e.message, { error: true });
+        toastError(e);
       }
     }
   }

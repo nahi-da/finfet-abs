@@ -1,7 +1,7 @@
 // ジョブの詳細のページ（4.6）: /jobs/<ID>（Blob）、/condition、/options、/log。
 
 import * as api from '../api.js';
-import { button, clear, debounce, h, iconButton, linkButton } from '../dom.js';
+import { button, clear, copyText, debounce, h, iconButton, linkButton } from '../dom.js';
 import { on } from '../events.js';
 import { dateFull, dateShort, mbps, num, size, speed, timeShort } from '../format.js';
 import { confirmDialog, infoDialog, openDialog } from '../parts/dialog.js';
@@ -9,7 +9,7 @@ import { pickFolder } from '../parts/folder.js';
 import { checkbox, checkInput, formGrid, radios, radioValue, row, select, setError, textInput } from '../parts/form.js';
 import { openMenu } from '../parts/menu.js';
 import { VirtualTable } from '../parts/table.js';
-import { toast } from '../parts/toast.js';
+import { toast, toastError } from '../parts/toast.js';
 import { cancelJobs, renameJob } from './jobs.js';
 
 const ITEM_STATES = [['', 'すべて'], ['pending', '待機中'], ['rehydrate_queued', 'リハイドレートの要求待ち'], ['rehydrating', 'リハイドレート中'],
@@ -46,7 +46,7 @@ export async function render(ctx) {
   async function action(name, extra = {}) {
     try {
       if (name === 'cancel') { await cancelJobs([id]); } else { await api.post(`/api/v1/jobs/${id}/actions/${name}`, extra); }
-    } catch (e) { toast(e.message, { error: true }); }
+    } catch (e) { toastError(e); }
     refresh();
   }
 
@@ -66,7 +66,7 @@ export async function render(ctx) {
     const menu = iconButton('more', '操作', (e) => openMenu(e.currentTarget, [
       { text: '名前を変更', onClick: async () => { if (await renameJob(job)) refresh(); } },
       { text: 'CSV を出力', onClick: () => api.downloadGet(`/api/v1/jobs/${id}/items.csv`, 'job.csv') },
-      { text: 'ログのフォルダーを開く', onClick: () => api.post('/api/v1/fs/open-folder', { path: job.log_dir }).catch((e) => toast(e.message, { error: true })) },
+      { text: 'ログのフォルダーを開く', onClick: () => api.post('/api/v1/fs/open-folder', { path: job.log_dir }).catch((e) => toastError(e)) },
       ENDED.has(st) ? { text: '削除', onClick: () => remove() } : null,
     ].filter(Boolean)));
     const code = job.last_error ? job.last_error.code : null;
@@ -147,7 +147,7 @@ export async function render(ctx) {
       try {
         const r = await api.post(`/api/v1/jobs/${id}/items/actions/${act}`, { ids });
         if (r.errors && r.errors.length) toast(r.errors[0].message, { error: true });
-      } catch (e) { toast(e.message, { error: true }); }
+      } catch (e) { toastError(e); }
       selected.clear();
       refresh();
     };
@@ -189,17 +189,61 @@ export async function render(ctx) {
   }
 
   async function itemAction(r, act) {
-    try { await api.post(`/api/v1/jobs/${id}/items/${r.id}/actions/${act}`, {}); } catch (e) { toast(e.message, { error: true }); }
+    try { await api.post(`/api/v1/jobs/${id}/items/${r.id}/actions/${act}`, {}); } catch (e) { toastError(e); }
+  }
+
+  // Blob ごとに記録する情報（3.3.14）。[キー, 表示名, 書式]
+  const ITEM_GROUPS = [
+    ['Blob の情報', [['storage_account', 'ストレージアカウント'], ['container', 'コンテナー'], ['blob_name', 'Blob 名', 'mono'],
+      ['url', 'URL（SAS なし）', 'mono'], ['blob_type', '種類'], ['size', 'サイズ', 'size'], ['etag', 'ETag', 'mono'],
+      ['content_md5', 'Content-MD5', 'mono'], ['creation_time', '作成日時', 'date'], ['last_modified', '最終更新日時', 'date'],
+      ['tier_at_search', '検索時の層'], ['archive_status_at_search', '検索時のリハイドレートの状態'], ['tier', '現在の層'],
+      ['access_tier_change_time', '層の変更日時', 'date']]],
+    ['リハイドレート', [['rehydrate_requested_at', '要求日時', 'requested'], ['rehydrate_priority', '優先度', 'prio'],
+      ['rehydrate_target_tier', '復元先の層'], ['rehydrate_priority_raised_at', '優先度を上げた日時', 'date'],
+      ['next_check_at', '次の確認', 'date'], ['rehydrate_completed_detected_at', '完了を確認した日時', 'date'],
+      ['rehydrate_completed_azure_at', '完了時の層の変更日時（Azure）', 'date']]],
+    ['ダウンロード', [['download_started_at', '開始日時', 'date'], ['download_resumed_at', '最後に再開した日時', 'date'],
+      ['download_completed_at', '完了日時', 'date'], ['planned_path', '保存するパス', 'mono'], ['local_path', '保存したファイル', 'mono'],
+      ['bytes_downloaded', '取得したバイト数', 'num'], ['attempts', '試行回数', 'num'], ['md5_result', 'MD5 の照合', 'md5']]],
+    ['結果', [['status', '状態', 'status'], ['status_reason', '理由'], ['error_code', 'エラーコード', 'mono'], ['error_message', 'エラーの内容']]],
+    ['認証', [['auth_kind', '認証方式', 'auth'], ['credential_id', '保存した認証情報の ID', 'mono']]],
+  ];
+  const MD5_LABELS = { match: '一致', mismatch: '不一致', none: 'Content-MD5 なし', off: '照合しない' };
+  const AUTH_KIND_LABELS = { entra_user: 'Entra ID（ユーザーアカウント）', entra_key: 'Entra ID（アクセスキーを取得）', account_key: 'アクセスキー', sas: 'SAS' };
+
+  function fmtItem(kind, v, d) {
+    if (kind === 'date') return dateFull(v);
+    if (kind === 'size') return `${size(v)}（${num(v)} バイト）`;
+    if (kind === 'num') return num(v);
+    if (kind === 'prio') return v === 'High' ? '高' : '標準';
+    if (kind === 'md5') return MD5_LABELS[v] || v;
+    if (kind === 'auth') return AUTH_KIND_LABELS[v] || v;
+    if (kind === 'status') return d.status_label || (ITEM_STATES.find((x) => x[0] === v) || [v, v])[1];
+    if (kind === 'requested') return dateFull(v);
+    return String(v);
   }
 
   async function itemDetail(r) {
-    const d = await api.get(`/api/v1/jobs/${id}/items/${r.id}`);
-    const kv = h('dl', { class: 'kv' });
-    for (const [k, v] of Object.entries(d)) {
-      if (v === null || v === '' || (Array.isArray(v) && !v.length)) continue;
-      kv.append(h('dt', { class: 'muted', text: k }), h('dd', { class: 'mono', text: typeof v === 'object' ? JSON.stringify(v) : String(v) }));
+    const d = { ...await api.get(`/api/v1/jobs/${id}/items/${r.id}`), status_label: r.status_label };
+    const body = h('div');
+    for (const [title, fields] of ITEM_GROUPS) {
+      const kv = h('dl', { class: 'kv' });
+      for (const [k, label, kind] of fields) {
+        let v = d[k];
+        if (k === 'rehydrate_requested_at' && !v && d.rehydrate_requested_known === 0) v = '不明（ジョブの開始前から要求済み）';
+        if (v === null || v === undefined || v === '') continue;
+        const text = k === 'rehydrate_requested_at' && d.rehydrate_requested_known === 0 && !d.rehydrate_requested_at ? v : fmtItem(kind, v, d);
+        kv.append(h('dt', { class: 'muted', text: label }), h('dd', { class: kind === 'mono' ? 'mono' : '', text }));
+      }
+      if (kv.childNodes.length) body.append(h('h2', { text: title }), kv);
     }
-    infoDialog({ title: r.blob_name, body: kv, width: 720 });
+    if (d.error_code) {
+      const detail = [`FinFeT ${window.__finfetVersion || ''}`.trim(), `ジョブ: ${job.name}`, `Blob: ${d.storage_account}/${d.container}/${d.blob_name}`,
+        `エラーコード: ${d.error_code}`, `内容: ${d.error_message || ''}`, `日時: ${d.updated_at || ''}`].join('\n');
+      body.append(h('p', null, linkButton('詳細をコピー', async () => { if (await copyText(detail)) toast('詳細をコピーしました'); })));
+    }
+    infoDialog({ title: r.blob_name, body, width: 720 });
   }
 
   function conditionTab() {
@@ -291,7 +335,7 @@ export async function render(ctx) {
         await api.post(`/api/v1/jobs/${id}/actions/start-download`, { mode: rem ? radioValue(mode) : 'completed_only', options: { directory: dirIn.value.trim(), conflict: conflictSel.value } });
         d.close(true);
         refresh();
-      } catch (e) { toast(e.message, { error: true }); }
+      } catch (e) { toastError(e); }
     }, { primary: true }));
   }
 

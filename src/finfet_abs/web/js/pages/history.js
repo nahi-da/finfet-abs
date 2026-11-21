@@ -7,7 +7,7 @@ import { confirmDialog } from '../parts/dialog.js';
 import { openExport, openImport } from '../parts/exchange.js';
 import { openMenu } from '../parts/menu.js';
 import { VirtualTable } from '../parts/table.js';
-import { toast } from '../parts/toast.js';
+import { toast, toastError } from '../parts/toast.js';
 
 export async function render(ctx) {
   const { root } = ctx;
@@ -39,7 +39,7 @@ export async function render(ctx) {
       await api.patch(`/api/v1/history/${r.id}`, { pinned: !r.pinned });
       await load();
     } catch (e) {
-      toast(e.message, { error: true });
+      toastError(e);
     }
   };
   const remove = async (r) => {

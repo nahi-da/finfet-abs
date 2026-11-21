@@ -45,6 +45,17 @@ class SecurityTest(TempDirMixin):
         self.assertEqual(self.c.post("/api/v1/settings/reset", csrf=False, headers={"X-FinFeT-CSRF": "wrong"}).status, 403)
         self.assertEqual(self.c.post("/api/v1/settings/reset").status, 200)
 
+    def test_backend_error_response(self) -> None:
+        """Azure の操作の失敗は、文・エラーコード・要求 ID を 502 で返します（3.7。画面の 401・403 と区別）。"""
+        from finfet_abs.azure.backend import BackendError
+        err = BackendError("AuthorizationPermissionMismatch", "権限がありません。", status=403, request_id="req-123")
+        with mock.patch.object(self.wsgi, "handle", side_effect=err):
+            r = self.c.get("/api/v1/session")
+        self.assertEqual(r.status, 502)
+        e = r.json()["error"]
+        self.assertEqual((e["code"], e["message"], e["request_id"]), ("AuthorizationPermissionMismatch", "権限がありません。", "req-123"))
+        self.assertIn("403", e["detail"])
+
     # S2
     def test_no_cookie(self) -> None:
         r = self.c.get("/api/v1/session", cookie=False)

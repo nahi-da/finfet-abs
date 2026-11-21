@@ -8,7 +8,7 @@ import { confirmDialog, openDialog } from '../parts/dialog.js';
 import { openMenu } from '../parts/menu.js';
 import { formGrid, row, select, setError, textInput } from '../parts/form.js';
 import { VirtualTable } from '../parts/table.js';
-import { toast } from '../parts/toast.js';
+import { toast, toastError } from '../parts/toast.js';
 
 const WARN_STATES = new Set(['waiting_download']);
 const AUTH_CODES = new Set(['NOT_SIGNED_IN', 'INTERACTION_REQUIRED', 'NO_CREDENTIAL']);
@@ -35,7 +35,7 @@ export async function cancelJobs(ids) {
     await api.post('/api/v1/jobs/actions/cancel', { ids });
     return true;
   } catch (e) {
-    if (e.code !== 'CANCEL_CONFIRM') { toast(e.message, { error: true }); return false; }
+    if (e.code !== 'CANCEL_CONFIRM') { toastError(e); return false; }
     const ok = await confirmDialog({
       title: 'ジョブを中止しますか',
       body: `リハイドレートを要求済みの Blob が ${num(e.data.rehydrating)} 件あります。要求は取り消せず、料金はすでに発生しています。完了した Blob は、復元先の層の料金がかかります。`,
@@ -120,7 +120,7 @@ export async function render(ctx) {
     const after = before ? null : (others[others.length - 1]?.id || null);
     try {
       await api.put('/api/v1/jobs/queue-order', { id, before, after });
-    } catch (e) { toast(e.message, { error: true }); }
+    } catch (e) { toastError(e); }
     load();
   }
   let dragId = null;

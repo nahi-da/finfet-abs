@@ -47,10 +47,19 @@ class WsgiApp:
             resp = self.handle(req)
         except AppError as err:
             resp = error_response(err)
-        except Exception:  # noqa: BLE001
-            log.exception("要求の処理でエラーが発生しました: %s %s", req.method, req.path)
-            resp = error_response(AppError("INTERNAL", "内部のエラーが発生しました。詳しくはログを確認してください。",
-                                           status=500))
+        except Exception as exc:  # noqa: BLE001
+            if _is_backend_error(exc):
+                # Azure の操作の失敗（3.7）: 文とエラーコード、問い合わせ用の要求 ID を返します（詳細はログ）
+                log.warning("Azure の操作に失敗しました: %s %s: %s（状態 %s、要求 ID %s）", req.method, req.path, exc.code,
+                            exc.status, exc.request_id)
+                # 画面の 401・403（本ツールの認証）と区別するため、状態コードは 502 にして、Azure の状態は detail に入れます
+                resp = error_response(AppError(exc.code, exc.message, status=502,
+                                               detail=f"Azure の状態コード: {exc.status}" if exc.status else "",
+                                               extra={"request_id": exc.request_id} if exc.request_id else None))
+            else:
+                log.exception("要求の処理でエラーが発生しました: %s %s", req.method, req.path)
+                resp = error_response(AppError("INTERNAL", "内部のエラーが発生しました。詳しくはログを確認してください。",
+                                               status=500))
         for name, value in SECURITY_HEADERS:
             resp.set_header(name, value)
         if not req.path.startswith("/api/v1/events"):
@@ -138,3 +147,8 @@ class WsgiApp:
         if not self.security.consume_launch_code(req.arg("code")):
             return simple_page("FinFeT", "このページの URL は無効か、期限が切れています。finfet-abs.bat をもう一度実行してください。", 400)
         return redirect("/", [self.security.session_cookie_header()])
+
+
+def _is_backend_error(exc: Exception) -> bool:
+    """azure.backend.BackendError か（server は azure に依存しないため、属性で判定します）。"""
+    return all(hasattr(exc, a) for a in ("code", "message", "status", "request_id")) and isinstance(exc.code, str)

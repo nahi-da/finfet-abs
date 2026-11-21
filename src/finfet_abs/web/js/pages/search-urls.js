@@ -6,7 +6,7 @@ import { dateShort, num } from '../format.js';
 import { select } from '../parts/form.js';
 import { openAddTargetDialog } from '../parts/target-dialog.js';
 import { VirtualTable } from '../parts/table.js';
-import { toast } from '../parts/toast.js';
+import { toast, toastError } from '../parts/toast.js';
 
 let saved = { text: '', auth: {} };
 
@@ -88,8 +88,8 @@ export async function renderUrlsTab(ctx) {
     try {
       const m = await import('../parts/job-dialog.js');
       m.openCreateJobDialog({ source: 'urls', token: parsed.token, auth: saved.auth });
-    } catch {
-      toast('ジョブの作成は、この版ではまだ使えません。', { error: true });
+    } catch (e) {
+      toastError(e);
     }
   }, { primary: true });
   root.append(h('section', { class: 'part' }, ta, info), authSec, h('section', { class: 'part' }, table.el), h('div', { class: 'sticky-bottom' }, h('span.push'), createBtn));
