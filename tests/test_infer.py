@@ -68,11 +68,34 @@ class CollectTest(unittest.TestCase):
         first, info = infer.collect(self.be, self.t, mode="first", limit=50)
         self.assertEqual(len(first), 50)
         self.assertTrue(info["truncated"])
+        # 1 ページ（5,000 件）に収まるコンテナーは、1 回の要求ですべて（大きさも分かる）
         sample, info = infer.collect(self.be, self.t, mode="sample", per_level=3)
-        self.assertLess(len(sample), 40)
-        self.assertLess(info["requests"], 30)
+        self.assertEqual(len(sample), 28 * 24 + 1)
+        self.assertEqual(info["requests"], 1)
+        self.assertTrue(info["complete"] and info["sizes_known"] and not info["truncated"])
         c = infer.infer(sample)
         self.assertEqual(c[0]["pattern"], r"y={{dt=YYYY}}/m={{dt=MM}}/d={{dt=DD}}/h={{dt=hh}}/PT1H\.json")
+
+    def test_sample_large(self) -> None:
+        # 1 ページに収まらない: 1 ページに含まれた階層はたどらず、残りの階層から見本を集める
+        be = MemoryBackend()
+        blobs = [BlobInfo(f"y=2026/m=11/d={d:02d}/h={h:02d}/m={m:02d}/PT05M.json", size=1)
+                 for d in range(1, 22) for h in range(24) for m in range(0, 60, 5)]
+        blobs += [BlobInfo(f"zz/{i:05d}.log", size=1) for i in range(6000)]
+        be.add_blobs("stexample01", "big", blobs)
+        t = ContainerRef(AccountRef("stexample01", "core.windows.net", AuthRef("account_key")), "big")
+        sample, info = infer.collect(be, t, mode="sample", per_level=3)
+        self.assertLess(info["requests"], 30)
+        self.assertFalse(info["complete"])
+        self.assertFalse(info["truncated"])
+        pats = [c["pattern"] for c in infer.infer(sample)]
+        self.assertIn(r"y={{dt=YYYY}}/m={{dt=MM}}/d={{dt=DD}}/h={{dt=hh}}/m={{dt=mm}}/PT05M\.json", pats)
+        self.assertTrue(any(p.startswith("zz/") for p in pats), pats)
+        self.assertEqual(len({n for n, _ in sample}), len(sample))  # 重複なし
+        # 要求の上限
+        _, info = infer.collect(be, t, mode="sample", per_level=3, max_requests=3)
+        self.assertLessEqual(info["requests"], 3)
+        self.assertTrue(info["truncated"] and not info["complete"])
 
     def test_cancel(self) -> None:
         import threading

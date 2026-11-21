@@ -223,7 +223,7 @@ def register(router, app) -> None:
                           tenant_id=target.get("tenant"))
             ct = ContainerRef(AccountRef(target["storage_account"], target.get("endpoint_suffix") or "core.windows.net", ref),
                               target["container"])
-            last = [0.0]
+            last = [time.monotonic()]  # 最初の知らせは 0.5 秒後（処理の ID が決まってから）
 
             def progress(n: int, requests: int) -> None:
                 if time.monotonic() - last[0] >= 0.5:
@@ -239,7 +239,7 @@ def register(router, app) -> None:
                 infer_cancels.pop(holder.get("id"), None)
             cands = infer.infer(items)
             return {"candidates": cands, "names": len(items), "requests": info["requests"],
-                    "truncated": info["truncated"], "sizes_known": mode != "sample"}
+                    "truncated": info["truncated"], "complete": info["complete"], "sizes_known": info["sizes_known"]}
         tid = s["tasks"].submit(run, "pattern-infer")
         holder["id"] = tid
         infer_cancels[tid] = cancel
