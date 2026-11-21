@@ -14,7 +14,7 @@ import time
 import urllib.request
 from pathlib import Path
 
-from . import winapi
+from . import dpapi, winapi
 
 log = logging.getLogger(__name__)
 
@@ -67,7 +67,9 @@ def instance_path(local_dir: Path, demo: bool = False) -> Path:
 def write(local_dir: Path, *, port: int, secret: str, version: str, demo: bool = False) -> Path:
     """instance.json を書き込み、現在のユーザーだけが読める ACL にします。"""
     path = instance_path(local_dir, demo)
-    data = {"pid": os.getpid(), "port": port, "secret": secret, "version": version, "started_at": time.time()}
+    # 秘密の値は、ACL に加えて DPAPI でも暗号化します（同じ Windows ユーザーのプロセスだけが復号できます）
+    data = {"pid": os.getpid(), "port": port, "secret": dpapi.seal(secret, "instance"), "version": version,
+            "started_at": time.time()}
     tmp = path.with_name(path.name + ".tmp")
     tmp.write_text(json.dumps(data), encoding="utf-8")
     winapi.restrict_to_current_user(tmp, is_dir=False)
@@ -97,8 +99,8 @@ def request_launch_url(info: dict, timeout: float = 3.0) -> str | None:
     try:
         pid = int(info.get("pid", 0))
         port = int(info.get("port", 0))
-        secret = str(info.get("secret", ""))
-    except (TypeError, ValueError):
+        secret = dpapi.unseal(str(info.get("secret", "")), "instance").reveal()
+    except (TypeError, ValueError, dpapi.DecryptError):
         return None
     if not port or not winapi.process_alive(pid):
         return None

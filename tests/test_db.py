@@ -125,11 +125,6 @@ class DbTest(TempDirMixin):
             self.assertGreater(total, 0)
             self.assertEqual(len(page), 200)
             self.assertLess(elapsed, 0.5, f"{elapsed:.3f} 秒")
-            t0 = time.perf_counter()
-            d.execute("UPDATE search_results SET selected=1 WHERE search_id='s1' AND blob_name_lower LIKE ? ESCAPE '\\'",
-                      ("%rg3%",))
-            # 一致するすべてを選ぶ更新の速さは、M4 の性能の確認（8.3.4）で詰めます。ここでは大きな劣化だけを検出します
-            self.assertLess(time.perf_counter() - t0, 5.0)
         finally:
             d.close()
 

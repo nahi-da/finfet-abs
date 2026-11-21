@@ -138,6 +138,19 @@ class PathsTest(TempDirMixin):
         self.assertFalse(paths.is_inside(Path("D:/a"), Path("C:/a")))
 
 
+class InstanceTest(TempDirMixin):
+    def test_secret_is_encrypted(self) -> None:
+        from finfet_abs.core import dpapi, instance
+        instance.write(self.tmp, port=1234, secret="instance-secret-value-xyz", version="0.0.0")
+        raw = (self.tmp / "instance.json").read_text(encoding="utf-8")
+        self.assertNotIn("instance-secret-value-xyz", raw)
+        info = instance.read(self.tmp)
+        self.assertEqual(info["port"], 1234)
+        self.assertEqual(dpapi.unseal(info["secret"], "instance").reveal(), "instance-secret-value-xyz")
+        instance.remove(self.tmp)
+        self.assertIsNone(instance.read(self.tmp))
+
+
 class ClockTest(unittest.TestCase):
     def test_iso(self) -> None:
         dt = datetime(2026, 11, 20, 1, 15, 2, tzinfo=timezone.utc)

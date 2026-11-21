@@ -127,9 +127,11 @@ def run(args) -> int:
         if url is None:
             console.error("別の FinFeT が起動していますが、応答がありません。しばらく待ってから、もう一度実行してください。")
             return 1
-        if not args.no_browser:
+        if args.no_browser:
+            console.started_again(url)
+        else:
             webbrowser.open(url)
-        console.info("FinFeT はすでに起動しています。画面を開きました。")
+            console.info("FinFeT はすでに起動しています。画面を開きました。")
         return 0
 
     demo_dir = Path(tempfile.mkdtemp(prefix="finfet-abs-demo-")) if demo else None

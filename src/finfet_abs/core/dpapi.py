@@ -25,6 +25,7 @@ PURPOSES = {
     "credential": b"finfet-abs/v1/credential",
     "job-secret": b"finfet-abs/v1/job-secret",
     "proxy": b"finfet-abs/v1/proxy",
+    "instance": b"finfet-abs/v1/instance",
     "selfcheck": b"finfet-abs/v1/selfcheck",
 }
 
