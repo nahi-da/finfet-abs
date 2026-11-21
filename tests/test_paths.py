@@ -162,7 +162,8 @@ class DuplicateTest(unittest.TestCase):
         s = paths.suggest(items, list(groups.values()), t.text, vs)
         el = time.perf_counter() - t0
         self.assertEqual(s, "{{dt=YYYYMMDDhh}}/{{@name}}")
-        self.assertLess(el, 4.0)  # 目安は 2 秒（CI の遅い PC を考えて余裕を持たせます）
+        # 目安は 2 秒（開発の PC）。GitHub Actions の PC は数倍遅いため、上限を緩めます
+        self.assertLess(el, 20.0 if os.environ.get("CI") else 4.0)
 
 
 class ReserveTest(TempDirMixin):

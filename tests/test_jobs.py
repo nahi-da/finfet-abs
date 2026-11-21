@@ -302,7 +302,8 @@ class DownloadTest(JobTestBase):
         self.assertEqual((self.out / "logs" / "c.bin").read_bytes(), blob_bytes("c.bin", 0, size))
         self.assertIn((256 * KB, 1024 * KB), got)  # 取得済みの続きから、今の大きさで
         self.assertEqual(min(o for o, _ in got), 256 * KB)  # 取得済みの部分は取り直しません
-        self.assertTrue(any("から再開します" in ln for ln in open(self.tmp / "logs" / f"{jid}.log", encoding="utf-8")))
+        log = (self.tmp / "logs" / f"{jid}.log").read_text(encoding="utf-8")
+        self.assertIn("から再開します", log)
 
     def test_412_restart_then_error(self) -> None:
         self.add("logs", [blob("u.bin", size=2 * 1024 * KB)])
