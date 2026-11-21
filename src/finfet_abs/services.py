@@ -66,7 +66,15 @@ def setup_services(app) -> None:
         # 起動時に、トークンキャッシュのアカウントでサインイン済みの状態にします（ブラウザは開きません）
         threading.Thread(target=lambda: auth.restore() and auth._changed(), name="auth-restore", daemon=True).start()
 
-    s["job_secrets"] = lambda sid: (_ for _ in ()).throw(LookupError(sid))
+    def job_secret(secret_id: str):
+        """ジョブに保存した SAS（URL で指定したジョブ。5.3.5 の job_secrets）。"""
+        from .core import dpapi
+        row = app.db.query_one("SELECT secret FROM job_secrets WHERE id=?", (secret_id,))
+        if row is None:
+            from .azure.backend import BackendError
+            raise BackendError("NO_CREDENTIAL", "ジョブに保存した SAS が見つかりません。")
+        return dpapi.unseal(row["secret"], "job-secret")
+    s["job_secrets"] = job_secret
     s["targets"] = TargetService(backend=s["backend"], credstore=s["credstore"], auth=s["auth"], arm=s["arm"],
                                  settings=app.settings, clock=app.clock)
 
@@ -77,8 +85,28 @@ def setup_services(app) -> None:
     from .search.results import ResultsService
     from .search.urls import UrlSessions
     s["history"] = HistoryService(app.db, app.settings, app.clock)
+    from .jobs.limits import Limits
+    limits = Limits(app.settings)
+    s["limits"] = limits
     s["search"] = SearchService(db=app.db, events=app.events, settings=app.settings, backend=lambda: s["backend"],
-                                history=s["history"], clock=app.clock)
+                                history=s["history"], clock=app.clock, connection=lambda: limits.request())
     s["results"] = ResultsService(app.db)
     s["url_sessions"] = UrlSessions()
     s["import_sessions"] = ImportSession()
+
+    # ジョブとキュー（M5）
+    from .jobs.engine import JobEngine
+    from .jobs.service import JobService
+    s["jobs"] = JobService(app.db, app.settings, app.events, clock=app.clock, url_sessions=s["url_sessions"])
+    s["job_engine"] = JobEngine(db=app.db, settings=app.settings, events=app.events, service=s["jobs"],
+                                backend=lambda: s["backend"], limits=limits, logs_dir=app.location.job_logs_dir,
+                                clock=app.clock,
+                                time_scale=(lambda: app.settings.get("demo.time_scale")) if app.demo else None)
+
+    def on_limits(keys: list[str]) -> None:
+        if any(k.startswith("transfer.") for k in keys):
+            limits.apply_settings()
+    app.settings.on_change(on_limits)
+    s["jobs"].on_startup()
+    s["job_engine"].start()
+    app.on_stop(s["job_engine"].stop)
