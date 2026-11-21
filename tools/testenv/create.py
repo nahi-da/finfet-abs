@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import secrets
 import subprocess
 import sys
@@ -27,8 +28,9 @@ STATE = ROOT / ".testenv.json"
 
 def az(*args: str, parse: bool = True):
     cmd = ["az", *args, "--only-show-errors"] + (["-o", "json"] if parse else [])
-    r = subprocess.run(" ".join(f'"{a}"' if " " in a else a for a in cmd), shell=True, capture_output=True, text=True,
-                       encoding="utf-8")
+    env = dict(os.environ, PYTHONIOENCODING="utf-8")
+    r = subprocess.run(" ".join(f'"{a}"' if (" " in a or "[" in a) else a for a in cmd), shell=True, capture_output=True,
+                       text=True, encoding="utf-8", errors="replace", env=env)
     if r.returncode != 0:
         print(r.stderr, file=sys.stderr)
         raise SystemExit(f"az の実行に失敗しました: {args[:3]}")
@@ -42,10 +44,13 @@ def save(state: dict) -> None:
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--location", default="japaneast")
+    ap.add_argument("--resume", action="store_true", help="途中で止まった場合に、Blob の作成から続けます")
     args = ap.parse_args()
-    if STATE.exists():
+    if STATE.exists() and not args.resume:
         print(f"{STATE.name} があります。先に tools/testenv/delete.py で削除してください。")
         return 1
+    if args.resume:
+        return populate(json.loads(STATE.read_text(encoding="utf-8")))
     rnd = secrets.token_hex(3)
     rg = f"rg-finfet-test-{rnd}"
     state = {"resource_group": rg, "location": args.location, "accounts": {}}
@@ -76,7 +81,12 @@ def main() -> int:
     print("ストレージ BLOB データ共同作成者を割り当てます")
     az("role", "assignment", "create", "--assignee-object-id", state["user_object_id"], "--assignee-principal-type",
        "User", "--role", "Storage Blob Data Contributor", "--scope", rg_info["id"])
+    return populate(state)
 
+
+def populate(state: dict) -> int:
+    """Blob と診断設定を作ります。"""
+    rg = state["resource_group"]
     # a: 小さな Blob（Hot と Archive）。アカウントキーで書き込みます（ロールの反映を待たないため）
     a = state["accounts"]["a"]["name"]
     key = az("storage", "account", "keys", "list", "-n", a, "-g", rg)[0]["value"]
@@ -86,11 +96,11 @@ def main() -> int:
             p = Path(tmp) / f"f{i}.txt"
             p.write_text(f"finfet-abs test blob {i}\n" * 20, encoding="utf-8")
             names.append(p)
-        for cont in ("logs", "archive", "日本語"):
+        for cont in ("logs", "archive", "jpn"):
             az("storage", "container", "create", "-n", cont, "--account-name", a, "--account-key", key, parse=False)
         blobs = [("logs", "app/2026/11/20/web.log", "Hot"), ("logs", "app/2026/11/21/web.log", "Cool"),
                  ("archive", "y=2026/m=11/d=20/h=09/a.json", "Archive"), ("archive", "y=2026/m=11/d=20/h=10/b.json", "Archive"),
-                 ("archive", "y=2026/m=11/d=21/h=09/c.json", "Archive"), ("日本語", "報告書/2026年 #1 (確定).txt", "Hot")]
+                 ("archive", "y=2026/m=11/d=21/h=09/c.json", "Archive"), ("jpn", "報告書/2026年 #1 (確定).txt", "Hot")]
         for (cont, blob, tier), p in zip(blobs, names):
             az("storage", "blob", "upload", "--account-name", a, "--account-key", key, "-c", cont, "-n", blob, "-f", str(p),
                "--tier", tier, "--overwrite", parse=False)

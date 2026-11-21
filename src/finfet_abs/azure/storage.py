@@ -61,7 +61,8 @@ class TenantResolver:
         import re
         url = f"{account.blob_endpoint}/{container or '$root'}?restype=container&comp=list&maxresults=1"
         try:
-            resp = self._session().get(url, headers={"x-ms-version": "2025-01-05", "Authorization": "Bearer"}, timeout=20)
+            # 認証のヘッダーを付けずに送ります（空の Bearer を付けると 400 になり、テナントが分かりません）
+            resp = self._session().get(url, headers={"x-ms-version": "2025-01-05"}, timeout=20)
         except Exception:  # noqa: BLE001
             return None
         h = resp.headers.get("WWW-Authenticate", "")
@@ -177,10 +178,15 @@ class AzureBackend:
         container = target.container if isinstance(target, ContainerRef) else None
         proxy = None
         if self._proxy_config and account:
-            proxy = proxy_label(resolve_proxy(self._proxy_config(), f"https://{account}.blob.core.windows.net"))
+            label = proxy_label(resolve_proxy(self._proxy_config(), f"https://{account}.blob.core.windows.net"))
+            proxy = label.replace("プロキシ ", "", 1) if label != "直接" else None
         if isinstance(exc, InteractionRequired):
             return BackendError("INTERACTION_REQUIRED", exc.info.message, detail=exc.info.code)
-        return from_exception(exc, account=account, container=container, proxy=proxy)
+        err = from_exception(exc, account=account, container=container, proxy=proxy)
+        auth = target.account.auth if isinstance(target, ContainerRef) else (target.auth if target else None)
+        if err.code == "AuthorizationPermissionMismatch" and auth is not None and auth.kind == "sas":
+            err.message = "SAS に、この操作に必要な権限がありません（検索は l、ダウンロードは r、リハイドレートは w が必要です）。"
+        return err
 
     def _container(self, target: ContainerRef):
         return self.factory.service(target.account, target.container).get_container_client(target.container)

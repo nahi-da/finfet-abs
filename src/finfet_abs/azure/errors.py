@@ -92,6 +92,7 @@ def from_exception(exc: BaseException, *, account: str | None = None, container:
     if isinstance(exc, HttpResponseError):
         status = getattr(exc, "status_code", None)
         code = getattr(exc, "error_code", None) or ""
+        code = str(getattr(code, "value", code))  # StorageErrorCode などの列挙型を文字列にします
         resp = getattr(exc, "response", None)
         headers = getattr(resp, "headers", {}) or {}
         request_id = headers.get("x-ms-request-id") if hasattr(headers, "get") else None

@@ -254,12 +254,32 @@ class AuthService:
         try:
             app = self._app(None)
             acct = self._home_account(app)
-            if acct is None:
+        except Exception as exc:  # noqa: BLE001
+            # MSAL のクライアントを作るときにも通信します。通信できなければ、キャッシュから直接アカウントを読みます
+            log.warning("サインインの情報を確認できませんでした（%s）", type(exc).__name__)
+            try:
+                import msal
+                cached = self._cache.find(msal.TokenCache.CredentialType.ACCOUNT)
+            except Exception:  # noqa: BLE001
+                cached = []
+            if not cached:
                 return False
+            with self._lock:
+                self._account = cached[0]
+                self._claims = {"preferred_username": cached[0].get("username", "")}
+            return True
+        if acct is None:
+            return False
+        try:
             result = app.acquire_token_silent([ARM_SCOPE], account=acct)
         except Exception as exc:  # noqa: BLE001
-            log.warning("トークンキャッシュからサインインできませんでした（%s）", type(exc).__name__)
-            return False
+            # ネットワーク（プロキシなど）の問題: アカウントはサインイン済みとして扱い、
+            # 実際の要求のときに原因（プロキシの誤りなど）の文を表示します
+            log.warning("トークンを更新できませんでした（%s）。サインイン済みとして扱います", type(exc).__name__)
+            with self._lock:
+                self._account = acct
+                self._claims = {"preferred_username": acct.get("username", "")}
+            return True
         if result and "access_token" in result:
             with self._lock:
                 self._account = acct

@@ -312,6 +312,24 @@ class AuthTest(TempDirMixin):
         self.assertFalse(a.signed_in)
 
 
+class AuthNetworkTest(AuthTest):
+    def test_restore_with_network_error(self) -> None:
+        a = self.make()
+        org = "https://login.microsoftonline.com/organizations"
+        a._app(None)
+        app = self.apps[org]
+        app.accounts = [{"home_account_id": "oid.tid", "username": "sato@contoso.com"}]
+
+        def boom(*args, **kw):
+            raise OSError("proxy down")
+        app.acquire_token_silent = boom
+        # 通信できなくても、キャッシュにアカウントがあればサインイン済みとして扱います
+        self.assertTrue(a.restore())
+        self.assertTrue(a.signed_in)
+        with self.assertRaises(OSError):
+            a.get_token(["https://storage.azure.com/.default"])
+
+
 class ProxyTest(TempDirMixin):
     def cfg(self, **kw):
         kw.setdefault("env", {})
