@@ -218,6 +218,31 @@ class JobEngine:
             JobLog(self.logs_dir, rows[0]["job_id"], self.clock).write("INFO", "削除された認証情報の代わりに、使える認証情報を使います")
         return changed
 
+    def auth_check(self, job_id: str) -> None:
+        """開始の前に、未完了の Blob の認証が使えるかを確かめます（3.3.11）。使えなければ AppError。"""
+        if self.resolve_auth is None:
+            return
+        rows = self.db.query("SELECT * FROM job_items WHERE job_id=? AND status IN ('pending','checking','rehydrate_queued',"
+                             "'rehydrating','ready','downloading','completed') AND secret_id IS NULL "
+                             "GROUP BY storage_account, endpoint_suffix, container, auth_kind, credential_id", (job_id,))
+        for r in rows:
+            res = self.resolve_auth({"storage_account": r["storage_account"], "endpoint_suffix": r["endpoint_suffix"],
+                                     "container": r["container"], "auth_kind": r["auth_kind"],
+                                     "credential_id": r["credential_id"], "tenant": r["tenant_id"]})
+            if res.get("resolved"):
+                continue
+            if r["auth_kind"] in ("entra_user", "entra_key") and not r["credential_id"]:
+                code, text = "NOT_SIGNED_IN", "サインインが必要です。サインインしてから開始してください。"
+            else:
+                code, text = "NO_CREDENTIAL", "認証情報がありません。接続のページで接続先を追加してから開始してください。"
+            self.auth_problem(job_id, code, text)
+            raise AppError(code, text, status=409)
+        all_rows = self.db.query("SELECT * FROM job_items WHERE job_id=? AND credential_id IS NOT NULL AND secret_id IS NULL",
+                                 (job_id,))
+        if all_rows:
+            self.reauth(all_rows)
+        self.clear_auth_problem(job_id)
+
     def job_name(self, job_id: str) -> str:
         return self.db.scalar("SELECT name FROM jobs WHERE id=?", (job_id,)) or "ジョブ"
 
@@ -521,6 +546,7 @@ class JobEngine:
             raise AppError("NOT_FOUND", "ジョブが見つかりません。", status=404)
         if row["status"] not in ("waiting_download", "waiting_rehydrate", "paused", "held"):
             raise AppError("JOB_BUSY", "このジョブはダウンロードを開始できる状態ではありません。", status=409)
+        self.auth_check(job_id)
         opts = json.loads(row["options_json"])
         if options:
             from .service import clean_options
@@ -607,6 +633,7 @@ class JobRunner(threading.Thread):
         self._progress: dict[int, dict] = {}
         self._plock = threading.Lock()
         self._last_publish = 0.0
+        self._auth_paused = False
 
     # ------------------------------------------------------------ 全体
 
@@ -627,6 +654,7 @@ class JobRunner(threading.Thread):
 
     def _run(self) -> None:
         opts = self.options()
+        self.engine.clear_auth_problem(self.job_id)
         self.log.write("INFO", "ジョブを開始しました")
         if opts["method"] != "rehydrate_only" or opts.get("download_mode"):
             if not self._prepare_folder(opts):
@@ -676,6 +704,36 @@ class JobRunner(threading.Thread):
                         (json.dumps({"message": message}, ensure_ascii=False), 1 if pause else 0, now, self.job_id))
         self.log.write("ERROR", message)
         self.engine.notify("error", f"「{self.engine.job_name(self.job_id)}」: {message}", self.job_id)
+
+    def _auth_blocked(self, rows: list, errors: dict, cur: str, back: str) -> bool:
+        """認証が使えない Blob を戻し、探し直すか、ジョブを一時停止して「サインインが必要です」などを表示します（3.1.9）。
+
+        認証のエラーがなければ False。Blob はエラーにしません（サインインや接続先の追加の後に続けられるように）。
+        """
+        bad = [r for r in rows if r["id"] in errors and errors[r["id"]][0] in SIGNIN_CODES + CREDENTIAL_CODES]
+        if not bad:
+            return False
+        ids = [r["id"] for r in bad]
+        now = to_iso(self.clock.now())
+        self.db.write(lambda c: c.executemany("UPDATE job_items SET status=?, updated_at=? WHERE id=? AND status=?",
+                                              [(back, now, i, cur) for i in ids]))
+        codes = sorted({errors[i][0] for i in ids})
+        if any(c in CREDENTIAL_CODES for c in codes):
+            fresh = self.db.query(f"SELECT * FROM job_items WHERE id IN ({','.join('?' * len(ids))})", ids)
+            if self.engine.reauth(fresh):
+                return True  # 次の回で、見つけた認証情報で処理します
+        code = codes[0]
+        msg = next(errors[i][1] for i in ids if errors[i][0] == code)
+        with self._plock:
+            if self._auth_paused:
+                return True
+            self._auth_paused = True
+        self.engine.auth_problem(self.job_id, code, msg)
+        self.db.execute("UPDATE jobs SET status='paused', updated_at=?, lock_json=NULL WHERE id=? AND status='running'",
+                        (now, self.job_id))
+        self.log.write("WARN", f"認証が使えないため、一時停止しました: {msg}")
+        self.stop_event.set()
+        return True
 
     def _stage(self, name: str, fn: Callable[[], int]) -> None:
         """段階ごとの処理。処理する Blob がなくなり、ほかの段階も止まったら終わります。"""
@@ -761,6 +819,8 @@ class JobRunner(threading.Thread):
                 for i, e in ex.map(lambda g: fetch_infos(backend, self.engine.limits, g), groups.values()):
                     infos.update(i)
                     errors.update(e)
+        if self._auth_blocked(rows, errors, "checking", "pending"):
+            return len(rows)
         now = self.clock.now()
         for r in rows:
             if r["id"] in errors:
@@ -884,6 +944,9 @@ class JobRunner(threading.Thread):
         except Cancelled:
             self._update(r["id"], "downloading", status="ready")
         except BackendError as exc:
+            if exc.code in SIGNIN_CODES + CREDENTIAL_CODES:
+                self._auth_blocked([r], {r["id"]: (exc.code, exc.message)}, "downloading", "ready")
+                return
             self._update(r["id"], "downloading", status="error", error_code=exc.code, error_message=exc.message)
             self.log.write("ERROR", exc.message, name)
         except OSError as exc:

@@ -100,7 +100,7 @@ def setup_services(app) -> None:
     s["jobs"] = JobService(app.db, app.settings, app.events, clock=app.clock, url_sessions=s["url_sessions"])
     s["job_engine"] = JobEngine(db=app.db, settings=app.settings, events=app.events, service=s["jobs"],
                                 backend=lambda: s["backend"], limits=limits, logs_dir=app.location.job_logs_dir,
-                                clock=app.clock,
+                                clock=app.clock, resolve_auth=lambda t: s["targets"].resolve(t),
                                 time_scale=(lambda: app.settings.get("demo.time_scale")) if app.demo else None)
 
     def on_limits(keys: list[str]) -> None:
