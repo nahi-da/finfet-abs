@@ -1,0 +1,46 @@
+name: release
+
+# v* のタグの push で、テスト → 全部入り版の作成（6.6）→ 構成証明 → Release の下書き（6.11.6 の②）
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    uses: ./.github/workflows/test.yml
+
+  build:
+    needs: test
+    runs-on: windows-latest
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    env:
+      TAG: ${{ github.ref_name }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.14"
+      - name: 全部入り版の作成
+        shell: pwsh
+        run: python -X utf8 tools/build_release.py --tag "$env:TAG" --out dist
+      - name: 構成証明
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: dist/finfet-abs-*-win-x64.zip
+      - name: Release の下書き
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python -X utf8 tools/release_notes.py "$env:TAG" | Out-File -Encoding utf8NoBOM notes.md
+          $zip = (Get-ChildItem dist/finfet-abs-*-win-x64.zip).FullName
+          $a = @('release', 'create', $env:TAG, '--draft', '--verify-tag', '--title', $env:TAG, '--notes-file', 'notes.md')
+          if ($env:TAG.Contains('-')) { $a += '--prerelease' }
+          gh @a $zip dist/SHA256SUMS.txt
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
