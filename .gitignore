@@ -1,0 +1,20 @@
+# 実行環境・データ（6.11.4）
+/runtime/
+/data/
+/dist/
+/build/
+src/finfet_abs/data/prices.json
+.testenv.json
+
+# Python
+__pycache__/
+*.pyc
+/.venv/
+
+# 作業中のファイル
+*.part
+*.log
+
+# エディター
+.vscode/
+.idea/
