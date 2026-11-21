@@ -260,6 +260,7 @@ export async function render(ctx) {
   }
 
   function optionsTab() {
+    body.classList.add('job-options');
     const o = job.options;
     const editable = ['held', 'queued', 'paused', 'waiting_download'].includes(job.status);
     const methodR = radios('opt-method', Object.entries(METHOD_LABELS), o.method, () => {});
