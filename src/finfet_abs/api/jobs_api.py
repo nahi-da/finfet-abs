@@ -94,6 +94,7 @@ def register(router, app) -> None:
                             (req.params["jid"],))
         out["next_check_at"] = nxt
         out["rehydrating_requested"] = jobs.rehydrate_requested_count([req.params["jid"]])
+        out["log_dir"] = str(app.location.job_logs_dir)
         return json_response(out)
 
     @router.patch("/api/v1/jobs/{jid}")

@@ -87,7 +87,7 @@ export async function render(ctx) {
     }
     if (q.get('from-job')) {
       const j = await api.get(`/api/v1/jobs/${encodeURIComponent(q.get('from-job'))}`);
-      if (j.search_condition) await fromCondition(j.search_condition, { shift: false });
+      if (j.condition) await fromCondition(j.condition, { shift: false });
       ctx.navigate('/search', { replace: true });
       return;
     }

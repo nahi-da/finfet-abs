@@ -100,3 +100,9 @@
 .two-line-cell { display: flex; flex-direction: column; min-width: 0; color: var(--text); }
 .two-line-cell:hover { text-decoration: none; }
 .two-line-cell:hover .mono { text-decoration: underline; }
+
+/* ジョブ（4.5・4.6） */
+.vtable .vrow.group-first { border-top: 1px solid var(--line-strong); }
+.rehydrate-note { border: 1px solid var(--warn); border-radius: var(--radius); padding: var(--sp-3); margin-top: var(--sp-3); }
+.rehydrate-note p { margin: 0 0 var(--sp-2); }
+.log-view { height: 60vh; overflow: auto; border: 1px solid var(--line); padding: var(--sp-2); background: var(--bg-sunken, var(--bg)); }

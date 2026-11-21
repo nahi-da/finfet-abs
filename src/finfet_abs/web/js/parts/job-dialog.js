@@ -125,7 +125,8 @@ export async function openCreateJobDialog(opt) {
 
     // ---------------------------------------------------------------- 保存するパスの検査（3.3.15）
     const recheck = debounce(async () => {
-      dupChoice = null;
+      // 番号を付ける・取得しないの選択は、入力を変えたら選び直します（提案に変えた後は、重複が出なければそのまま）
+      if (dupChoice !== 'suggest') dupChoice = null;
       let r;
       try {
         r = await api.post('/api/v1/jobs/path-check', { source, options: options() });
@@ -134,6 +135,7 @@ export async function openCreateJobDialog(opt) {
         return;
       }
       lastCheck = r;
+      if (dupChoice === 'suggest' && r.duplicates) dupChoice = null;
       setError(tmplIn, null);
       clear(examples);
       if (!r.ok) {
@@ -150,8 +152,8 @@ export async function openCreateJobDialog(opt) {
     function drawDup() {
       clear(dupLine);
       const dup = lastCheck && lastCheck.duplicates;
-      dupLine.hidden = !dup;
-      if (!dup) return;
+      dupLine.hidden = !dup && !dupChoice;
+      if (!dup && !dupChoice) return;
       if (dupChoice) {
         dupLine.className = 'line';
         dupLine.append(h('span', { text: `重複は解決しました（${{ suggest: '提案したパスに変更', number: '番号を付ける', skip: '2件目以降を取得しない' }[dupChoice]}）` }));
