@@ -6,17 +6,28 @@ import csv
 import io
 import json
 import threading
+from collections import OrderedDict
 from urllib.parse import quote
 
 from ..core.clock import from_iso
 from ..core.errors import NotFound, bad_request
 from .shortener import CommonShortener, tail_names
 
-SORTS = {
-    "name": "r.sort_key", "size": "r.size", "last_modified": "r.last_modified", "creation_time": "r.creation_time",
-    "tier_change": "r.access_tier_change_time", "tier": "IFNULL(r.archive_status, r.tier)", "type": "r.blob_type",
-    "target": "r.storage_account, r.container, r.sort_key", "notes": "r.notes_json",
+#: 並べ替えのキー → 式の並び（式の中にカンマを含むものがあるため、文字列で分けずに並びで持ちます）
+SORTS: dict[str, tuple[str, ...]] = {
+    "name": ("r.sort_key",), "size": ("r.size",), "last_modified": ("r.last_modified",),
+    "creation_time": ("r.creation_time",), "tier_change": ("r.access_tier_change_time",),
+    "tier": ("IFNULL(r.archive_status, r.tier)",), "type": ("r.blob_type",),
+    "target": ("r.storage_account", "r.container", "r.sort_key"), "notes": ("r.notes_json",),
 }
+
+
+def order_by(sort: str) -> str:
+    """並べ替えの ORDER BY の式（同じ値の行は ID の順。逆順でも ID は昇順にしません）。"""
+    desc = sort.startswith("-")
+    cols = SORTS.get(sort.lstrip("-"), SORTS["name"])
+    d = "DESC" if desc else "ASC"
+    return ", ".join(f"{c} {d}" for c in cols) + f", r.id {d}"
 NOTE_LABELS = {"rehydrating": "すでにリハイドレート中です", "downloaded": "過去のジョブでダウンロード済みです",
                "writing": "更新中の可能性があります"}
 
@@ -75,6 +86,8 @@ class ResultsService:
         self.db = db
         self._display: dict[tuple, tuple[int, object]] = {}
         self._lock = threading.Lock()
+        #: 絞り込みごとの件数・合計サイズ（検索結果の行が変わらない間だけ使います）
+        self._aggr: OrderedDict[tuple, tuple] = OrderedDict()
 
     def _check(self, sid: str):
         row = self.db.query_one("SELECT * FROM searches WHERE id=?", (sid,))
@@ -99,13 +112,17 @@ class ResultsService:
     def list(self, sid: str, f: dict, sort: str, offset: int, limit: int, display: str = "full") -> dict:
         self._check(sid)
         where, params = build_where(sid, f)
-        desc = sort.startswith("-")
-        col = SORTS.get(sort.lstrip("-"), "r.sort_key")
-        order = ", ".join(f"{c.strip()} {'DESC' if desc else 'ASC'}" for c in col.split(",")) + ", r.id"
-        total = self.db.scalar(f"SELECT COUNT(*) FROM search_results r WHERE {where}", params)
-        rows = self.db.query(
-            f"SELECT r.*, EXISTS(SELECT 1 FROM search_selection s WHERE s.search_id=r.search_id AND s.result_id=r.id) AS sel "
-            f"FROM search_results r WHERE {where} ORDER BY {order} LIMIT ? OFFSET ?", params + [limit, offset])
+        order = order_by(sort)
+        total = self._count(sid, f, where, params)
+        # 並べ替えは ID だけで行い、表示する行だけを後から読みます（30 万件でも並べ替えの作業の領域を小さくするため）
+        ids = [r[0] for r in self.db.query(
+            f"SELECT r.id FROM search_results r WHERE {where} ORDER BY {order} LIMIT ? OFFSET ?", params + [limit, offset])]
+        rows = []
+        if ids:
+            by_id = {r["id"]: r for r in self.db.query(
+                f"SELECT r.*, EXISTS(SELECT 1 FROM search_selection s WHERE s.search_id=r.search_id AND s.result_id=r.id) AS sel "
+                f"FROM search_results r WHERE r.id IN ({','.join('?' * len(ids))})", ids)}
+            rows = [by_id[i] for i in ids if i in by_id]
         short = None
         if display in ("common", "tail") and rows:
             short = self._shortener(sid, display)
@@ -129,22 +146,63 @@ class ResultsService:
             })
         return {"total": total, "items": items}
 
+    # ------------------------------------------------------------ 件数・合計の記憶
+
+    def _stamp(self, sid: str) -> tuple:
+        """検索結果の行の変化を表す値（行の追加・削除で変わります）。索引だけで求めます。"""
+        r = self.db.query_one("SELECT COUNT(*) AS n, MAX(id) AS m FROM search_results WHERE search_id=?", (sid,))
+        return (r["n"], r["m"])
+
+    def _cached(self, key: tuple, fn):
+        with self._lock:
+            if key in self._aggr:
+                self._aggr.move_to_end(key)
+                return self._aggr[key]
+        value = fn()
+        with self._lock:
+            self._aggr[key] = value
+            while len(self._aggr) > 64:
+                self._aggr.popitem(last=False)
+        return value
+
+    @staticmethod
+    def _fkey(f: dict) -> str:
+        return json.dumps({k: v for k, v in f.items() if v not in (None, "", [])}, sort_keys=True, ensure_ascii=False)
+
+    def _aggregate(self, sid: str, f: dict, where: str, params: list, stamp: tuple | None = None) -> tuple[int, int]:
+        """絞り込みに一致する件数と合計サイズ。"""
+        stamp = stamp or self._stamp(sid)
+        if self._fkey(f) == "{}":
+            return stamp[0], self._cached((sid, stamp, "{}"), lambda: self.db.scalar(
+                "SELECT IFNULL(SUM(size),0) FROM search_results WHERE search_id=?", (sid,)))
+        return self._cached((sid, stamp, self._fkey(f)), lambda: tuple(self.db.query_one(
+            f"SELECT COUNT(*), IFNULL(SUM(size),0) FROM search_results r WHERE {where}", params)))
+
+    def _count(self, sid: str, f: dict, where: str, params: list) -> int:
+        return self._aggregate(sid, f, where, params)[0]
+
     def summary(self, sid: str, f: dict) -> dict:
         self._check(sid)
         where, params = build_where(sid, f)
-        filt = self.db.query_one(f"SELECT COUNT(*) AS n, IFNULL(SUM(size),0) AS b FROM search_results r WHERE {where}", params)
-        allr = self.db.query_one("SELECT COUNT(*) AS n, IFNULL(SUM(size),0) AS b FROM search_results WHERE search_id=?", (sid,))
+        stamp = self._stamp(sid)
+        fn, fb = self._aggregate(sid, f, where, params, stamp)
+        an, ab = self._aggregate(sid, {}, *build_where(sid, {}), stamp)
+        filt = {"n": fn, "b": fb}
+        allr = {"n": an, "b": ab}
         sel = self.db.query_one(
             "SELECT COUNT(*) AS n, IFNULL(SUM(r.size),0) AS b, IFNULL(SUM(r.tier='Archive'),0) AS an, "
             "IFNULL(SUM(CASE WHEN r.tier='Archive' THEN r.size ELSE 0 END),0) AS ab FROM search_selection s "
             "JOIN search_results r ON r.id=s.result_id WHERE s.search_id=?", (sid,))
-        visible_sel = self.db.scalar(
-            f"SELECT COUNT(*) FROM search_selection s JOIN search_results r ON r.id=s.result_id WHERE s.search_id=? AND {where}",
-            [sid] + params)
-        tiers = {}
-        for r in self.db.query("SELECT CASE WHEN archive_status IS NOT NULL THEN 'rehydrating' ELSE IFNULL(tier,'none') END AS t, "
-                               "COUNT(*) AS n, IFNULL(SUM(size),0) AS b FROM search_results WHERE search_id=? GROUP BY t", (sid,)):
-            tiers[r["t"]] = {"count": r["n"], "bytes": r["b"]}
+        if self._fkey(f) == "{}" or sel["n"] == 0:
+            visible_sel = sel["n"]
+        else:
+            visible_sel = self.db.scalar(
+                f"SELECT COUNT(*) FROM search_selection s JOIN search_results r ON r.id=s.result_id WHERE s.search_id=? AND {where}",
+                [sid] + params)
+        tiers = self._cached((sid, stamp, "tiers"), lambda: {
+            r["t"]: {"count": r["n"], "bytes": r["b"]} for r in self.db.query(
+                "SELECT CASE WHEN archive_status IS NOT NULL THEN 'rehydrating' ELSE IFNULL(tier,'none') END AS t, "
+                "COUNT(*) AS n, IFNULL(SUM(size),0) AS b FROM search_results WHERE search_id=? GROUP BY t", (sid,))})
         return {"filtered": {"count": filt["n"], "bytes": filt["b"]}, "all": {"count": allr["n"], "bytes": allr["b"]},
                 "selected": {"count": sel["n"], "bytes": sel["b"], "archive_count": sel["an"], "archive_bytes": sel["ab"]},
                 "hidden_selected": sel["n"] - visible_sel, "tiers": tiers}
@@ -171,10 +229,7 @@ class ResultsService:
         if body.get("range"):
             rg = body["range"]
             start, end = sorted((int(rg.get("start", 0)), int(rg.get("end", 0))))
-            sort = body.get("sort") or "name"
-            desc = sort.startswith("-")
-            col = SORTS.get(sort.lstrip("-"), "r.sort_key")
-            order = ", ".join(f"{c.strip()} {'DESC' if desc else 'ASC'}" for c in col.split(",")) + ", r.id"
+            order = order_by(body.get("sort") or "name")
             sub = f"SELECT r.id FROM search_results r WHERE {where} ORDER BY {order} LIMIT ? OFFSET ?"
             params2 = params + [end - start + 1, start]
         elif body.get("all_matching"):

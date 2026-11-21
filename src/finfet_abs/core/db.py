@@ -18,6 +18,8 @@ log = logging.getLogger(__name__)
 
 #: 1つのトランザクションにまとめる書き込みの最大数（3.4.4 の L5）
 BATCH_LIMIT = 500
+#: メモリマップで読む大きさの上限（ローカルのディスクのとき）
+MMAP_SIZE = 1 << 30
 
 
 SCHEMA_V1 = """
@@ -61,6 +63,9 @@ CREATE TABLE search_results (
   notes_json TEXT
 );
 CREATE INDEX idx_results_sort ON search_results(search_id, sort_key);
+CREATE INDEX idx_results_size ON search_results(search_id, size);
+CREATE INDEX idx_results_modified ON search_results(search_id, last_modified);
+CREATE INDEX idx_results_tier ON search_results(search_id, IFNULL(archive_status, tier));
 
 CREATE TABLE search_selection (
   search_id TEXT NOT NULL REFERENCES searches(id) ON DELETE CASCADE,
@@ -205,6 +210,11 @@ class Database:
         conn.execute("PRAGMA foreign_keys=ON")
         conn.execute("PRAGMA busy_timeout=5000")
         conn.execute("PRAGMA synchronous=NORMAL")
+        # 30 万件の検索結果の絞り込み・集計を速くするため、ローカルのディスクではメモリマップで読みます
+        # （ネットワーク上のデータ保存先では使いません）
+        conn.execute("PRAGMA cache_size=-16384")
+        if not self.network:
+            conn.execute(f"PRAGMA mmap_size={MMAP_SIZE}")
         with self._conns_lock:
             self._all_conns.append(conn)
         return conn
