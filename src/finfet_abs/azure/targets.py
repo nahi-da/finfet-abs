@@ -10,7 +10,7 @@ import time
 from ..core.errors import AppError
 from ..core.secret import Secret
 from .backend import AccountRef, AuthRef, BackendError, ContainerRef
-from .credentials import InteractionRequired
+from .credentials import InteractionRequired, account_key
 from .credstore import CredentialStore, NewCredential, new_from_input
 from .sas import DEFAULT_SUFFIX, ParseError, validate_account, validate_suffix
 
@@ -81,9 +81,17 @@ class TargetService:
         kind = auth.get("kind")
         if kind not in ("entra_user", "entra_key"):
             raise AppError("AUTH_REQUIRED", "認証方式を選択してください。")
-        if self.auth is not None and not self.auth.signed_in:
-            raise AppError("NOT_SIGNED_IN", "サインインしていません。")
-        return AuthRef(kind, tenant_id=auth.get("tenant") or None), None
+        user = account_key(auth.get("account")) or None
+        if self.auth is not None and not self._signed_in(user):
+            raise AppError("NOT_SIGNED_IN", f"{user} でサインインしていません。" if user else "サインインしていません。")
+        return AuthRef(kind, tenant_id=auth.get("tenant") or None, account=user), None
+
+    def _signed_in(self, account: str | None) -> bool:
+        """そのアカウント（None は既定のアカウント）でサインインしているか。"""
+        if self.auth is None:
+            return True
+        f = getattr(self.auth, "is_signed_in", None)
+        return f(account) if f is not None else self.auth.signed_in
 
     def resolve_secret(self, cred_id: str) -> tuple[str, Secret]:
         """ClientFactory から呼ばれます（保存した認証情報、または入力中の認証情報）。"""
@@ -122,7 +130,8 @@ class TargetService:
         names: list[str] | None = None
         if ref.kind in ("entra_user", "entra_key") and self.arm is not None:
             try:
-                names = self.arm.list_containers(account)
+                from .storage import arm_for
+                names = arm_for(self.arm, ref.account).list_containers(account)
             except Exception:  # noqa: BLE001
                 names = None
         if names is None:
@@ -173,8 +182,10 @@ class TargetService:
             kind = auth.get("kind")
             if kind not in ("entra_user", "entra_key"):
                 raise AppError("AUTH_REQUIRED", "認証方式を選択してください。")
+        user = (account_key(auth.get("account")) or None) if kind in ("entra_user", "entra_key") and not cred_id else None
         targets = [{"storage_account": account, "endpoint_suffix": suffix, "container": cont, "auth_kind": kind,
-                    "tenant": auth.get("tenant") or None, "credential_id": cred_id} for cont in dict.fromkeys(containers)]
+                    "tenant": auth.get("tenant") or None, "credential_id": cred_id, "account": user}
+                   for cont in dict.fromkeys(containers)]
         return {"targets": [self.describe(t) for t in targets], "credential_id": cred_id}
 
     # ------------------------------------------------------------ 認証の決定（3.1.9）
@@ -187,6 +198,13 @@ class TargetService:
         warnings: list[str] = []
         detail = {"entra_user": "Entra ID（ユーザーアカウント）", "entra_key": "アクセスキー（Entra ID で取得）",
                   "account_key": "アクセスキー", "sas": "SAS"}.get(kind, "")
+        if kind in ("entra_user", "entra_key") and not t.get("credential_id"):
+            # 使うアカウント（指定がなければ既定のアカウント）。複数のアカウントでサインインしているときに見分けるため
+            info = self.auth.account_info(t.get("account")) if self.auth is not None and hasattr(self.auth, "account_info") else None
+            user = (info or {}).get("username") or t.get("account") or ""
+            out["account_label"] = user
+            if user:
+                detail = detail.replace("）", f": {user}）") if kind == "entra_user" else f"{detail}（{user}）"
         if t.get("credential_id"):
             row = self.credstore.get(t["credential_id"])
             if row is not None:
@@ -229,9 +247,11 @@ class TargetService:
                     pass
         # 2. Entra ID の方式で、サインインしていれば、その方式
         if kind in ("entra_user", "entra_key"):
-            if self.auth is None or self.auth.signed_in:
+            user = account_key(t.get("account")) or None
+            if self._signed_in(user):
                 return {**self.describe({**t, "credential_id": None}), "resolved": True}
-            return {**self.describe({**t, "credential_id": None}), "resolved": False, "reason": "サインインが必要です。"}
+            reason = f"サインインが必要です（{user}）。" if user else "サインインが必要です。"
+            return {**self.describe({**t, "credential_id": None}), "resolved": False, "reason": reason}
         # 3. 同じストレージアカウント・ドメインの保存した認証情報のうち、そのコンテナーに使えるもの
         for c in self.credstore.usable_for(account, suffix, container):
             if c["usable"]:
@@ -242,7 +262,8 @@ class TargetService:
     # ------------------------------------------------------------ 接続テスト
 
     def test(self, t: dict) -> dict:
-        ref = AuthRef(t.get("auth_kind") or "entra_user", credential_id=t.get("credential_id"), tenant_id=t.get("tenant"))
+        ref = AuthRef(t.get("auth_kind") or "entra_user", credential_id=t.get("credential_id"), tenant_id=t.get("tenant"),
+                      account=account_key(t.get("account")) or None)
         acct = AccountRef(t["storage_account"], t.get("endpoint_suffix") or DEFAULT_SUFFIX, ref)
         target = ContainerRef(acct, t["container"]) if t.get("container") else acct
         try:

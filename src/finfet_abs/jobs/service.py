@@ -48,7 +48,7 @@ ITEM_LABELS = {"pending": "待機中", "checking": "確認中", "rehydrate_queue
 _ITEM_COLS = ("storage_account", "endpoint_suffix", "container", "blob_name", "blob_name_lower", "sort_key", "blob_type",
               "size", "etag", "content_md5", "creation_time", "last_modified", "access_tier_change_time", "tier_at_search",
               "archive_status_at_search", "rehydrate_priority_at_search", "tier", "archive_status", "notes_json",
-              "vars_json", "auth_kind", "credential_id", "secret_id", "tenant_id", "status", "status_reason",
+              "vars_json", "auth_kind", "credential_id", "secret_id", "tenant_id", "account", "status", "status_reason",
               "planned_path", "rehydrate_priority", "rehydrate_target_tier", "rehydrate_requested_known", "updated_at")
 
 
@@ -157,7 +157,7 @@ class JobService:
                 "tier": r["tier"], "archive_status": r["archive_status"], "rehydrate_priority": r["rehydrate_priority"],
                 "notes_json": r["notes_json"], "vars": json.loads(r["vars_json"]) if r["vars_json"] else {},
                 "auth_kind": t["auth_kind"] if t else None, "credential_id": t["credential_id"] if t else None,
-                "tenant_id": t["tenant_id"] if t else None,
+                "tenant_id": t["tenant_id"] if t else None, "account": t["account"] if t else None,
             })
         cond = json.loads(srow["condition_json"])
         return out, {"source": "search", "search_id": sid, "condition": cond, "searched_at": srow["started_at"]}
@@ -187,7 +187,8 @@ class JobService:
                     a = {**a, "auth_kind": kind}
                 if not a.get("auth_kind"):
                     raise AppError("AUTH_REQUIRED", f"ストレージアカウント「{r['storage_account']}」の認証方式を選んでください。")
-                item.update(auth_kind=a["auth_kind"], credential_id=a.get("credential_id"), tenant_id=a.get("tenant"))
+                item.update(auth_kind=a["auth_kind"], credential_id=a.get("credential_id"), tenant_id=a.get("tenant"),
+                            account=(a.get("account") or "").lower() or None)
             out.append(item)
             accounts.add(r["storage_account"])
         if not out:
@@ -218,6 +219,7 @@ class JobService:
                 "rehydrate_priority": r["rehydrate_priority_at_search"], "notes_json": r["notes_json"],
                 "vars": json.loads(r["vars_json"]) if r["vars_json"] else {}, "auth_kind": r["auth_kind"],
                 "credential_id": r["credential_id"], "secret_id": r["secret_id"], "tenant_id": r["tenant_id"],
+                "account": r["account"],
             })
         ctx = {"source": "rerun", "source_job_id": job["id"], "search_id": job["search_id"],
                "condition": json.loads(job["search_json"]) if job["search_json"] else None,
@@ -401,7 +403,7 @@ class JobService:
                 "archive_status": it.get("archive_status"), "notes_json": it.get("notes_json"),
                 "vars_json": json.dumps(it.get("vars"), ensure_ascii=False) if it.get("vars") else None,
                 "auth_kind": it.get("auth_kind"), "credential_id": it.get("credential_id"), "secret_id": secret_id,
-                "tenant_id": it.get("tenant_id"), "status": st, "status_reason": reason,
+                "tenant_id": it.get("tenant_id"), "account": it.get("account"), "status": st, "status_reason": reason,
                 "planned_path": None if i in skipped_dup else planned[i], "rehydrate_priority": None,
                 "rehydrate_target_tier": None, "rehydrate_requested_known": None, "updated_at": now,
             })

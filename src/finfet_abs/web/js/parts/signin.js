@@ -10,14 +10,17 @@ import { toast, toastError } from './toast.js';
  * サインインを始めます（tenantId を指定すると、そのテナントにサインイン）。
  * サインインが終わると、resolve(true)。取り消すと resolve(false)。
  * @param {string} [tenantId]
+ * @param {{add?: boolean, account?: string}} [opt] add: 別のアカウントを追加、account: そのアカウントで
  * @returns {Promise<boolean>}
  */
-export function startSignIn(tenantId) {
+export function startSignIn(tenantId, opt = {}) {
   return new Promise(async (resolve) => {
     let res;
+    let before;
     try {
-      res = tenantId ? await api.post(`/api/v1/auth/tenants/${encodeURIComponent(tenantId)}/sign-in`, {})
-        : await api.post('/api/v1/auth/user/sign-in', {});
+      before = new Set(((await api.get('/api/v1/auth/status')).accounts || []).map((a) => a.id));
+      res = tenantId ? await api.post(`/api/v1/auth/tenants/${encodeURIComponent(tenantId)}/sign-in`, { account: opt.account || null })
+        : await api.post('/api/v1/auth/user/sign-in', { add: !!opt.add, account: opt.account || null });
     } catch (e) {
       toastError(e);
       resolve(false);
@@ -36,17 +39,21 @@ export function startSignIn(tenantId) {
         'サインインのページには「Microsoft Azure CLI」と表示されます。本ツールは Azure の開発ツールと同じ方法でサインインします。') : null,
     ];
     const off = on('auth.changed', (d) => {
-      if (finished) return;
-      if (d.signed_in && !d.signin_pending) {
-        finished = true;
-        off();
-        d2.close(true);
-        toast(`${d.account?.username || ''} でサインインしました`);
-        resolve(true);
-      }
+      if (finished || d.signin_pending || !d.signed_in) return;
+      // アカウントの追加では、新しいアカウントが増えたとき、アカウントの指定があれば、そのアカウントがあるときに終わります
+      const accounts = d.accounts || [];
+      const added = accounts.find((a) => !before.has(a.id));
+      const target = opt.account ? accounts.find((a) => a.id === opt.account.toLowerCase()) : null;
+      if (opt.add && !added) return;
+      if (opt.account && !target) return;
+      finished = true;
+      off();
+      d2.close(true);
+      toast(`${(added || target || d.account)?.username || ''} でサインインしました`);
+      resolve(true);
     });
     const d2 = openDialog({
-      title: tenantId ? 'このテナントにサインイン' : 'サインイン',
+      title: tenantId ? 'このテナントにサインイン' : opt.add ? 'アカウントを追加' : 'サインイン',
       width: 720,
       body,
       onClose: () => {

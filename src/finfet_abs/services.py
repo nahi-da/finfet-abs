@@ -30,7 +30,7 @@ def setup_services(app) -> None:
         s["backend"].signed_in = lambda: s["auth"].signed_in
         s["network"] = None
     else:
-        from .azure.arm import ArmClient
+        from .azure.arm import ArmPool
         from .azure.credentials import AuthService
         from .azure.proxy import NetworkManager
         from .azure.storage import AzureBackend, ClientFactory, SecretResolver, TenantResolver
@@ -41,7 +41,7 @@ def setup_services(app) -> None:
                            cache_path=app.location.local_dir / "msal_cache.bin", port=port, events=app.events,
                            clock=app.clock)
         s["auth"] = auth
-        arm = ArmClient(auth, network.session, lambda: app.settings.get("transfer.retry_total"))
+        arm = ArmPool(auth, network.session, lambda: app.settings.get("transfer.retry_total"))
         s["arm"] = arm
         resolver = SecretResolver(credential=lambda cid: s["targets"].resolve_secret(cid),
                                   job_secret=lambda sid: s["job_secrets"](sid))

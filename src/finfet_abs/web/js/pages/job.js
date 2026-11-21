@@ -72,7 +72,7 @@ export async function render(ctx) {
     const code = job.last_error ? job.last_error.code : null;
     // 認証が使えないときは、サインインか接続先の追加を求めます（3.1.9・3.3.9）
     const fix = code === 'NOT_SIGNED_IN' || code === 'INTERACTION_REQUIRED'
-      ? linkButton('サインイン', () => import('../parts/signin.js').then((m) => m.startSignIn()))
+      ? linkButton('サインイン', () => import('../parts/signin.js').then((m) => m.startSignIn(null, { account: job.last_error.account || undefined })))
       : code === 'NO_CREDENTIAL' ? h('a', { href: '/connections', text: '接続のページを開く' }) : null;
     const warn = job.last_error ? h('div', { class: 'line status-warn' }, h('span', { text: job.last_error.message }), fix) : null;
     head.append(...[h('div', { class: 'page-head' }, h('h1', { class: 'ellipsis', text: job.name, title: job.name }),

@@ -151,7 +151,7 @@ def register(router, app) -> None:
             err = None
             try:
                 ref = AuthRef(body.get("auth_kind") or "entra_user", credential_id=body.get("credential_id"),
-                              tenant_id=body.get("tenant"))
+                              tenant_id=body.get("tenant"), account=body.get("account"))
                 names = s["backend"].list_containers(AccountRef(account, suffix, ref))
             except Exception as exc:  # noqa: BLE001
                 err = getattr(exc, "message", None) or "コンテナーの一覧を取得できません。"
@@ -182,7 +182,7 @@ def register(router, app) -> None:
 
         def run():
             ref = AuthRef(target.get("auth_kind") or "entra_user", credential_id=target.get("credential_id"),
-                          tenant_id=target.get("tenant"))
+                          tenant_id=target.get("tenant"), account=target.get("account"))
             ct = ContainerRef(AccountRef(target.get("storage_account", ""), target.get("endpoint_suffix") or "core.windows.net",
                                          ref), target.get("container", ""))
             values: list[str] = []
@@ -223,11 +223,12 @@ def register(router, app) -> None:
         holder: dict = {}
         # 集めた名前の保持のキー（接続先と認証）。秘密情報は含めません
         tkey = (target["storage_account"].lower(), target.get("endpoint_suffix") or "core.windows.net", target["container"],
-                target.get("auth_kind") or "entra_user", target.get("credential_id"), target.get("tenant"))
+                target.get("auth_kind") or "entra_user", target.get("credential_id"), target.get("tenant"),
+                (target.get("account") or "").lower())
 
         def run():
             ref = AuthRef(target.get("auth_kind") or "entra_user", credential_id=target.get("credential_id"),
-                          tenant_id=target.get("tenant"))
+                          tenant_id=target.get("tenant"), account=target.get("account"))
             ct = ContainerRef(AccountRef(target["storage_account"], target.get("endpoint_suffix") or "core.windows.net", ref),
                               target["container"])
             last = [time.monotonic()]  # 最初の知らせは 0.5 秒後（処理の ID が決まってから）

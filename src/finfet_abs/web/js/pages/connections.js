@@ -11,26 +11,50 @@ import { VirtualTable } from '../parts/table.js';
 import { toast, toastError } from '../parts/toast.js';
 import { runTask } from '../task.js';
 
-/** サインアウトします（アカウントのメニューからも使います）。 */
-export async function signOut() {
-  await api.post('/api/v1/auth/sign-out', {});
-  toast('サインアウトしました');
+/**
+ * サインアウトします（アカウントのメニューからも使います）。
+ * @param {string} [account] 指定すればそのアカウントだけ、指定しなければすべて
+ */
+export async function signOut(account) {
+  await api.post('/api/v1/auth/sign-out', { account: account || null });
+  toast(account ? `${account} をサインアウトしました` : 'サインアウトしました');
 }
 
+async function setDefault(account) {
+  try {
+    await api.post('/api/v1/auth/default', { account });
+    toast(`既定のアカウントを ${account} にしました`);
+  } catch (e) {
+    toastError(e);
+  }
+}
+
+// サインイン（4.8.2）。複数のアカウントで同時にサインインでき、接続先ごとに使うアカウントを選べます（依頼者の意見）
 function signInSection(st) {
   const sec = h('section', { class: 'part' }, h('h2', { text: 'サインイン' }));
   if (!st || !st.signed_in) {
     sec.append(h('div', { class: 'line' }, h('span', { text: 'サインインしていません。' }), button('サインイン', () => startSignIn(), { primary: true })));
     return sec;
   }
-  const a = st.account || {};
-  const who = a.tenant_name ? `${a.username}（${a.tenant_name}）` : a.username;
-  sec.append(h('div', { class: 'line' }, h('span', { text: `${who}でサインインしています。` }), linkButton('サインアウト', () => signOut())));
+  const accounts = st.accounts && st.accounts.length ? st.accounts : [st.account || {}];
+  const multi = accounts.length > 1;
+  const list = h('div', { class: 'account-list' });
+  for (const a of accounts) {
+    const who = h('span', null, h('span', { text: a.name ? `${a.name}　` : '' }), h('span', { class: 'mono', text: a.username }),
+      a.tenant_name ? h('span', { class: 'muted', text: `（${a.tenant_name}）` }) : null);
+    const row = h('div', { class: 'line account-row' }, who);
+    if (multi && a.default) row.append(h('span', { class: 'tag', text: '既定', title: 'アカウントを指定していない接続先で使います' }));
+    if (multi && !a.default) row.append(linkButton('既定にする', () => setDefault(a.id)));
+    row.append(linkButton('サインアウト', () => signOut(multi ? a.id : null)));
+    list.append(row);
+  }
+  sec.append(list, h('div', { class: 'line' }, linkButton('アカウントを追加', () => startSignIn(null, { add: true }))));
+  if (multi) sec.append(h('p', { class: 'muted', text: '接続先を追加するときに、使うアカウントを選べます。アカウントを指定していない接続先は、既定のアカウントを使います。' }));
   const bad = (st.tenants || []).filter((t) => t.status !== 'ok' && t.status !== 'unknown');
   for (const t of bad) {
     sec.append(h('div', { class: 'line' },
-      h('span', { class: 'warn', text: `使えないテナント: ${t.name || t.id}（${t.label}）` }),
-      linkButton('このテナントにサインイン', () => startSignIn(t.id))));
+      h('span', { class: 'warn', text: `使えないテナント: ${t.name || t.id}（${t.label}${multi && t.account ? `、${t.account}` : ''}）` }),
+      linkButton('このテナントにサインイン', () => startSignIn(t.id, { account: t.account }))));
   }
   return sec;
 }

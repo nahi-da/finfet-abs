@@ -181,9 +181,16 @@ def _migrate_1(conn: sqlite3.Connection) -> None:
     run_script(conn, SCHEMA_V1)
 
 
+def _migrate_2(conn: sqlite3.Connection) -> None:
+    """v1.2: 複数のユーザーアカウント。接続先の認証に、使うアカウント（ユーザー名の小文字。NULL は既定のアカウント）を加えます。"""
+    conn.execute("ALTER TABLE search_targets ADD COLUMN account TEXT")
+    conn.execute("ALTER TABLE job_items ADD COLUMN account TEXT")
+
+
 #: 移行の関数（番号 → 関数）。番号は移行した後の schema_version です。
 MIGRATIONS: dict[int, Callable[[sqlite3.Connection], None]] = {
     1: _migrate_1,
+    2: _migrate_2,
 }
 
 LATEST_VERSION = max(MIGRATIONS)

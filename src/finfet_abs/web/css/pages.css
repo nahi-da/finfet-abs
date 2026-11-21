@@ -113,3 +113,7 @@
 .choice-item { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: block; }
 .choice-item input { margin-right: var(--sp-1); }
 .choice-empty { grid-column: 1 / -1; padding: var(--sp-1) 0; }
+
+/* 接続のページのアカウントの一覧（複数のアカウント） */
+.account-row { min-height: var(--row-h); }
+.tag { border: 1px solid var(--line); padding: 0 var(--sp-1); font-size: 12px; color: var(--text-muted); line-height: 18px; }

@@ -63,7 +63,7 @@ export function openInferDialog(opt) {
         // 結果の待ち合わせは runTask（処理がすぐ終わって、待ち受けより先に task.done が届いても取りこぼさない）
         const r = await runTask('POST', '/api/v1/pattern/infer', {
           target: { storage_account: t.storage_account, endpoint_suffix: t.endpoint_suffix, container: t.container, auth_kind: t.auth_kind,
-            tenant: t.tenant || null, credential_id: t.credential_id || null },
+            tenant: t.tenant || null, credential_id: t.credential_id || null, account: t.account || null },
           mode, prefix: prefixIn.value.trim(), limit: Number(limitIn.value) || 10000, refresh: !!refresh,
         }, (id) => { taskId = id; });
         taskId = null;
