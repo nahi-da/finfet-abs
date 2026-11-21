@@ -11,6 +11,7 @@ import { VirtualTable } from '../parts/table.js';
 import { toast } from '../parts/toast.js';
 
 const WARN_STATES = new Set(['waiting_download']);
+const AUTH_CODES = new Set(['NOT_SIGNED_IN', 'INTERACTION_REQUIRED', 'NO_CREDENTIAL']);
 const RESULT_LABELS = { completed: '完了', completed_with_errors: '一部失敗', cancelled: '中止' };
 
 /** 進捗の文（4.5.1）。 */
@@ -137,13 +138,20 @@ export async function render(ctx) {
   ]));
   const check = (r) => h('input', { type: 'checkbox', checked: selected.has(r.id), 'aria-label': '選択', onchange: (e) => { if (e.target.checked) selected.add(r.id); else selected.delete(r.id); } });
 
+  // 認証が使えないジョブは「サインインが必要です」などを状態の横に出します（3.3.9）
+  const statusCell = (r) => {
+    const authMsg = r.last_error && AUTH_CODES.has(r.last_error.code) ? r.last_error.message.replace(/。.*$/, '') : '';
+    return h('span', { class: WARN_STATES.has(r.status) || r.last_error ? 'status-warn' : '',
+      text: authMsg ? `${r.status_label}・${authMsg}` : r.status_label, title: r.last_error ? r.last_error.message : null });
+  };
+
   const queueCols = [
     { key: 'grip', label: '', width: 32, fixed: true, noResize: true, align: 'center',
       render: (r) => h('span', { class: 'grip', draggable: 'true', title: 'ドラッグして順番を変える（Alt+↑ / Alt+↓）', 'aria-hidden': 'true',
         ondragstart: (e) => { dragId = r.id; e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', r.id); } }, icon('grip')) },
     { key: 'sel', label: '', width: 36, fixed: true, noResize: true, align: 'center', render: check },
     { key: 'name', label: '名前', width: 260, flex: true, fixed: true, render: nameCell },
-    { key: 'status', label: '状態', width: 150, render: (r) => h('span', { class: WARN_STATES.has(r.status) || r.last_error ? 'status-warn' : '', text: r.status_label, title: r.last_error ? r.last_error.message : null }) },
+    { key: 'status', label: '状態', width: 150, render: statusCell },
     { key: 'progress', label: '進捗', width: 240, render: (r) => progressText(r) },
     { key: 'targets', label: '接続先', width: 180, render: (r) => r.targets_summary },
     { key: 'created', label: '追加', width: 110, render: (r) => dateShort(r.created_at), title: (r) => dateFull(r.created_at) },

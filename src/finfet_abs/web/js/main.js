@@ -303,6 +303,7 @@ async function boot() {
     const el = document.getElementById('nav-jobs-count');
     el.textContent = d.jobs_attention ? String(d.jobs_attention) : '';
   });
+  document.getElementById('nav-jobs-count').textContent = s.jobs_attention ? String(s.jobs_attention) : '';
   for (const w of s.warnings || []) addNotice('warn', w);
   try { app.settings = (await api.get('/api/v1/settings')).values; } catch { app.settings = {}; }
   refreshAuth();

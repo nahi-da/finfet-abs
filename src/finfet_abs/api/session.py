@@ -30,6 +30,7 @@ def register(router, app) -> None:
             "network_data_dir": loc.is_network,
             "warnings": warnings,
             "events_last": app.events.last,
+            "jobs_attention": app.services["jobs"].attention_count() if "jobs" in (app.services or {}) else 0,
         })
 
     @router.get("/api/v1/events")

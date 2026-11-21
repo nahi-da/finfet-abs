@@ -69,7 +69,12 @@ export async function render(ctx) {
       { text: 'ログのフォルダーを開く', onClick: () => api.post('/api/v1/fs/open-folder', { path: job.log_dir }).catch((e) => toast(e.message, { error: true })) },
       ENDED.has(st) ? { text: '削除', onClick: () => remove() } : null,
     ].filter(Boolean)));
-    const warn = job.last_error ? h('div', { class: 'status-warn', text: job.last_error.message }) : null;
+    const code = job.last_error ? job.last_error.code : null;
+    // 認証が使えないときは、サインインか接続先の追加を求めます（3.1.9・3.3.9）
+    const fix = code === 'NOT_SIGNED_IN' || code === 'INTERACTION_REQUIRED'
+      ? linkButton('サインイン', () => import('../parts/signin.js').then((m) => m.startSignIn()))
+      : code === 'NO_CREDENTIAL' ? h('a', { href: '/connections', text: '接続のページを開く' }) : null;
+    const warn = job.last_error ? h('div', { class: 'line status-warn' }, h('span', { text: job.last_error.message }), fix) : null;
     head.append(...[h('div', { class: 'page-head' }, h('h1', { class: 'ellipsis', text: job.name, title: job.name }),
       h('span', { class: ENDED.has(st) || st === 'running' ? '' : 'status-warn', text: job.status_label }),
       h('div', { class: 'actions' }, ...btns, menu)), warn,
