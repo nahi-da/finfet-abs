@@ -71,7 +71,7 @@ class App:
         router = build_router(self)
         web = StaticFiles(paths.WEB_DIR)
         docs = StaticFiles(paths.DOCS_DIR, "/docs/")
-        signin = getattr(self.services.get("auth"), "handle_signin_return", None)
+        signin = self.services.get("signin_return")
         return WsgiApp(router, self.security, web, docs, signin_return=signin)
 
     # ------------------------------------------------------------ 終了

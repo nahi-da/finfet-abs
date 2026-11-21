@@ -37,7 +37,7 @@ RE_PRODUCT = re.compile(
 )
 
 FORBIDDEN_PREFIXES = ("runtime/", "data/")
-FORBIDDEN_NAMES = {"prices.json", ".testenv.json"}
+FORBIDDEN_NAMES = {"prices.json", ".testenv.json", ".testenv.deleted.json"}
 
 
 def load_allow() -> list[str]:
