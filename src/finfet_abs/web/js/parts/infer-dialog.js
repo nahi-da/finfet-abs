@@ -92,7 +92,7 @@ export function openInferDialog(opt) {
           h('td', { class: 'mono', text: c.pattern }),
           h('td', { class: 'num', text: num(c.count) }),
           r.sizes_known ? h('td', { class: 'num', text: size(c.bytes) }) : null,
-          h('td', { text: range }),
+          h('td', { class: 'nowrap', text: range }),
           h('td', null, button('使う', () => { result = { path_pattern: c.pattern, target: t }; d.close(true); }))));
       }
       table.append(tb);
