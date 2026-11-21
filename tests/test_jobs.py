@@ -277,6 +277,33 @@ class DownloadTest(JobTestBase):
         self.assertEqual(sorted(calls), sorted([0, 1024 * KB, 2 * 1024 * KB, 2 * 1024 * KB, 3 * 1024 * KB]))
         self.assertEqual((self.out / "logs" / "r.bin").read_bytes(), blob_bytes("r.bin", 0, size))
 
+    def test_resume_with_different_chunk_size(self) -> None:
+        """前回と範囲の大きさが違っても（帯域の制限の有無で変わる）、足りない部分だけを正しく取得します。"""
+        size = 3 * 1024 * KB + 100
+        self.add("logs", [blob("c.bin", size=size)])
+        jid = self.create(self.make_search(), job_folder=False, start=False)
+        it = self.items(jid)[0]
+        final = str(self.out / "logs" / "c.bin")
+        part = final + ".part"
+        os.makedirs(os.path.dirname(final), exist_ok=True)
+        open(final, "wb").close()
+        with open(part, "wb") as f:
+            f.truncate(size)
+            f.seek(0)
+            f.write(blob_bytes("c.bin", 0, 256 * KB))  # 前回は 256 KiB だけ取得した
+        self.db.execute("UPDATE job_items SET status='ready', local_path=?, part_path=?, ranges_done_json=?, "
+                        "download_etag=?, download_started_at=? WHERE id=?",
+                        (final, part, json.dumps([[0, 256 * KB]]), '"0x1"', "2026-11-20T00:00:00Z", it["id"]))
+        got = []
+        orig = self.be.download_range
+        self.be.download_range = lambda t, n, o, ln, e: (got.append((o, ln)), orig(t, n, o, ln, e))[1]
+        self.svc.start([jid])
+        self.run_until(lambda: self.status(jid) == "completed")
+        self.assertEqual((self.out / "logs" / "c.bin").read_bytes(), blob_bytes("c.bin", 0, size))
+        self.assertIn((256 * KB, 1024 * KB), got)  # 取得済みの続きから、今の大きさで
+        self.assertEqual(min(o for o, _ in got), 256 * KB)  # 取得済みの部分は取り直しません
+        self.assertTrue(any("から再開します" in ln for ln in open(self.tmp / "logs" / f"{jid}.log", encoding="utf-8")))
+
     def test_412_restart_then_error(self) -> None:
         self.add("logs", [blob("u.bin", size=2 * 1024 * KB)])
         jid = self.create(self.make_search())

@@ -121,7 +121,7 @@ class Speed:
 
 class JobEngine:
     def __init__(self, *, db, settings, events, service: JobService, backend: Callable[[], object], limits: Limits,
-                 logs_dir: Path, clock: Clock = SYSTEM_CLOCK) -> None:
+                 logs_dir: Path, clock: Clock = SYSTEM_CLOCK, time_scale: Callable[[], float] | None = None) -> None:
         self.db = db
         self.settings = settings
         self.events = events
@@ -130,6 +130,8 @@ class JobEngine:
         self.limits = limits
         self.logs_dir = Path(logs_dir)
         self.clock = clock
+        #: デモモードで、完了の確認の間隔を縮める割合（8.3.3。1 分 = 1 時間なら 60）
+        self.time_scale = time_scale or (lambda: 1.0)
         self.speed = Speed()
         self.md5_lock = threading.Lock()
         self._runners: dict[str, JobRunner] = {}
@@ -172,7 +174,7 @@ class JobEngine:
             try:
                 self.schedule()
                 self.heartbeat()
-                if time.monotonic() - self._last_poll >= 15:
+                if time.monotonic() - self._last_poll >= (15 if self.time_scale() <= 1 else 5):
                     self._last_poll = time.monotonic()
                     self.poll()
             except Exception:  # noqa: BLE001
@@ -240,7 +242,7 @@ class JobEngine:
     def poll_interval(self, priority: str | None, first: bool) -> timedelta:
         p = "high" if priority == "High" else "standard"
         key = f"rehydrate.poll_first_minutes.{p}" if first else f"rehydrate.poll_interval_minutes.{p}"
-        return timedelta(minutes=int(self.settings.get(key)))
+        return timedelta(minutes=int(self.settings.get(key)) / max(1.0, float(self.time_scale())))
 
     def poll(self, job_id: str | None = None, force: bool = False) -> int:
         """完了の確認の時刻が来たリハイドレート中の Blob を確かめます。戻り値は確かめた件数。"""
@@ -830,11 +832,13 @@ class JobRunner(threading.Thread):
                 return
             part = final + ".part"
             self._update(r["id"], local_path=final, part_path=part, ranges_done_json=None, bytes_downloaded=0)
-            ranges_done: set[int] = set()
+            ranges_done: list[list[int]] = []
             etag_done = None
         else:
-            ranges_done = set(json.loads(r["ranges_done_json"] or "[]"))
+            ranges_done = load_ranges(r["ranges_done_json"])
             etag_done = r["download_etag"]
+            if ranges_done:
+                self.log.write("INFO", f"取得済みの範囲（{covered(ranges_done) / 1024 / 1024:.1f} MiB）から再開します", name)
         now = self.clock.now()
         self._update(r["id"], download_started_at=r["download_started_at"] or to_iso(now),
                      download_resumed_at=to_iso(now) if r["download_started_at"] else None)
@@ -850,7 +854,7 @@ class JobRunner(threading.Thread):
             if etag_done and etag_done != info.etag:
                 # Blob が更新された: .part を作り直して最初から
                 self.log.write("WARN", "Blob が更新されたため、最初から取得し直します", name)
-                ranges_done = set()
+                ranges_done = []
             etag_done = info.etag
             self._update(r["id"], download_etag=info.etag, size=info.size, content_md5=info.content_md5,
                          attempts=(r["attempts"] or 0) + attempts)
@@ -859,7 +863,7 @@ class JobRunner(threading.Thread):
                 break
             except BackendError as exc:
                 if exc.code == "ConditionNotMet" and attempts < DOWNLOAD_RESUME_TRIES:
-                    ranges_done = set()
+                    ranges_done = []
                     etag_done = None
                     continue
                 if exc.code == "ConditionNotMet":
@@ -897,29 +901,31 @@ class JobRunner(threading.Thread):
                      bytes_downloaded=info.size, md5_result=md5_result, part_path=None, ranges_done_json=None)
         self.log.write("INFO", "ダウンロードしました", name)
 
-    def _fetch_ranges(self, r, info: BlobInfo, part: str, done: set[int], opts: dict) -> None:
+    def _fetch_ranges(self, r, info: BlobInfo, part: str, done: list[list[int]], opts: dict) -> None:
+        """足りない区間を、今のチャンクの大きさで取得します（取得済みの区間は [開始, 終わり) で記録します）。"""
         limits = self.engine.limits
         chunk = limits.chunk_size()
         size = info.size
-        starts = [s for s in range(0, max(size, 1), chunk) if s not in done] if size > 0 else []
+        todo = [(s, min(e, s + chunk)) for gs, ge in missing(done, size) for s, e in [(x, ge) for x in range(gs, ge, chunk)]]
         mode = "r+b" if os.path.exists(paths.long_path(part)) and done else "wb"
         with open(paths.long_path(part), mode) as f:
             if size and mode == "wb":
                 f.truncate(size)
             flock = threading.Lock()
-            state = {"bytes": sum(min(chunk, size - s) for s in done), "last_save": time.monotonic()}
+            state = {"bytes": covered(done), "last_save": time.monotonic()}
             backend = self.engine.backend()
             target = item_target(r)
 
             def save(force: bool = False) -> None:
                 if force or time.monotonic() - state["last_save"] >= 1.0:
                     state["last_save"] = time.monotonic()
-                    self._update(r["id"], ranges_done_json=json.dumps(sorted(done)), bytes_downloaded=state["bytes"])
+                    self._update(r["id"], ranges_done_json=json.dumps(done), bytes_downloaded=state["bytes"])
 
-            def one(start: int) -> None:
+            def one(rng: tuple[int, int]) -> None:
                 if self.stop_event.is_set():
                     raise Cancelled()
-                length = min(chunk, size - start)
+                start, end = rng
+                length = end - start
                 limits.bandwidth.acquire(length, self.stop_event)
                 with limits.request(r["storage_account"], self.stop_event):
                     data = b"".join(backend.download_range(target, r["blob_name"], start, length, info.etag))
@@ -928,7 +934,7 @@ class JobRunner(threading.Thread):
                 with flock:
                     f.seek(start)
                     f.write(data)
-                    done.add(start)
+                    add_range(done, start, end)
                     state["bytes"] += length
                     self.engine.speed.add(length)
                     with self._plock:
@@ -936,14 +942,56 @@ class JobRunner(threading.Thread):
                     save()
 
             try:
-                if starts:
+                if todo:
                     with ThreadPoolExecutor(max_workers=int(opts["connections_per_blob"])) as ex:
-                        for fut in [ex.submit(one, s) for s in starts]:
+                        for fut in [ex.submit(one, t) for t in todo]:
                             fut.result()
             finally:
                 save(force=True)
             f.flush()
             os.fsync(f.fileno())
+
+
+def load_ranges(text: str | None) -> list[list[int]]:
+    """記録した取得済みの区間。形式が違う（古い形式など）ものは、最初から取得し直すため空にします。"""
+    try:
+        data = json.loads(text or "[]")
+    except ValueError:
+        return []
+    if not all(isinstance(x, list) and len(x) == 2 and all(isinstance(v, int) for v in x) for x in data):
+        return []
+    out: list[list[int]] = []
+    for s, e in sorted(data):
+        add_range(out, s, e)
+    return out
+
+
+def add_range(done: list[list[int]], start: int, end: int) -> None:
+    """区間 [start, end) を加え、重なり・隣り合う区間をまとめます（done を書き換えます）。"""
+    merged: list[list[int]] = []
+    for s, e in sorted(done + [[start, end]]):
+        if merged and s <= merged[-1][1]:
+            merged[-1][1] = max(merged[-1][1], e)
+        else:
+            merged.append([s, e])
+    done[:] = merged
+
+
+def covered(done: list[list[int]]) -> int:
+    return sum(e - s for s, e in done)
+
+
+def missing(done: list[list[int]], size: int) -> list[tuple[int, int]]:
+    """[0, size) のうち、取得していない区間。"""
+    out = []
+    pos = 0
+    for s, e in sorted(done):
+        if s > pos:
+            out.append((pos, min(s, size)))
+        pos = max(pos, e)
+    if pos < size:
+        out.append((pos, size))
+    return [(s, e) for s, e in out if e > s]
 
 
 def file_md5(path: str) -> str:
