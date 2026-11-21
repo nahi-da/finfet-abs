@@ -10,10 +10,11 @@ from datetime import datetime, timezone
 from typing import Iterator
 
 from ..azure.backend import AccountRef, BackendError, BlobInfo, ContainerRef, ListPage
+from ..search.listing import azure_order
 
 
 class MemoryBackend:
-    """コンテナーごとに、名前の順の Blob の一覧を持つ架空の実装。要求の回数を数えます。"""
+    """コンテナーごとに、名前の順（Azure と同じ UTF-16 の順）の Blob の一覧を持つ架空の実装。要求の回数を数えます。"""
 
     def __init__(self) -> None:
         self._lock = threading.RLock()
@@ -31,7 +32,7 @@ class MemoryBackend:
             names, by_name = conts.setdefault(container, ([], {}))
             for b in blobs:
                 if b.name not in by_name:
-                    bisect.insort(names, b.name)
+                    bisect.insort(names, b.name, key=azure_order)
                 by_name[b.name] = b
 
     def add_container(self, account: str, container: str, suffix: str = "core.windows.net") -> None:
@@ -60,7 +61,7 @@ class MemoryBackend:
             self.requests.append(("list", target.container, prefix))
             self._check(target, "list")
             names, by_name = self._container(target)
-            start = int(continuation) if continuation else bisect.bisect_left(names, prefix)
+            start = int(continuation) if continuation else bisect.bisect_left(names, azure_order(prefix), key=azure_order)
             out = []
             i = start
             while i < len(names) and len(out) < page_size:
@@ -77,7 +78,7 @@ class MemoryBackend:
             self.requests.append(("walk", target.container, prefix))
             names, _ = self._container(target)
             out: list[str] = []
-            i = bisect.bisect_left(names, prefix)
+            i = bisect.bisect_left(names, azure_order(prefix), key=azure_order)
             while i < len(names) and names[i].startswith(prefix) and len(out) < limit:
                 rest = names[i][len(prefix):]
                 head = rest.split("/", 1)[0]

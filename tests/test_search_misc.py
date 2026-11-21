@@ -117,6 +117,21 @@ class ListingTest(unittest.TestCase):
         self.assertTrue(listing.covered_by_trial("a/", "b/1"))
         self.assertFalse(listing.covered_by_trial("b/", "b/1"))
         self.assertFalse(listing.covered_by_trial("c/", "b/1"))
+        # Azure の順（UTF-16 の符号単位）: 😀（U+1F600）は Ａ（U+FF21）より前。Python の文字列の比較では後
+        self.assertTrue(listing.covered_by_trial("😀/", "Ａ/1"))
+        self.assertFalse(listing.covered_by_trial("Ａ/", "😀/1"))
+
+    def test_azure_order_split(self) -> None:
+        """絵文字と全角の名前が混ざるとき、まとめて取得から切り替えても取りこぼさない（実環境で確認した順）。"""
+        names = [f"x/😀/{i:05d}" for i in range(3000)] + [f"x/Ａ/{i:05d}" for i in range(3000)] + \
+                [f"x/ﾆ/{i:05d}" for i in range(3000)]
+        self.be.add_blobs("stexample01", "logs", blobs(names))
+        listed = [b.name for b in self.be.list_blobs_page(self.t, "x/", page_size=10000).items]
+        self.assertEqual(listed[0][:3], "x/😀")  # 架空の実装も Azure と同じ順
+        self.assertEqual(listed, sorted(names, key=listing.azure_order))
+        with mock.patch.object(listing, "PAGE_SIZE", 5000):
+            self.run_list(["x/😀/", "x/Ａ/", "x/ﾆ/"], concurrency=1)
+        self.assertEqual(set(self.got), set(names))
 
     def test_cache(self) -> None:
         self.be.add_blobs("stexample01", "logs", blobs([f"a/{i}" for i in range(10)] + [f"b/{i}" for i in range(10)]))
