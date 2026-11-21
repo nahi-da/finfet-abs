@@ -63,7 +63,7 @@ class JobLog:
 
 def item_target(row) -> ContainerRef:
     auth = AuthRef(row["auth_kind"] or "entra_user", credential_id=row["credential_id"], secret_id=row["secret_id"],
-                   tenant_id=row["tenant_id"])
+                   tenant_id=row["tenant_id"], account=row["account"])
     return ContainerRef(AccountRef(row["storage_account"], row["endpoint_suffix"] or "core.windows.net", auth),
                         row["container"])
 
@@ -207,11 +207,12 @@ class JobEngine:
         for r in rows:
             if not r["credential_id"] or r["secret_id"]:
                 continue
-            key = (r["storage_account"], r["endpoint_suffix"], r["container"], r["auth_kind"], r["credential_id"])
+            key = (r["storage_account"], r["endpoint_suffix"], r["container"], r["auth_kind"], r["credential_id"], r["account"])
             if key not in cache:
                 cache[key] = self.resolve_auth({"storage_account": r["storage_account"], "endpoint_suffix": r["endpoint_suffix"],
                                                 "container": r["container"], "auth_kind": r["auth_kind"],
-                                                "credential_id": r["credential_id"], "tenant": r["tenant_id"]})
+                                                "credential_id": r["credential_id"], "tenant": r["tenant_id"],
+                                                "account": r["account"]})
             res = cache[key]
             if res.get("resolved") and (res.get("credential_id") != r["credential_id"] or res.get("auth_kind") != r["auth_kind"]):
                 self.db.execute("UPDATE job_items SET auth_kind=?, credential_id=? WHERE id=?",
@@ -227,15 +228,16 @@ class JobEngine:
             return
         rows = self.db.query("SELECT * FROM job_items WHERE job_id=? AND status IN ('pending','checking','rehydrate_queued',"
                              "'rehydrating','ready','downloading','completed') AND secret_id IS NULL "
-                             "GROUP BY storage_account, endpoint_suffix, container, auth_kind, credential_id", (job_id,))
+                             "GROUP BY storage_account, endpoint_suffix, container, auth_kind, credential_id, account", (job_id,))
         for r in rows:
             res = self.resolve_auth({"storage_account": r["storage_account"], "endpoint_suffix": r["endpoint_suffix"],
                                      "container": r["container"], "auth_kind": r["auth_kind"],
-                                     "credential_id": r["credential_id"], "tenant": r["tenant_id"]})
+                                     "credential_id": r["credential_id"], "tenant": r["tenant_id"], "account": r["account"]})
             if res.get("resolved"):
                 continue
             if r["auth_kind"] in ("entra_user", "entra_key") and not r["credential_id"]:
-                code, text = "NOT_SIGNED_IN", "サインインが必要です。サインインしてから開始してください。"
+                who = f"（{r['account']}）" if r["account"] else ""
+                code, text = "NOT_SIGNED_IN", f"サインインが必要です{who}。サインインしてから開始してください。"
             else:
                 code, text = "NO_CREDENTIAL", "認証情報がありません。接続のページで接続先を追加してから開始してください。"
             self.auth_problem(job_id, code, text)
@@ -372,7 +374,7 @@ class JobEngine:
         groups: dict[tuple, list] = {}
         for r in rows:
             key = (r["storage_account"], r["endpoint_suffix"], r["container"], r["auth_kind"], r["credential_id"],
-                   r["secret_id"], r["tenant_id"])
+                   r["secret_id"], r["tenant_id"], r["account"])
             groups.setdefault(key, []).append(r)
         jobs_touched: set[str] = set()
         backend = self.backend()

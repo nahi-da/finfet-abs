@@ -18,6 +18,12 @@ from .proxy import proxy_label, resolve_proxy
 log = logging.getLogger(__name__)
 
 
+def arm_for(arm, account: str | None):
+    """アカウントの ArmClient（ArmPool なら for_account、そうでなければそのもの）。"""
+    f = getattr(type(arm), "for_account", None)
+    return arm.for_account(account) if f is not None else arm
+
+
 class SecretResolver:
     """認証情報の ID から秘密情報を取り出す関数の組（保存した認証情報、ジョブに保存した SAS）。"""
 
@@ -38,13 +44,13 @@ class TenantResolver:
     def resolve(self, account: AccountRef, container: str | None = None) -> str | None:
         if account.auth.tenant_id:
             return account.auth.tenant_id
-        key = f"{account.account}.{account.endpoint_suffix}"
+        key = f"{account.account}.{account.endpoint_suffix}|{account.auth.account or ''}"
         with self._lock:
             if key in self._cache:
                 return self._cache[key]
         tid = None
         try:
-            tid = self.arm.tenant_of(account.account) if self.arm else None
+            tid = arm_for(self.arm, account.auth.account).tenant_of(account.account) if self.arm else None
         except InteractionRequired:
             tid = None
         except Exception:  # noqa: BLE001
@@ -106,7 +112,11 @@ class ClientFactory:
         from azure.core.credentials import AzureNamedKeyCredential, AzureSasCredential
         from azure.storage.blob import BlobServiceClient
         a = account.auth
-        key = (account.account, account.endpoint_suffix, a.kind, a.credential_id, a.secret_id, a.tenant_id)
+        user = None
+        if a.kind in ("entra_user", "entra_key") and self.auth is not None and hasattr(self.auth, "resolve"):
+            # 使うアカウントを決めてからキーにします（既定のアカウントを変えたら、別のクライアントにするため）
+            user = self.auth.resolve(a.account)
+        key = (account.account, account.endpoint_suffix, a.kind, a.credential_id, a.secret_id, a.tenant_id, user)
         with self._lock:
             c = self._clients.get(key)
         if c is not None:
@@ -116,9 +126,9 @@ class ClientFactory:
             if self.auth is None:
                 raise BackendError("NOT_SIGNED_IN", "サインインしていません。")
             tid = self.tenants.resolve(account, container)
-            cred = self.auth.credential(tid)
+            cred = self.auth.credential(tid, user)
         elif a.kind == "entra_key":
-            cred = AzureNamedKeyCredential(account.account, self.arm.get_account_key(account.account).reveal())
+            cred = AzureNamedKeyCredential(account.account, arm_for(self.arm, user).get_account_key(account.account).reveal())
         elif a.kind in ("account_key", "sas"):
             if a.secret_id:
                 secret = self.secrets.job_secret(a.secret_id)

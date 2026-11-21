@@ -21,6 +21,7 @@ class AuthRef:
     credential_id: str | None = None
     secret_id: str | None = None
     tenant_id: str | None = None
+    account: str | None = None  # Entra ID のユーザーアカウント（ユーザー名の小文字。None は既定のアカウント）
 
 
 @dataclass(frozen=True)

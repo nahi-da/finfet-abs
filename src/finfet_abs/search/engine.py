@@ -96,9 +96,9 @@ class SearchService:
                       (sid, json.dumps(cond, ensure_ascii=False), "running", now))
             for i, t in enumerate(cond["targets"]):
                 c.execute("INSERT INTO search_targets(search_id, target_no, storage_account, endpoint_suffix, container, "
-                          "auth_kind, credential_id, tenant_id, status) VALUES(?,?,?,?,?,?,?,?,?)",
+                          "auth_kind, credential_id, tenant_id, account, status) VALUES(?,?,?,?,?,?,?,?,?,?)",
                           (sid, i, t["storage_account"], t.get("endpoint_suffix") or "core.windows.net", t["container"],
-                           t.get("auth_kind"), t.get("credential_id"), t.get("tenant"), "waiting"))
+                           t.get("auth_kind"), t.get("credential_id"), t.get("tenant"), t.get("account"), "waiting"))
         self.db.write(fn)
         for i, t in enumerate(cond["targets"]):
             run.targets[i] = {"no": i, "status": "waiting", "listed": 0, "matched": 0, "requests": 0, "error": None,
@@ -180,7 +180,8 @@ class SearchService:
                         for t in sorted(targets, key=lambda x: x["no"])]})
 
     def _auth(self, t: dict) -> AuthRef:
-        return AuthRef(t.get("auth_kind") or "entra_user", credential_id=t.get("credential_id"), tenant_id=t.get("tenant"))
+        return AuthRef(t.get("auth_kind") or "entra_user", credential_id=t.get("credential_id"), tenant_id=t.get("tenant"),
+                       account=t.get("account"))
 
     def _containers(self, run: SearchRun, t: dict, account: AccountRef) -> list[tuple[str, dict]]:
         """コンテナー名の変数を展開します（3.2.8）。列挙できなければ、コンテナーの一覧を取得してフィルターします。"""
@@ -233,9 +234,9 @@ class SearchService:
                                        "error": None, "storage_account": t["storage_account"], "container": name}
             self.db.write(lambda c, n=new_no, name=name: c.execute(
                 "INSERT INTO search_targets(search_id, target_no, storage_account, endpoint_suffix, container, auth_kind, "
-                "credential_id, tenant_id, status) VALUES(?,?,?,?,?,?,?,?,?)",
+                "credential_id, tenant_id, account, status) VALUES(?,?,?,?,?,?,?,?,?,?)",
                 (run.id, n, t["storage_account"], account.endpoint_suffix, name, t.get("auth_kind"), t.get("credential_id"),
-                 t.get("tenant"), "waiting")))
+                 t.get("tenant"), t.get("account"), "waiting")))
             rows.append((new_no, name, fixed))
         for target_no, name, fixed in rows:
             if run.cancel.is_set() or run.limit_hit:
@@ -468,7 +469,7 @@ class SearchService:
                                            "storage_account": r["storage_account"], "container": r["container"]}
         t = {"storage_account": trow["storage_account"], "endpoint_suffix": trow["endpoint_suffix"],
              "container": trow["container"], "auth_kind": trow["auth_kind"], "credential_id": trow["credential_id"],
-             "tenant": trow["tenant_id"]}
+             "tenant": trow["tenant_id"], "account": trow["account"]}
         fixed = self._fixed_for(cond, t)
         self.db.write(lambda c: (c.execute("DELETE FROM search_results WHERE search_id=? AND target_no=?", (sid, no)),
                                  c.execute("UPDATE searches SET status='running' WHERE id=?", (sid,))))

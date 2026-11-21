@@ -45,17 +45,31 @@ def register(router, app) -> None:
 
     @router.post("/api/v1/auth/user/sign-in")
     def sign_in(req: Request):
+        """サインイン。add: 別のアカウントを追加（アカウントの選択の画面）、account: そのアカウントで。"""
+        body = req.json() or {}
         try:
-            return json_response(auth().start_sign_in(None))
+            return json_response(auth().start_sign_in(None, account=body.get("account") or None, add=bool(body.get("add"))))
         except InteractionRequired as exc:
             raise AppError(exc.info.code, exc.info.message) from None
 
     @router.post("/api/v1/auth/tenants/{tenant_id}/sign-in")
     def sign_in_tenant(req: Request):
+        body = req.json() or {}
         try:
-            return json_response(auth().start_sign_in(req.params["tenant_id"]))
+            return json_response(auth().start_sign_in(req.params["tenant_id"], account=body.get("account") or None))
         except InteractionRequired as exc:
             raise AppError(exc.info.code, exc.info.message) from None
+
+    @router.post("/api/v1/auth/default")
+    def set_default(req: Request):
+        """既定のアカウント（接続先でアカウントを指定しないときに使うもの）を変えます。"""
+        try:
+            auth().set_default(req.json().get("account") or "")
+        except InteractionRequired as exc:
+            raise AppError(exc.info.code, exc.info.message) from None
+        if s.get("clients") is not None:
+            s["clients"].reset()
+        return json_response({"ok": True})
 
     @router.post("/api/v1/auth/sign-in/cancel")
     def cancel(req: Request):
@@ -64,7 +78,14 @@ def register(router, app) -> None:
 
     @router.post("/api/v1/auth/sign-out")
     def sign_out(req: Request):
-        auth().sign_out()
+        """サインアウト。account を指定すればそのアカウントだけ、指定しなければすべて。"""
+        body = req.json() or {}
+        account = body.get("account") or None
+        auth().sign_out(account)
+        if account and hasattr(s["arm"], "forget"):
+            s["arm"].forget(account.lower())
+        if s.get("clients") is not None:
+            s["clients"].reset()
         return json_response({"ok": True})
 
     # ------------------------------------------------------------ 接続先の追加
@@ -82,10 +103,12 @@ def register(router, app) -> None:
     def storage_accounts(req: Request):
         q = (req.arg("q") or "").lower()
         refresh = req.arg("refresh") == "1"
+        account = req.arg("account") or None
 
         def run():
+            from ..azure.storage import arm_for
             try:
-                data = s["arm"].list_storage_accounts(refresh=refresh)
+                data = arm_for(s["arm"], account).list_storage_accounts(refresh=refresh)
             except InteractionRequired as exc:
                 raise AppError(exc.info.code, exc.info.message) from None
             rows = data["accounts"]

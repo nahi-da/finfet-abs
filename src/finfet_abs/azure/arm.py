@@ -27,8 +27,9 @@ LIST_CACHE_SECONDS = 600
 class ArmClient:
     """ARM の呼び出し（テナントごとのトークンを使います）。"""
 
-    def __init__(self, auth: AuthService, session, retry_total=lambda: 5) -> None:
+    def __init__(self, auth: AuthService, session, retry_total=lambda: 5, account: str | None = None) -> None:
         self.auth = auth
+        self.account = account  # 使うユーザーアカウント（None は既定のアカウント）
         self._session = session
         self._retry_total = retry_total
         self._clients: dict[str | None, object] = {}
@@ -54,7 +55,7 @@ class ArmClient:
                     RequestIdPolicy(), HeadersPolicy(),
                     UserAgentPolicy(base_user_agent=f"finfet-abs/{__version__}", user_agent_use_env=False),
                     RetryPolicy(retry_total=self._retry_total()),
-                    BearerTokenCredentialPolicy(self.auth.credential(tenant), ARM_SCOPE),
+                    BearerTokenCredentialPolicy(self.auth.credential(tenant, self.account), ARM_SCOPE),
                 ]
                 c = PipelineClient(ARM, policies=policies,
                                    transport=RequestsTransport(session=self._session(), session_owner=False))
@@ -249,3 +250,39 @@ class ArmClient:
             url = data.get("nextLink")
             params = None
         return out
+
+
+class ArmPool:
+    """ユーザーアカウントごとの ArmClient（複数のアカウントでサインインできるため。decisions.md）。
+
+    for_account(None) は既定のアカウントのもの。そのほかの属性は、既定のアカウントの ArmClient に渡します。
+    """
+
+    def __init__(self, auth: AuthService, session, retry_total=lambda: 5) -> None:
+        self.auth = auth
+        self._session = session
+        self._retry_total = retry_total
+        self._pool: dict[str, ArmClient] = {}
+        self._pool_lock = threading.Lock()
+
+    def for_account(self, account: str | None) -> ArmClient:
+        key = self.auth.resolve(account) or ""
+        with self._pool_lock:
+            c = self._pool.get(key)
+            if c is None:
+                c = self._pool[key] = ArmClient(self.auth, self._session, self._retry_total, account=key or None)
+            return c
+
+    def reset(self) -> None:
+        with self._pool_lock:
+            for c in self._pool.values():
+                c.reset()
+
+    def forget(self, account: str) -> None:
+        """サインアウトしたアカウントの ArmClient（取得したアクセスキーなど）を捨てます。"""
+        with self._pool_lock:
+            self._pool.pop(account, None)
+
+    def __getattr__(self, name: str):
+        return getattr(self.for_account(None), name)
+

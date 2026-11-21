@@ -50,6 +50,8 @@ def clean_condition(raw: dict, *, keep_credential_ids: bool = True, keep_credent
         }
         if keep_credential_ids and t.get("credential_id"):
             item["credential_id"] = _str(t.get("credential_id"), 64)
+        if keep_credential_ids and t.get("account") and item["auth_kind"] in ("entra_user", "entra_key"):
+            item["account"] = _str(t.get("account"), 256).lower()
         if keep_credentials and isinstance(t.get("credential"), dict):
             c = t["credential"]
             if c.get("source") in ("connection_string", "sas_url", "account_key"):
