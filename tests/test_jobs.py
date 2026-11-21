@@ -189,8 +189,11 @@ class QueueTest(JobTestBase):
         gate.set()
         self.run_until(lambda: self.status(a) == "completed")
         self.run_until(lambda: self.status(b) == "completed")  # 次は先頭に移した b
-        self.assertEqual(self.status(c), "running" if self.status(c) != "completed" else "completed")
+        # c は b の終了の後に始まる（b の完了の直後は、まだ queued のことがある。CI で失敗したため、時刻で確かめる）
         self.run_until(lambda: self.status(c) == "completed")
+        b_end = self.db.scalar("SELECT ended_at FROM jobs WHERE id=?", (b,))
+        c_start = self.db.scalar("SELECT started_at FROM jobs WHERE id=?", (c,))
+        self.assertGreaterEqual(c_start, b_end)
         self.assertEqual(self.svc.list("ended")["counts"]["ended"], 3)
 
     def test_pause_start_cancel(self) -> None:
