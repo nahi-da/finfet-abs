@@ -7,8 +7,6 @@ import { openMenu } from './menu.js';
 
 const CHAR_CLASSES = [['digit', '数字'], ['lower', '英小文字'], ['upper', '英大文字'], ['symbol', '記号'], ['space', '空白'],
   ['hiragana', 'ひらがな'], ['katakana', 'カタカナ'], ['kanji', '漢字']];
-const REL = [['today', '今日'], ['yesterday', '昨日'], ['last_days', '直近 n 日'], ['last_hours', '直近 n 時間'],
-  ['this_month', '今月'], ['last_month', '先月'], ['days_ago', 'n 日前〜m 日前']];
 const UNIT_NAMES = [['year', '年', 'YYYY|YY|year'], ['month', '月', 'MM|M|month'], ['day', '日', 'DD|D|day'],
   ['hour', '時', 'hh|h|hour'], ['minute', '分', 'mm|m|minute'], ['second', '秒', 'ss|s|second']];
 
@@ -50,6 +48,93 @@ export function periodFromFound(found, pathTz, inputTz) {
     return `${dt.getFullYear()}-${p(dt.getMonth() + 1)}-${p(dt.getDate())} ${p(dt.getHours())}:${p(dt.getMinutes())}`;
   };
   return { start: conv(found.first), end: conv(found.last) };
+}
+
+const pad2 = (x) => String(x).padStart(2, '0');
+const range = (a, b) => { const out = []; for (let i = a; i <= b; i++) out.push(i); return out; };
+
+/** 入力の基準（'local' / 'utc'）の今の壁時計の時刻。 */
+function wallNow(tz) {
+  const t = new Date();
+  return tz === 'utc'
+    ? { y: t.getUTCFullYear(), mo: t.getUTCMonth() + 1, d: t.getUTCDate(), h: t.getUTCHours() }
+    : { y: t.getFullYear(), mo: t.getMonth() + 1, d: t.getDate(), h: t.getHours() };
+}
+
+/** 期間の入力の文字（`2026-11-20`、`2026/11/20 09:00`、`20261120` など）を、上位からの数の並びにします。 */
+function wallParts(text) {
+  const s = String(text || '').trim();
+  let m = s.match(/^(\d{4})(?:[-/](\d{1,2})(?:[-/](\d{1,2})(?:[ T](\d{1,2})(?::(\d{1,2})(?::(\d{1,2}))?)?)?)?)?$/);
+  if (m) return m.slice(1).filter((x) => x !== undefined).map(Number);
+  m = s.match(/^\d{4}(?:\d{2}){0,5}$/);
+  if (m) {
+    const out = [Number(s.slice(0, 4))];
+    for (let i = 4; i < s.length; i += 2) out.push(Number(s.slice(i, i + 2)));
+    return out;
+  }
+  return null;
+}
+
+/** 期間の端を、比べられる形（`2026-11-20 09:00`）にします。終了は、その単位の最後に寄せます。 */
+function normPoint(text, isEnd) {
+  const p = wallParts(text) || [];
+  const y = p[0] ?? 0;
+  const mo = p[1] ?? (isEnd ? 12 : 1);
+  const last = new Date(Date.UTC(y, mo, 0)).getUTCDate();
+  const d = p[2] ?? (isEnd ? last : 1);
+  const hh = p[3] ?? (isEnd ? 23 : 0);
+  const mi = p[4] ?? (isEnd ? 59 : 0);
+  return `${String(y).padStart(4, '0')}-${pad2(mo)}-${pad2(d)} ${pad2(hh)}:${pad2(mi)}`;
+}
+
+/** パスの書式の最も細かい単位から、期間の入力の部品の種類を決めます。 */
+function inputKindOf(finest) {
+  if (finest === 'year') return { type: 'number', unit: 'year' };
+  if (finest === 'month') return { type: 'month', unit: 'month' };
+  if (finest === 'day') return { type: 'date', unit: 'day' };
+  if (finest === 'hour') return { type: 'datetime-local', unit: 'hour', step: '3600' };
+  if (finest === 'minute') return { type: 'datetime-local', unit: 'minute', step: '60' };
+  return { type: 'datetime-local', unit: 'second', step: '1' };
+}
+
+/** 保存している期間の文字を、入力の部品の値にします（足りない単位は、開始は最初・終了は最後で補います）。 */
+function toInputValue(text, kind, isEnd) {
+  const p = wallParts(text);
+  if (!p) return '';
+  const y = String(p[0]).padStart(4, '0');
+  if (kind.unit === 'year') return y;
+  const mo = p[1] ?? (isEnd ? 12 : 1);
+  if (kind.unit === 'month') return `${y}-${pad2(mo)}`;
+  const last = new Date(Date.UTC(p[0], mo, 0)).getUTCDate();
+  const d = p[2] ?? (isEnd ? last : 1);
+  if (kind.unit === 'day') return `${y}-${pad2(mo)}-${pad2(d)}`;
+  const hh = p[3] ?? (isEnd ? 23 : 0);
+  const mi = kind.unit === 'hour' ? 0 : (p[4] ?? (isEnd ? 59 : 0));
+  const base = `${y}-${pad2(mo)}-${pad2(d)}T${pad2(hh)}:${pad2(mi)}`;
+  return kind.unit === 'second' ? `${base}:${pad2(p[5] ?? (isEnd ? 59 : 0))}` : base;
+}
+
+/** 入力の部品の値を、保存する期間の文字（`2026-11-20 09:00` など）にします。 */
+function fromInputValue(value, kind) {
+  const s = String(value || '').trim();
+  if (!s) return '';
+  if (kind.type === 'datetime-local') {
+    const t = s.replace('T', ' ');
+    return kind.unit === 'second' && t.length === 16 ? `${t}:00` : (kind.unit === 'second' ? t : t.slice(0, 16));
+  }
+  return s;
+}
+
+/**
+ * ボタンを並べた切り替え（どれか 1 つを選ぶ）。
+ * @param {[string, string][]} options [値, 表示]
+ */
+function segmented(options, value, label, onPick) {
+  const wrap = h('div', { class: 'seg', role: 'group', 'aria-label': label });
+  for (const [k, t] of options) {
+    wrap.append(h('button', { type: 'button', text: t, 'aria-pressed': String(k === value), onclick: () => onPick(k) }));
+  }
+  return wrap;
 }
 
 /**
@@ -281,68 +366,220 @@ export function variableRow(ctx) {
     body.append(line);
   }
 
+  // 日時の変数（依頼者の意見で作り直し。decisions.md）。指定の方法はタブで切り替え、期間は日付・時刻の部品で入力します。
+  // データの形（value の mode・start・end の文字など。5.5.3）は変えません。
   function drawDatetime() {
     const v = d.value;
-    const tzSel = select([['local', 'ローカル時刻'], ['utc', 'UTC']], ctx.inputTimezone, {
-      'aria-label': '期間の入力の基準', onchange: (e) => ctx.onInputTimezone(e.target.value),
+    const tz = ctx.inputTimezone;
+    const units = unitsInFormats(ctx.formats);
+    const finest = units.length ? units[units.length - 1][0] : 'hour';
+    const kind = inputKindOf(finest);
+    const found = d.found && d.found.first && d.found.last
+      ? { ...periodFromFound(d.found, d.path_timezone || 'utc', tz), complete: d.found.complete } : null;
+
+    const modeSeg = segmented([['period', '期間'], ['relative', '相対'], ['units', '単位ごと'], ['any', 'すべて']], v.mode || 'any', `${ctx.name} の指定の方法`, (m) => {
+      if (m === v.mode) return;
+      d.value = m === 'relative' ? { mode: 'relative', kind: 'last_days', n: 7 }
+        : m === 'period' ? (found && found.complete !== false ? { mode: 'period', start: found.start, end: found.end } : { mode: 'period', start: '', end: '' })
+          : m === 'units' ? { mode: 'units', units: {} } : { mode: 'any' };
+      changed();
     });
-    const modeSel = select([['any', '任意'], ['period', '期間'], ['units', '単位ごと'], ['relative', '相対的な期間']], v.mode, {
-      'aria-label': `${ctx.name} の値の指定`,
-      onchange: (e) => {
-        const m = e.target.value;
-        d.value = m === 'relative' ? { mode: 'relative', kind: 'last_days', n: 7 }
-          : m === 'period' ? { mode: 'period', start: '', end: '' }
-            : m === 'units' ? { mode: 'units', units: {} } : { mode: 'any' };
+    const tzSeg = segmented([['local', 'ローカル時刻'], ['utc', 'UTC']], tz, '期間の入力の基準', (t) => { if (t !== tz) ctx.onInputTimezone(t); });
+    body.append(h('div', { class: 'fields' },
+      h('div', { class: 'field' }, h('span', { class: 'field-label', text: '種類' }), typeSel),
+      h('div', { class: 'field' }, h('span', { class: 'field-label', text: '指定の方法' }), modeSeg),
+      v.mode === 'any' ? null : h('div', { class: 'field' }, h('span', { class: 'field-label', text: '入力の基準' }), tzSeg)));
+
+    if (v.mode === 'period') drawPeriod(v, kind, found, tz);
+    else if (v.mode === 'relative') drawRelative(v);
+    else if (v.mode === 'units') drawUnits(v, units, found);
+    else body.append(h('div', { class: 'muted', text: '日時を限定しません。パスパターンに合うすべての Blob を検索します。' }));
+
+    if (v.mode !== 'any') drawSummary(v, found, tz);
+    if (v.mode === 'period' || v.mode === 'relative') drawStep(v);
+  }
+
+  function drawPeriod(v, kind, found, tz) {
+    // すぐに入力（入力の基準の今日を使います）
+    const quick = h('div', { class: 'quick' });
+    const setPeriod = (start, end) => { v.start = start; v.end = end; changed(); };
+    const now = wallNow(tz);
+    const ymd = (o) => { const x = new Date(Date.UTC(now.y, now.mo - 1, now.d + o)); return `${x.getUTCFullYear()}-${pad2(x.getUTCMonth() + 1)}-${pad2(x.getUTCDate())}`; };
+    const ym = (o) => { const x = new Date(Date.UTC(now.y, now.mo - 1 + o, 1)); return `${x.getUTCFullYear()}-${pad2(x.getUTCMonth() + 1)}`; };
+    const presets = [['今日', () => setPeriod(ymd(0), ymd(0))], ['昨日', () => setPeriod(ymd(-1), ymd(-1))],
+      ['直近 7 日', () => setPeriod(ymd(-6), ymd(0))], ['今月', () => setPeriod(ym(0), ym(0))], ['先月', () => setPeriod(ym(-1), ym(-1))]];
+    if (found) presets.push(['Blob がある期間', () => setPeriod(found.start, found.end)]);
+    for (const [t, fn] of presets) quick.append(h('button', { type: 'button', class: 'quick-btn', text: t, onclick: fn }));
+    if (ctx.shiftHint) quick.append(h('button', { type: 'button', class: 'quick-btn', text: '今日に合わせて移動', onclick: ctx.shiftHint }));
+    body.append(h('div', { class: 'field' }, h('span', { class: 'field-label', text: 'すぐに入力' }), quick));
+
+    const limit = found && found.complete !== false ? { min: toInputValue(found.start, kind, false), max: toInputValue(found.end, kind, true) } : {};
+    const mk = (val, isEnd, label) => {
+      const el = h('input', { type: kind.type, class: 'input dt-input', value: toInputValue(val, kind, isEnd), 'aria-label': label, ...limit });
+      if (kind.step) el.step = kind.step;
+      el.addEventListener('change', () => {
+        const x = fromInputValue(el.value, kind);
+        if (isEnd) v.end = x; else v.start = x;
         changed();
-      },
-    });
-    const line = h('div', { class: 'line' }, typeSel, h('span', { text: '期間の入力' }), tzSel, modeSel);
-    body.append(line);
-    if (d.found && d.found.first && d.found.last) {
-      // パスパターンの自動生成で分かった、Blob がある期間（依頼者の依頼。decisions.md）
-      const p = periodFromFound(d.found, d.path_timezone || 'utc', ctx.inputTimezone);
-      const tzName = ctx.inputTimezone === 'utc' ? 'UTC' : 'ローカル時刻';
-      const already = v.mode === 'period' && v.start === p.start && v.end === p.end;
-      body.append(h('div', { class: 'line found-range' },
-        h('span', { class: 'muted', text: `Blob がある期間（${tzName}）: ${p.start} 〜 ${p.end}${d.found.complete ? '' : '（見本の Blob 名から。実際はもっと広いことがあります）'}` }),
-        already ? null : linkButton('この期間にする', () => { d.value = { mode: 'period', start: p.start, end: p.end }; changed(); })));
+      });
+      return el;
+    };
+    body.append(h('div', { class: 'fields' },
+      h('label', { class: 'field grow' }, h('span', { class: 'field-label', text: '開始' }), mk(v.start, false, '期間の開始')),
+      h('label', { class: 'field grow' }, h('span', { class: 'field-label', text: '終了（この日時を含む）' }), mk(v.end, true, '期間の終了'))));
+    if (found) body.append(rangeBar(found, v.start && v.end ? [normPoint(v.start, false), normPoint(v.end, true)] : null, tz));
+  }
+
+  function drawRelative(v) {
+    const kinds = [['today', '今日'], ['yesterday', '昨日'], ['last_days', '直近 n 日'], ['last_hours', '直近 n 時間'],
+      ['this_month', '今月'], ['last_month', '先月'], ['days_ago', 'n 日前〜m 日前']];
+    const quick = h('div', { class: 'quick', role: 'group', 'aria-label': '相対的な期間' });
+    for (const [k, t] of kinds) {
+      quick.append(h('button', {
+        type: 'button', class: 'quick-btn', text: t, 'aria-pressed': String((v.kind || 'last_days') === k),
+        onclick: () => { v.kind = k; if ((k === 'last_days' || k === 'last_hours') && !v.n) v.n = 7; if (k === 'days_ago') { v.from = v.from ?? 7; v.to = v.to ?? 1; } changed(); },
+      }));
     }
-    if (v.mode === 'relative') {
-      const kind = select(REL, v.kind || 'last_days', { 'aria-label': '相対的な期間', onchange: (e) => { v.kind = e.target.value; if (!v.n) v.n = 7; changed(); } });
-      line.append(kind);
-      if (v.kind === 'last_days' || v.kind === 'last_hours') line.append(numIn(v.n, v.kind === 'last_days' ? '日数' : '時間数', (n) => { v.n = n; }));
-      if (v.kind === 'days_ago') line.append(numIn(v.from, '何日前から', (n) => { v.from = n; }), h('span', { text: '日前〜' }), numIn(v.to, '何日前まで', (n) => { v.to = n; }), h('span', { text: '日前' }));
-    } else if (v.mode === 'period') {
-      const s = textInput(v.start || '', { width: 'w-short', placeholder: '2026-11-13', 'aria-label': '期間の開始', mono: true });
-      const e = textInput(v.end || '', { width: 'w-short', placeholder: '2026-11-20', 'aria-label': '期間の終了', mono: true });
-      s.addEventListener('change', () => { v.start = s.value.trim(); changed(); });
-      e.addEventListener('change', () => { v.end = e.value.trim(); changed(); });
-      line.append(s, h('span', { text: '〜' }), e);
-      const stepN = numIn(v.step, '間隔', (n) => { v.step = n || undefined; if (!v.step) delete v.step_unit; else v.step_unit = v.step_unit || 'day'; });
-      const stepU = select([['day', '日'], ['hour', '時間'], ['month', 'か月'], ['year', '年'], ['minute', '分']], v.step_unit || 'day', { 'aria-label': '間隔の単位', onchange: (ev) => { v.step_unit = ev.target.value; changed(); } });
-      line.append(h('span', { text: '間隔（任意）' }), stepN, stepU);
-      if (ctx.shiftHint) line.append(linkButton('今日に合わせて移動', ctx.shiftHint));
-    } else if (v.mode === 'units') {
-      v.units = v.units || {};
-      const units = unitsInFormats(ctx.formats);
-      const grid = h('div', { class: 'units-grid' });
-      for (const [u, label] of units) {
-        const spec = v.units[u] || { mode: 'all' };
-        v.units[u] = spec;
-        const cell = h('div', { class: 'line' }, h('span', { class: 'unit-label', text: label }));
-        const m = select([['all', 'すべて'], ['fixed', '固定'], ['range', '範囲']], spec.mode, {
-          'aria-label': `${label}の指定`, onchange: (e) => { v.units[u] = e.target.value === 'fixed' ? { mode: 'fixed', value: 0 } : e.target.value === 'range' ? { mode: 'range', start: 0, end: 0, step: 1 } : { mode: 'all' }; changed(); },
-        });
-        cell.append(m);
-        if (spec.mode === 'fixed') cell.append(numIn(spec.value, `${label}の値`, (n) => { spec.value = n; }));
-        if (spec.mode === 'range') cell.append(numIn(spec.start, `${label}の開始`, (n) => { spec.start = n; }), h('span', { text: '〜' }), numIn(spec.end, `${label}の終了`, (n) => { spec.end = n; }), h('span', { text: '間隔' }), numIn(spec.step ?? 1, `${label}の間隔`, (n) => { spec.step = n; }));
-        grid.append(cell);
+    body.append(h('div', { class: 'field' }, h('span', { class: 'field-label', text: '期間（検索するたびに、その日時を基準に計算します）' }), quick));
+    if (v.kind === 'last_days' || v.kind === 'last_hours') {
+      body.append(h('div', { class: 'field' }, h('span', { class: 'field-label', text: v.kind === 'last_days' ? '日数' : '時間数' }),
+        stepper(v.n ?? 7, 1, v.kind === 'last_days' ? 3660 : 87840, v.kind === 'last_days' ? '日数' : '時間数', (n) => { v.n = n; changed(); })));
+    } else if (v.kind === 'days_ago') {
+      body.append(h('div', { class: 'fields' },
+        h('div', { class: 'field' }, h('span', { class: 'field-label', text: '何日前から' }), stepper(v.from ?? 7, 0, 3660, '何日前から', (n) => { v.from = n; changed(); })),
+        h('div', { class: 'field' }, h('span', { class: 'field-label', text: '何日前まで' }), stepper(v.to ?? 1, 0, 3660, '何日前まで', (n) => { v.to = n; changed(); }))));
+    }
+  }
+
+  function drawUnits(v, units, found) {
+    v.units = v.units || {};
+    const grid = h('div', { class: 'units-grid' });
+    const fa = found ? wallParts(found.start) : null;
+    const fb = found ? wallParts(found.end) : null;
+    const now = wallNow(ctx.inputTimezone);
+    for (const [u, label] of units) {
+      const spec = v.units[u] || { mode: 'all' };
+      v.units[u] = spec;
+      let vals;
+      if (u === 'year') vals = fa ? range(fa[0], fb[0]) : range(now.y - 10, now.y + 1);
+      else if (u === 'month') vals = fa && fa[0] === fb[0] && found.complete !== false ? range(fa[1], fb[1]) : range(1, 12);
+      else if (u === 'day') vals = range(1, 31);
+      else if (u === 'hour') vals = range(0, 23);
+      else vals = range(0, 59);
+      const cur = spec.mode === 'fixed' ? [spec.value, spec.value] : spec.mode === 'range' ? [spec.start, spec.end] : null;
+      if (cur) for (const x of cur) if (x != null && !vals.includes(x)) vals = [...vals, x].sort((p, q) => p - q);
+      const on = spec.mode !== 'all';
+      const seg = segmented([['all', 'すべて'], ['pick', '指定']], on ? 'pick' : 'all', `${label}の指定`, (m) => {
+        if (m === 'all') v.units[u] = { mode: 'all' };
+        else if (!on) v.units[u] = { mode: 'fixed', value: vals[vals.length - 1] };
+        changed();
+      });
+      const card = h('div', { class: 'unit-card' }, h('div', { class: 'unit-head' }, h('strong', { text: label }), seg));
+      if (on) {
+        const opts = vals.map((x) => [String(x), String(x)]);
+        const set = (a, b) => {
+          const step = spec.mode === 'range' ? spec.step : undefined;
+          v.units[u] = a === b ? { mode: 'fixed', value: a } : { mode: 'range', start: Math.min(a, b), end: Math.max(a, b), step: step || 1 };
+          changed();
+        };
+        const sa = select(opts, String(cur[0]), { 'aria-label': `${label}の開始`, onchange: (e) => set(Number(e.target.value), cur[1]) });
+        const sb = select(opts, String(cur[1]), { 'aria-label': `${label}の終了`, onchange: (e) => set(cur[0], Number(e.target.value)) });
+        card.append(h('div', { class: 'pair' }, sa, h('span', { text: '〜' }), sb, h('span', { text: label })));
+        if (spec.mode === 'range') {
+          card.append(h('div', { class: 'pair' }, h('span', { class: 'muted', text: '間隔' }),
+            stepper(spec.step ?? 1, 1, 999, `${label}の間隔`, (n) => { spec.step = n; changed(); })));
+        }
       }
-      body.append(grid);
+      let hint = '';
+      if (u === 'year' && fa) hint = `Blob がある年: ${fa[0] === fb[0] ? fa[0] : `${fa[0]}〜${fb[0]}`}`;
+      else if (u === 'month' && fa && fa[0] === fb[0]) hint = `Blob がある月: ${fa[1]}〜${fb[1]}`;
+      if (on && spec.mode === 'fixed') hint = `${hint ? `${hint}。` : ''}同じ値を選ぶと固定、違う値を選ぶと範囲になります`;
+      if (hint) card.append(h('span', { class: 'muted small', text: hint }));
+      grid.append(card);
     }
-    if (ctx.dtInfo && !ctx.dtInfo.same_zone && ctx.dtInfo.path) {
-      side.prepend(h('span', { class: 'muted nowrap', text: `パス（${d.path_timezone === 'local' ? 'ローカル' : 'UTC'}）${ctx.dtInfo.path}` }));
+    if (!units.length) grid.append(h('span', { class: 'muted', text: 'パスパターンの書式に、年・月・日などの単位がありません。' }));
+    body.append(grid);
+  }
+
+  function drawSummary(v, found, tz) {
+    const tzName = tz === 'utc' ? 'UTC' : 'ローカル時刻';
+    const box = h('div', { class: 'dt-summary', 'aria-live': 'polite' });
+    const info = ctx.dtInfo;
+    if (info && info.input) {
+      box.append(h('strong', { text: `検索する期間（${tzName}）: ${info.input}` }));
+      if (!info.same_zone && info.path) box.append(h('span', { class: 'muted', text: `パス上の日時（${d.path_timezone === 'local' ? 'ローカル時刻' : 'UTC'}）: ${info.path}` }));
+    } else if (v.mode === 'units') {
+      const parts = Object.entries(v.units || {}).map(([u, s]) => {
+        const l = UNIT_NAMES.find((x) => x[0] === u)?.[1] || u;
+        return s.mode === 'fixed' ? `${s.value}${l}` : s.mode === 'range' ? `${s.start}〜${s.end}${l}${s.step > 1 ? `（${s.step} ごと）` : ''}` : `すべての${l}`;
+      });
+      box.append(h('strong', { text: `${parts.join('・')}（${tzName}）` }));
+    } else {
+      box.append(h('span', { class: 'muted', text: '期間を確かめています…' }));
     }
+    if (v.mode === 'period' && found && found.complete !== false && v.start && v.end) {
+      const s = normPoint(v.start, false);
+      const e = normPoint(v.end, true);
+      const fs = normPoint(found.start, false);
+      const fe = normPoint(found.end, true);
+      if (e < fs || s > fe) box.append(h('span', { class: 'warn-text', text: 'Blob がある期間の外です。一致する Blob はありません。' }));
+      else if (s < fs || e > fe) box.append(h('span', { class: 'warn-text', text: '一部が Blob がある期間の外です。' }));
+    }
+    if (found && v.mode !== 'period') {
+      box.append(h('span', { class: 'muted', text: `Blob がある期間（${tzName}）: ${found.start} 〜 ${found.end}${d.found.complete ? '' : '（見本の Blob 名から）'}` }));
+    }
+    body.append(box);
+  }
+
+  function drawStep(v) {
+    if (v.mode !== 'period') return;
+    const det = h('details', { class: 'more' }, h('summary', { text: '詳細な設定' }));
+    if (v.step) det.open = true;
+    const stepN = stepper(v.step || 0, 0, 9999, '間隔', (n) => {
+      v.step = n || undefined;
+      if (!v.step) delete v.step_unit; else v.step_unit = v.step_unit || 'day';
+      changed();
+    });
+    const stepU = select([['day', '日'], ['hour', '時間'], ['month', 'か月'], ['year', '年'], ['minute', '分']], v.step_unit || 'day', { 'aria-label': '間隔の単位', onchange: (ev) => { v.step_unit = ev.target.value; changed(); } });
+    det.append(h('div', { class: 'field' }, h('span', { class: 'field-label', text: '間隔（0 は間隔なし。指定すると、開始から指定した間隔ごとの日時だけを検索します）' }),
+      h('div', { class: 'pair' }, stepN, stepU)));
+    body.append(det);
+  }
+
+  function rangeBar(found, sel, tz) {
+    const toMs = (s) => { const p = s.match(/\d+/g).map(Number); return Date.UTC(p[0], p[1] - 1, p[2], p[3], p[4]); };
+    const f0 = toMs(normPoint(found.start, false));
+    const f1 = toMs(normPoint(found.end, true));
+    let lo = f0;
+    let hi = f1;
+    let s0 = null;
+    let s1 = null;
+    if (sel) { s0 = toMs(sel[0]); s1 = toMs(sel[1]); lo = Math.min(lo, s0); hi = Math.max(hi, s1); }
+    const span = Math.max(hi - lo, 3600e3);
+    lo -= span * 0.03;
+    hi += span * 0.03;
+    const pct = (ms) => `${((ms - lo) / (hi - lo)) * 100}%`;
+    const wid = (a, b) => `${Math.max(((b - a) / (hi - lo)) * 100, 0.8)}%`;
+    const md = (s) => { const p = s.match(/\d+/g).map(Number); return `${p[1]}/${p[2]}`; };
+    const bar = h('div', { class: 'rangebar', 'aria-hidden': 'true' },
+      h('div', { class: 'rb-track' }),
+      h('div', { class: 'rb-found', style: { left: pct(f0), width: wid(f0, f1) } }),
+      sel && s1 >= s0 ? h('div', { class: 'rb-sel', style: { left: pct(s0), width: wid(s0, s1) } }) : null,
+      h('span', { class: 'rb-tick l', style: { left: pct(f0) }, text: md(found.start) }),
+      h('span', { class: 'rb-tick r', style: { left: pct(f1) }, text: md(found.end) }));
+    const legend = h('div', { class: 'rb-legend' },
+      h('span', {}, h('i', { class: 'rb-key found' }), `Blob がある期間（${tz === 'utc' ? 'UTC' : 'ローカル時刻'}）: ${found.start} 〜 ${found.end}${found.complete === false ? '（見本の Blob 名から）' : ''}`),
+      h('span', {}, h('i', { class: 'rb-key sel' }), '検索する期間'));
+    return h('div', { class: 'rangebar-wrap' }, bar, legend);
+  }
+
+  function stepper(value, min, max, label, onSet) {
+    const inp = h('input', { type: 'number', class: 'input num', value: String(value), min: String(min), max: String(max), 'aria-label': label });
+    const set = (n) => { const x = Math.min(Math.max(min, Math.round(Number(n) || 0)), max); inp.value = String(x); onSet(x); };
+    inp.addEventListener('change', () => set(inp.value));
+    return h('span', { class: 'stepper' },
+      h('button', { type: 'button', 'aria-label': `${label}を 1 減らす`, text: '−', onclick: () => set(Number(inp.value) - 1) }), inp,
+      h('button', { type: 'button', 'aria-label': `${label}を 1 増やす`, text: '＋', onclick: () => set(Number(inp.value) + 1) }));
   }
 
   return row;
