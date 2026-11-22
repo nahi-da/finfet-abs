@@ -1081,6 +1081,32 @@ class JobRunner(threading.Thread):
         self._update(r["id"], "downloading", status="completed", download_completed_at=to_iso(self.clock.now()),
                      bytes_downloaded=info.size, md5_result=md5_result, part_path=None, ranges_done_json=None)
         self.log.write("INFO", "ダウンロードしました", name)
+        if opts.get("extract"):
+            self._extract(r["id"], final, name, opts)
+
+    def _extract(self, item_id: int, final: str, name: str, opts: dict) -> None:
+        """ダウンロードした圧縮ファイルを展開します（依頼者の意見。v1.3.0）。結果は Blob の状態の理由とログに残します。"""
+        from . import extract
+        try:
+            res = extract.extract(final, max_bytes=int(opts.get("extract_max_gib") or 10) * 1024 ** 3, stop=self.stop_event)
+        except extract.ExtractCancelled:
+            self._update(item_id, status_reason="展開を中断しました")
+            self.log.write("WARN", "展開を中断しました", name)
+            return
+        except extract.ExtractError as exc:
+            self._update(item_id, status_reason=f"展開できませんでした: {exc}")
+            self.log.write("WARN", f"展開できませんでした: {exc}", name)
+            return
+        except OSError as exc:
+            msg = f"展開したファイルを書き込めません（{exc.strerror or exc}）。"
+            self._update(item_id, status_reason=f"展開できませんでした: {msg}")
+            self.log.write("WARN", msg, name)
+            return
+        if res is None:
+            return
+        extra = f"、展開しなかった名前 {res.skipped:,} 件" if res.skipped else ""
+        self._update(item_id, status_reason=f"展開しました（{res.files:,} ファイル{extra}）")
+        self.log.write("INFO", f"展開しました（{res.files:,} ファイル{extra}）: {res.dest}", name)
 
     def _fetch_ranges(self, r, info: BlobInfo, part: str, done: list[list[int]], opts: dict) -> None:
         """足りない区間を、今のチャンクの大きさで取得します（取得済みの区間は [開始, 終わり) で記録します）。"""

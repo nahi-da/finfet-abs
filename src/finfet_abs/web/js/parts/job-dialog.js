@@ -36,7 +36,7 @@ export async function openCreateJobDialog(opt) {
     method: s['fetch.method'], target_tier: s['rehydrate.target_tier'], priority: s['rehydrate.priority'],
     directory: s['fetch.directory'], job_folder: s['fetch.job_folder'], path_structure: s['fetch.path_structure'],
     path_template: s['fetch.path_template'], conflict: s['fetch.conflict'], set_mtime: s['fetch.set_mtime'],
-    verify_md5: s['fetch.verify_md5'], ...(opt.initial || {}),
+    verify_md5: s['fetch.verify_md5'], extract: s['fetch.extract_archives'], ...(opt.initial || {}),
   };
   if (pv.url_mode && init.path_structure === 'template' && /\{\{(?!@)/.test(init.path_template || '')) init.path_template = '';
 
@@ -71,13 +71,14 @@ export async function openCreateJobDialog(opt) {
     const existLine = h('div', { class: 'field-note', hidden: true });
     const mtimeChk = checkbox('最終更新日時をファイルに設定する', init.set_mtime);
     const md5Chk = checkbox('MD5 を照合する', init.verify_md5);
+    const extractChk = checkbox('ダウンロードの後に圧縮ファイルを展開する（zip・tar・gz・bz2・xz）', !!init.extract);
 
     const fetchRows = row('取得の方法', methodR);
     const tierRows = row('復元先の層', h('div', { class: 'line' }, tierSel, h('span', { text: '優先度' }), prioSel));
     const dirRows = row('保存先', h('div', null, h('div', { class: 'line' }, dirIn, dirBtn),
       h('div', { class: 'line' }, folderChk, h('span', { text: 'パス構造' }), structSel, h('span', { text: '同名のファイル' }), conflictSel)));
     const tmplRows = row('保存するパス', h('div', null, tmplIn, tmplList, examples));
-    const checkRows = row('', h('div', null, dupLine, existLine, h('div', { class: 'line' }, mtimeChk, md5Chk)));
+    const checkRows = row('', h('div', null, dupLine, existLine, h('div', { class: 'line' }, mtimeChk, md5Chk), h('div', { class: 'line' }, extractChk)));
     const sasRows = row('認証', h('div', { class: 'status-warn' }, (pv.sas_warnings || []).map((w) => h('div', {
       text: `${w.storage_account} の SAS は ${dateShort(w.expires_at)} に期限が切れます。` + (w.before_rehydrate ? 'リハイドレートの完了の前に切れるおそれがあります。' : ''),
     }))));
@@ -105,6 +106,7 @@ export async function openCreateJobDialog(opt) {
       method: radioValue(methodR), target_tier: tierSel.value, priority: prioSel.value, directory: dirIn.value.trim(),
       job_folder: checkInput(folderChk).checked, path_structure: structSel.value, path_template: tmplIn.value,
       conflict: conflictSel.value, set_mtime: checkInput(mtimeChk).checked, verify_md5: checkInput(md5Chk).checked,
+      extract: checkInput(extractChk).checked,
     });
 
     function needsRehydrate() {
