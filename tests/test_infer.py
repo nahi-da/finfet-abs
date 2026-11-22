@@ -44,14 +44,32 @@ class InferTest(unittest.TestCase):
     def test_choices_and_classes(self) -> None:
         names = [f"{app}/server{n}.txt" for app in ("web", "api") for n in range(1, 8)]
         c = pats(names)
-        # 英字が変わる階層は選択肢の変数、数字だけが変わる階層は \d の形
-        self.assertEqual(c[0]["pattern"], r"{{v1}}/server\d{1}\.txt")
+        # 値の種類が少ない項目は、項目の全体を選択肢の変数にします（server1 の 1 だけを選択肢にしない）
+        self.assertEqual(c[0]["pattern"], r"{{v1}}/{{v2}}\.txt")
         self.assertEqual(c[0]["variables"]["v1"], {"type": "choice", "value": {"options": ["api", "web"], "selected": ["api", "web"]}})
+        self.assertEqual(c[0]["variables"]["v2"]["value"]["options"], [f"server{n}" for n in range(1, 8)])
         many = [f"{w}/x.txt" for w in ("alpha", "beta", "gamma", "delta", "epsilon", "zeta")]
         self.assertEqual(pats(many)[0]["pattern"], r"{{v1}}/x\.txt")
         # 値の種類が多い階層は選択肢にしない
         ids = [f"data/{i:08x}-guid.bin" for i in range(150)]
         self.assertEqual(pats(ids)[0]["pattern"], r"data/[^/]+-guid\.bin")
+
+    def test_fields_in_file_name_become_choices(self) -> None:
+        # 依頼者の例: VM 名と「監査・調査」が、日時と区切りの間の項目。候補は 1 つにまとまり、項目ごとの選択肢の変数
+        names = [f"{top}/custom-auditlog/2026/11/{d:02d}/{vm}_{kind}_202611{d:02d}.log"
+                 for top in ("east", "west") for vm in ("VM1", "VM2", "VM3") for kind in ("監査", "調査") for d in (20, 21)]
+        c = pats(names)
+        self.assertEqual(len(c), 1)
+        self.assertEqual(c[0]["pattern"], r"{{v1}}/custom-auditlog/{{dt=YYYY}}/{{dt=MM}}/{{dt=DD}}/{{v2}}_{{v3}}_{{dt=YYYYMMDD}}\.log")
+        self.assertEqual(c[0]["variables"]["v2"]["value"]["options"], ["VM1", "VM2", "VM3"])
+        self.assertEqual(c[0]["variables"]["v3"]["value"]["options"], ["監査", "調査"])
+        # ハイフンを含む VM 名・一部が同じ VM 名は、名前の全体が選択肢（途中の違う部分だけにしない）
+        names = [f"logs/{vm}_監査_20261121.log" for vm in ("vm-app-01", "vm-app-02", "vm-db-01")]
+        c = pats(names)
+        self.assertEqual(c[0]["pattern"], r"logs/{{v1}}_監査_{{dt=YYYYMMDD}}\.log")
+        self.assertEqual(c[0]["variables"]["v1"]["value"]["options"], ["vm-app-01", "vm-app-02", "vm-db-01"])
+        # 数字だけの項目で種類が多いもの（連番）は \d の形
+        self.assertEqual(pats([f"seq/{i:06d}.log" for i in range(50)])[0]["pattern"], r"seq/\d{6}\.log")
 
     def test_choice_named_by_key_and_natural_order(self) -> None:
         names = [f"vm=web{n:02d}/2026/11/{d:02d}/app.log" for n in (1, 2, 10) for d in (1, 2)] + ["vm=db01/2026/11/03/app.log"]
@@ -71,6 +89,9 @@ class InferTest(unittest.TestCase):
             [f"vm=web{n:02d}/2026/11/{d:02d}/app.log" for n in (1, 2, 10) for d in (1, 2)],
             [f"vm-logs/{vm}/2026/11/{d:02d}/app_202611{d:02d}{h:02d}.log" for vm in ("web01", "db01") for d in (20, 21) for h in (0, 9)],
             [f"logs/2026/11/{d:02d}/app_202610{d:02d}.log" for d in range(1, 5)],
+            [f"{top}/custom-auditlog/2026/11/{d:02d}/{vm}_{kind}_202611{d:02d}.log"
+             for top in ("east", "west") for vm in ("VM-1", "VM-2") for kind in ("監査", "調査") for d in (20, 21)],
+            ["営業部/2025/10/報告書 #387 (確定版).pdf", "営業部/2025/11/報告書 #12 (確定版).pdf", "x/a b.c d.txt"],
             [f"logs/{h}_PT1H.json" for h in ("host-a", "host-b", "host-c")],
             [f"{app}/server{n}.txt" for app in ("web", "api") for n in range(1, 8)],
             [f"data/{i:08x}-guid.bin" for i in range(150)],
@@ -99,9 +120,7 @@ class InferTest(unittest.TestCase):
         c = pats(names)
         p = c[0]["pattern"]
         self.assertIn(r"\(確定版\)\.pdf", p)
-        rx = re.sub(r"\{\{[^}]+\}\}", r"\\d+", p)
-        for n in names:
-            self.assertTrue(re.fullmatch(rx, n), (p, n))
+        self.assertEqual(c[0]["variables"]["v1"]["value"]["options"], ["#12", "#387"])  # 空白で区切った項目
 
     def test_groups_sorted_by_count(self) -> None:
         names = [f"a/{i}.csv" for i in range(10)] + ["b/readme.md"]
