@@ -64,7 +64,7 @@ export class VirtualTable {
    */
   constructor(opt) {
     this.opt = opt;
-    // 狭い幅（640px 未満）では、行をカードの形にします（v1.4.0。opt.cards が false なら表のまま）
+    // 狭い幅・列が収まらない場合は、行をカードの形にします（v1.4.0。opt.cards が false なら表のまま。wantCard）
     this.mq = window.matchMedia(CARD_QUERY);
     this.card = opt.cards !== false && this.mq.matches;
     this.rowH = this.rowHeightNow();
@@ -99,9 +99,22 @@ export class VirtualTable {
     return cssPx('--row-h', 36);
   }
 
-  /** 画面の幅・文字の大きさが変わったら、行の形と高さを合わせます。 */
+  /**
+   * カードの形にするか。狭い幅（640px 未満）のほか、列が表の幅に収まらない場合もカードにします
+   * （表の中の横方向のスクロールをなくすため。[列] で列を減らして収まれば、表に戻ります）。
+   */
+  wantCard() {
+    if (this.opt.cards === false) return false;
+    if (this.mq.matches) return true;
+    const avail = this.el.isConnected ? this.el.clientWidth : 0;
+    if (!avail) return this.card;
+    // 境目で行き来しないよう、表に戻すときは少し余裕を見ます
+    return this.card ? avail < this.minWidth() + 16 : avail < this.minWidth();
+  }
+
+  /** 画面の幅・文字の大きさ・表示する列が変わったら、行の形と高さを合わせます。 */
   updateMode() {
-    const card = this.opt.cards !== false && this.mq.matches;
+    const card = this.wantCard();
     const changed = card !== this.card;
     this.card = card;
     const rowH = this.rowHeightNow();
@@ -229,6 +242,7 @@ export class VirtualTable {
       else this.hidden.add(c.key);
       this.renderHead();
       this.rerender();
+      this.updateMode();
       this.saveLayout();
     }));
     openMenu(anchor, items);
@@ -244,6 +258,7 @@ export class VirtualTable {
   /** 表の高さを、画面の下端に合わせます。 */
   fit() {
     if (!this.el.isConnected) return;
+    this.updateMode();
     const top = this.el.getBoundingClientRect().top;
     let reserve = this.opt.bottomReserve ?? 24;
     // 狭い幅では、画面の下のタブの分も空けます

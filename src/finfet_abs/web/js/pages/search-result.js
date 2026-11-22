@@ -241,6 +241,8 @@ export async function render(ctx) {
       selAll.textContent = `絞り込みに一致するすべてを選択（${num(s.filtered.count)} 件）`;
       jobBtn.disabled = sel.count === 0;
       jobBtn.dataset.hidden = String(s.hidden_selected);
+      // 選択の行の文が長くなって折り返すと、ページが伸びるため、表の高さを合わせ直します
+      table.fit();
     } catch { /* 次の更新で */ }
   }
   async function refreshRows() {
