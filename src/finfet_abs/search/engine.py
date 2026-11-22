@@ -439,6 +439,11 @@ class SearchService:
 
     # ------------------------------------------------------------ 操作
 
+    def any_running(self) -> bool:
+        """実行中の検索があるか。"""
+        with self._lock:
+            return bool(self._runs)
+
     def running(self, sid: str) -> bool:
         with self._lock:
             return sid in self._runs

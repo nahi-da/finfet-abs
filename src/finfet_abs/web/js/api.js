@@ -32,11 +32,13 @@ export async function initSession() {
  * @param {string} method
  * @param {string} url
  * @param {any} [body]
- * @param {{signal?: AbortSignal, raw?: boolean}} [opt]
+ * @param {{signal?: AbortSignal, raw?: boolean, keepalive?: boolean}} [opt]
  */
 export async function request(method, url, body, opt = {}) {
   const headers = { Accept: 'application/json' };
   const init = { method, headers, credentials: 'same-origin', signal: opt.signal, cache: 'no-store' };
+  // タブを閉じるときの知らせは、ページが閉じた後も送り終えるようにします
+  if (opt.keepalive) init.keepalive = true;
   if (method !== 'GET' && method !== 'HEAD') {
     if (csrf) headers['X-FinFeT-CSRF'] = csrf;
     if (body !== undefined) {

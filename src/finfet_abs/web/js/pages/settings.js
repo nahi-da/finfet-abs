@@ -89,6 +89,8 @@ function sections(session) {
         ['ui.start_page', '起動時に開くページ', 'select', { options: [['jobs', 'ジョブ'], ['search', '検索']] }],
         ['ui.browser_notifications', 'ブラウザの通知', 'check', { text: 'リハイドレートの完了などを、ブラウザの通知でも知らせる' }],
         ['ui.blob_name_display', 'Blob 名の表示', 'select', { options: [['full', '全体'], ['common', '共通する階層を省略'], ['tail', '末尾のみ']] }],
+        ['exit.when_closed', '自動の終了', 'check', { text: '本ツールの画面（ブラウザのタブ）をすべて閉じたら、本ツールを終了する（実行中のジョブ・検索があるときは、終わってから終了します）' }],
+        ['exit.wait_minutes', '終了までの時間', 'num', { unit: '分（画面をすべて閉じてから）' }],
       ],
     },
     {

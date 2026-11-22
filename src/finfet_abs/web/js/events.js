@@ -1,12 +1,30 @@
 // イベントの受信（ロングポーリング。5.8）。
 
-import { get } from './api.js';
+import { get, post } from './api.js';
 
 /** @type {Map<string, Set<Function>>} */
 const listeners = new Map();
 let last = null;
 let running = false;
 const RETRY = [1000, 2000, 5000];
+
+// この画面の ID。イベントの要求に付け、本ツールは、画面がすべて閉じられたかを判定します（自動の終了。v1.3.0）
+const CLIENT_ID = (() => {
+  try { return crypto.randomUUID(); } catch { return `c${Date.now().toString(36)}${Math.random().toString(36).slice(2)}`; }
+})();
+
+function sendState(state) {
+  post('/api/v1/app/client', { client: CLIENT_ID, state }, { keepalive: true }).catch(() => {});
+}
+
+function watchLifecycle() {
+  // タブを閉じた（または別のページに移った）
+  window.addEventListener('pagehide', () => sendState('closed'));
+  window.addEventListener('pageshow', (e) => { if (e.persisted) sendState('active'); });
+  // スリープ中のタブなど、凍結される画面は、閉じたものと見なしません
+  document.addEventListener('freeze', () => sendState('frozen'));
+  document.addEventListener('resume', () => sendState('active'));
+}
 
 /**
  * イベントを受け取る関数を登録します。戻り値の関数で解除します。
@@ -40,10 +58,11 @@ export async function start(start) {
   if (running) return;
   running = true;
   last = start;
+  watchLifecycle();
   let failures = 0;
   while (running) {
     try {
-      const res = await get(`/api/v1/events?after=${last}`);
+      const res = await get(`/api/v1/events?after=${last}&client=${CLIENT_ID}`);
       if (failures) onConnection(true);
       failures = 0;
       if (res.reset) {
