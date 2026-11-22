@@ -50,7 +50,8 @@ class RerunTest(JobTestBase):
         self.assertEqual(after["r/bad.log"]["status"], "completed")
         self.assertEqual(after["r/ok.log"]["download_completed_at"], before["r/ok.log"]["download_completed_at"])
         self.assertFalse([r for r in self.be.requests if r[2] == "r/ok.log"])
-        self.assertTrue(any(n["level"] == "ok" for n in self.notes))  # 完了のお知らせ
+        # 完了のお知らせ（状態を完了にした後に発行するため、届くまで待ちます）
+        self.run_until(lambda: any(n["level"] == "ok" for n in self.notes))
         with self.assertRaises(AppError):
             self.engine.resume(jid)  # 未完了の Blob がなければ再開できません
 
