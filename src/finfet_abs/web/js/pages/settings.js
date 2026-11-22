@@ -88,6 +88,8 @@ function sections(session) {
     },
     {
       id: 'ui', title: '画面', items: [
+        ['ui.theme', 'テーマ', 'radios', { options: [['dark', 'ダーク'], ['light', 'ライト'], ['system', 'Windows の設定に合わせる']] }],
+        ['ui.font_size', '文字の大きさ', 'radios', { options: [['normal', '標準'], ['large', '大']] }],
         ['ui.start_page', '起動時に開くページ', 'select', { options: [['jobs', 'ジョブ'], ['search', '検索']] }],
         ['ui.browser_notifications', 'ブラウザの通知', 'check', { text: 'リハイドレートの完了などを、ブラウザの通知でも知らせる' }],
         ['ui.blob_name_display', 'Blob 名の表示', 'select', { options: [['full', '全体'], ['common', '共通する階層を省略'], ['tail', '末尾のみ']] }],
@@ -224,11 +226,11 @@ export async function render(ctx) {
       }
       case 'poll': {
         const [k1, k2] = key;
-        return row(label, [h('span', { text: '最初は' }), numInput(k1, { label: `${label} 最初` }), h('span', { text: '分後、以降は' }), numInput(k2, { label: `${label} 以降` }), h('span', { text: '分ごと' })], { inline: true });
+        return row(label, [h('span', { class: 'labeled' }, h('span', { text: '最初は' }), numInput(k1, { label: `${label} 最初` }), h('span', { text: '分後、' })), h('span', { class: 'labeled' }, h('span', { text: '以降は' }), numInput(k2, { label: `${label} 以降` }), h('span', { text: '分ごと' }))], { inline: true });
       }
       case 'timeouts': {
         const [k1, k2] = key;
-        return row(label, [h('span', { text: '接続' }), numInput(k1, { label: '接続のタイムアウト' }), h('span', { text: '秒、読み取り' }), numInput(k2, { label: '読み取りのタイムアウト' }), h('span', { text: '秒' })], { inline: true });
+        return row(label, [h('span', { class: 'labeled' }, h('span', { text: '接続' }), numInput(k1, { label: '接続のタイムアウト' }), h('span', { text: '秒、' })), h('span', { class: 'labeled' }, h('span', { text: '読み取り' }), numInput(k2, { label: '読み取りのタイムアウト' }), h('span', { text: '秒' }))], { inline: true });
       }
       case 'sleep': {
         const [k1, k2] = key;

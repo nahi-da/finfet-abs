@@ -1,4 +1,4 @@
-/* 部品（4.3）。角丸は入力欄・ボタン・選択肢のチップだけ。影とグラデーションは使いません。 */
+/* 部品（4.3）。v1.4.0（依頼者の意見 5）で、角を丸め、ボタン・入力欄の高さを 40px 前後にそろえました（タッチでも押しやすい大きさ）。 */
 
 /* ---- アイコン（web/icons の SVG を、文字と同じ色で表示） */
 .icon {
@@ -24,39 +24,47 @@
 .icon-copy { --icon: url("/icons/copy.svg"); }
 .icon-nav { --icon: url("/icons/nav.svg"); }
 .icon-warn { --icon: url("/icons/warn.svg"); }
+.icon-search { --icon: url("/icons/search.svg"); }
+.icon-jobs { --icon: url("/icons/jobs.svg"); }
+.icon-history { --icon: url("/icons/history.svg"); }
+.icon-connections { --icon: url("/icons/connections.svg"); }
+.icon-settings { --icon: url("/icons/settings.svg"); }
+.icon-help { --icon: url("/icons/help.svg"); }
 
 /* ---- ボタン */
 .btn {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: var(--sp-1);
-  height: 32px;
-  padding: 0 var(--sp-3);
+  min-height: var(--tap);
+  padding: 0 var(--sp-4);
   border: 1px solid var(--line-strong);
   border-radius: var(--radius);
-  background: transparent;
+  background: var(--bg-raised);
   color: var(--text);
   cursor: pointer;
   white-space: nowrap;
 }
 .btn:hover:not(:disabled) { background: var(--bg-hover); }
-.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-text); }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-text); font-weight: 600; }
 .btn.primary:hover:not(:disabled) { background: var(--accent); filter: brightness(1.1); }
 .btn.danger { background: var(--danger-bg); border-color: var(--danger-bg); color: var(--accent-text); }
-.btn:disabled { color: var(--text-disabled); border-color: var(--line); cursor: default; }
+.btn:disabled { color: var(--text-disabled); border-color: var(--line); background: transparent; cursor: default; }
 .btn.primary:disabled { background: transparent; border-color: var(--line); color: var(--text-disabled); }
-.btn.small { height: 26px; padding: 0 var(--sp-2); }
+.btn.small { min-height: var(--tap-small); padding: 0 var(--sp-3); }
 
 .link-btn {
   display: inline-flex;
   align-items: center;
   gap: var(--sp-1);
+  min-height: 28px;
   padding: 0;
   border: 0;
   background: none;
   color: var(--link);
   cursor: pointer;
-  white-space: nowrap;
+  text-align: left;
 }
 .link-btn:hover:not(:disabled) { text-decoration: underline; }
 .link-btn:disabled { color: var(--text-disabled); cursor: default; }
@@ -66,8 +74,9 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 28px;
-  height: 28px;
+  width: var(--tap-small);
+  height: var(--tap-small);
+  flex: none;
   padding: 0;
   border: 0;
   border-radius: var(--radius);
@@ -80,7 +89,8 @@
 
 /* ---- 入力欄 */
 .input, select.input, textarea.input {
-  height: 32px;
+  height: var(--tap);
+  max-width: 100%;
   padding: 0 var(--sp-2);
   border: 1px solid var(--line-strong);
   border-radius: var(--radius);
@@ -100,13 +110,18 @@ select.input { padding-right: var(--sp-6); }
 .w-long { width: 40em; max-width: 100%; }
 .w-full { width: 100%; }
 
-input[type="checkbox"], input[type="radio"] { accent-color: var(--accent); width: 16px; height: 16px; margin: 0; }
+input[type="checkbox"], input[type="radio"] { accent-color: var(--accent); width: 18px; height: 18px; margin: 0; flex: none; }
 
-.check { display: inline-flex; align-items: center; gap: var(--sp-2); cursor: pointer; white-space: nowrap; }
-.radios { display: flex; flex-wrap: wrap; gap: var(--sp-2) var(--sp-4); align-items: center; min-height: 32px; }
+.check { display: inline-flex; align-items: center; gap: var(--sp-2); cursor: pointer; min-height: var(--tap-small); }
+.radios { display: flex; flex-wrap: wrap; gap: 0 var(--sp-4); align-items: center; min-height: var(--tap); }
 .inline { display: inline-flex; align-items: center; gap: var(--sp-2); flex-wrap: wrap; }
-.line { display: flex; align-items: center; gap: var(--sp-2); flex-wrap: wrap; min-height: 32px; }
+.line { display: flex; align-items: center; gap: var(--sp-2); flex-wrap: wrap; min-height: var(--tap); }
 .line + .line { margin-top: var(--sp-1); }
+/* 名前と入力欄のまとまり（まとまりの中では折り返しません） */
+.labeled { display: inline-flex; align-items: center; gap: var(--sp-2); white-space: nowrap; max-width: 100%; }
+@media (max-width: 759px) {
+  .line.grow-first > :first-child { flex: 1 1 12em; width: auto; }
+}
 
 .field-error { color: var(--danger); margin-top: var(--sp-1); }
 .field-note { color: var(--text-muted); }
@@ -119,11 +134,21 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--accent); width
   row-gap: var(--sp-3);
   align-items: start;
 }
-.form > .label { padding-top: 5px; color: var(--text); }
-.form > .control { min-width: 0; display: flex; flex-direction: column; align-items: flex-start; gap: var(--sp-1); }
+.form > .label { padding-top: 9px; color: var(--text); }
+.form > .control { min-width: 0; display: flex; flex-direction: column; align-items: flex-start; gap: var(--sp-1); overflow-wrap: anywhere; }
 .form > .control.row { flex-direction: row; align-items: center; flex-wrap: wrap; gap: var(--sp-2); }
 .form > .full { grid-column: 1 / -1; }
 .form .unit { color: var(--text-muted); }
+/* 狭い幅では、名前を入力欄の上に置きます（名前だけが行の端に残ることを防ぎます） */
+@media (max-width: 759px) {
+  .form { grid-template-columns: minmax(0, 1fr); row-gap: var(--sp-1); }
+  .form > .label { padding-top: var(--sp-2); color: var(--text-muted); font-size: var(--fs-small); }
+  .form > .label:empty { display: none; }
+  .form > .control { align-items: stretch; }
+  .form > .control > .input, .form > .control > select.input { width: 100%; }
+  .form > .control > .input.w-num { width: 9em; }
+  .form > .control > .check, .form > .control > .link-btn { align-self: flex-start; }
+}
 
 /* ---- チップ */
 .chips { display: flex; flex-wrap: wrap; gap: var(--sp-1); align-items: center; }
@@ -131,21 +156,24 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--accent); width
   display: inline-flex;
   align-items: center;
   gap: var(--sp-1);
-  height: 26px;
-  padding: 0 var(--sp-1) 0 var(--sp-2);
+  min-height: var(--tap-small);
+  padding: 0 var(--sp-1) 0 var(--sp-3);
   border: 1px solid var(--line-strong);
-  border-radius: var(--radius);
+  border-radius: 999px;
   font-family: var(--font-mono);
   font-size: var(--fs-mono);
+  max-width: 100%;
 }
 .chip.off { color: var(--text-disabled); }
-.chip .icon-btn { width: 20px; height: 20px; }
+.chip .icon-btn { width: 24px; height: 24px; border-radius: 999px; }
 
-/* ---- タブ */
-.tabs { display: flex; gap: var(--sp-6); border-bottom: 1px solid var(--line); margin-bottom: var(--sp-3); }
+/* ---- タブ（狭い幅では横にスクロールします） */
+.tabs { display: flex; gap: var(--sp-6); border-bottom: 1px solid var(--line); margin-bottom: var(--sp-3); overflow-x: auto; scrollbar-width: none; }
 .tabs a {
-  display: inline-block;
-  padding: var(--sp-2) 0;
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--tap);
+  white-space: nowrap;
   color: var(--text-muted);
   border-bottom: 2px solid transparent;
   margin-bottom: -1px;
@@ -160,8 +188,8 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--accent); width
 
 .vtable {
   position: relative;
-  border-top: 1px solid var(--line);
-  border-bottom: 1px solid var(--line);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
   overflow: auto;
   font-size: var(--fs-table);
   background: var(--bg);
@@ -216,14 +244,43 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--accent); width
 .vtable .two-line .vcell { white-space: normal; }
 .vtable .group-sep { border-bottom: 2px solid var(--line-strong); }
 
+/* 狭い幅では、表の行をカードの形にします（横方向のスクロールは不要です）。
+   行の高さは固定のまま（仮想スクロール）で、名前の列を上の 2 行に、ほかの列を下の 1 行に並べます。 */
+.vtable.cards .vhead { display: flex; align-items: center; gap: var(--sp-2); padding: 0 var(--sp-1) 0 var(--sp-2); }
+.vtable.cards .vhead:empty { display: none; }
+.vtable.cards .vhead .card-lead { padding: 0; min-width: 28px; justify-content: center; }
+.vtable.cards .vhead .card-sortcell { overflow: visible; padding: 0; }
+.vtable.cards .vbody { min-width: 0 !important; }
+.vtable.cards .vbody .vrow {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: var(--sp-2) var(--sp-1) var(--sp-2) var(--sp-2);
+}
+.vtable.cards .card-lead { display: flex; align-items: center; gap: var(--sp-1); flex: none; }
+.vtable.cards .card-lead > .vcell, .vtable.cards .card-side > .vcell { padding: 0; overflow: visible; display: flex; align-items: center; justify-content: center; min-width: 28px; }
+.vtable.cards .card-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.vtable.cards .card-title { padding: 0; white-space: normal; overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; word-break: break-all; line-height: 1.4; }
+.vtable.cards .card-title > * { white-space: normal; }
+.vtable.cards .card-title .ellipsis { white-space: normal; overflow: visible; }
+.vtable.cards .card-meta { display: flex; gap: 0 var(--sp-3); overflow: hidden; white-space: nowrap; color: var(--text-muted); font-size: var(--fs-small); }
+.vtable.cards .card-meta > .vcell { padding: 0; flex: none; max-width: 100%; text-align: left; }
+.vtable.cards .card-meta > .vcell:empty { display: none; }
+.vtable.cards .card-meta > .vcell.right { text-align: left; }
+.vtable.cards .card-meta .bar { width: 5em; display: inline-block; vertical-align: middle; }
+.vtable.cards .card-side { flex: none; display: flex; align-items: center; }
+.vtable.cards .two-line-cell { gap: 2px; }
+
 /* ---- 進捗の横棒 */
-.bar { height: 4px; background: var(--line); width: 100%; }
+.bar { height: 6px; background: var(--line); width: 100%; border-radius: 999px; overflow: hidden; }
 .bar > span { display: block; height: 100%; background: var(--link); }
 
 /* ---- ダイアログ（4.3.4） */
 dialog.dlg {
   padding: 0;
   border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  box-shadow: 0 12px 40px var(--shadow);
   background: var(--bg-raised);
   color: var(--text);
   max-width: calc(100vw - 32px);
@@ -235,16 +292,18 @@ dialog.dlg .dlg-head {
   display: flex;
   align-items: center;
   gap: var(--sp-2);
-  padding: var(--sp-3) var(--sp-4);
+  padding: var(--sp-2) var(--sp-2) var(--sp-2) var(--sp-4);
   border-bottom: 1px solid var(--line);
 }
-dialog.dlg .dlg-head h2 { margin: 0; flex: 1; }
+dialog.dlg .dlg-head h2 { margin: 0; flex: 1; min-width: 0; }
+dialog.dlg .dlg-head .icon-btn { width: var(--tap); height: var(--tap); }
 dialog.dlg .dlg-body { padding: var(--sp-4); overflow: auto; flex: 1; min-height: 0; }
 dialog.dlg .dlg-body section + section { border-top: 1px solid var(--line); margin-top: var(--sp-4); padding-top: var(--sp-4); }
 dialog.dlg .dlg-foot {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: var(--sp-3);
+  gap: var(--sp-2) var(--sp-3);
   padding: var(--sp-3) var(--sp-4);
   border-top: 1px solid var(--line);
 }
@@ -253,19 +312,34 @@ dialog.dlg .dlg-foot .push { margin-left: auto; }
 dialog.w480 { width: 480px; }
 dialog.w720 { width: 720px; }
 dialog.w960 { width: 960px; }
+/* 狭い幅では、ダイアログを画面全体に表示します */
+@media (max-width: 639px) {
+  dialog.dlg { inset: 0; width: 100%; height: 100%; max-width: 100%; max-height: 100%; margin: 0; border: 0; border-radius: 0; }
+  dialog.dlg .dlg-inner { height: 100%; max-height: none; }
+  dialog.dlg .dlg-body { padding: var(--sp-3); }
+  dialog.dlg .dlg-foot { padding: var(--sp-2) var(--sp-3) calc(var(--sp-2) + env(safe-area-inset-bottom, 0px)); }
+  dialog.dlg .dlg-foot .note { flex: 1 1 100%; }
+  dialog.dlg .dlg-foot .push { flex: 1 1 0; margin: 0; }
+  dialog.dlg .dlg-foot > .btn { flex: 1 1 8em; }
+}
 
 /* ---- メニュー */
 .menu {
   position: fixed;
   z-index: 50;
   min-width: 200px;
+  max-width: calc(100vw - 16px);
   padding: var(--sp-1) 0;
   background: var(--bg-raised);
   border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  box-shadow: 0 8px 24px var(--shadow);
 }
 .menu button, .menu a {
-  display: block;
+  display: flex;
+  align-items: center;
   width: 100%;
+  min-height: 36px;
   padding: var(--sp-1) var(--sp-4);
   border: 0;
   background: none;
@@ -273,6 +347,8 @@ dialog.w960 { width: 960px; }
   text-align: left;
   cursor: pointer;
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .menu button:hover, .menu a:hover { background: var(--bg-hover); text-decoration: none; }
 .menu button:disabled { color: var(--text-disabled); cursor: default; }
@@ -292,14 +368,24 @@ dialog.w960 { width: 960px; }
   padding: var(--sp-2) var(--sp-3);
   background: var(--bg-raised);
   border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  box-shadow: 0 8px 24px var(--shadow);
 }
 .toast.error { border-color: var(--danger); }
+@media (max-width: 639px) {
+  .toasts { left: var(--sp-2); right: var(--sp-2); bottom: calc(var(--bottomnav-h) + var(--sp-2) + env(safe-area-inset-bottom, 0px)); }
+  .toast { max-width: none; }
+}
 
 /* ---- そのほか */
 .summary-line { display: flex; flex-wrap: wrap; gap: var(--sp-2) var(--sp-4); align-items: center; }
 .kv { display: grid; grid-template-columns: max-content 1fr; gap: var(--sp-1) var(--sp-4); }
 .kv dt { color: var(--text-muted); }
 .kv dd { margin: 0; word-break: break-all; }
+@media (max-width: 639px) {
+  .kv { grid-template-columns: minmax(0, 1fr); gap: 0; }
+  .kv dt { font-size: var(--fs-small); margin-top: var(--sp-2); }
+}
 .pre { font-family: var(--font-mono); font-size: var(--fs-mono); white-space: pre-wrap; word-break: break-all; }
 .loading { color: var(--text-muted); }
 .status-ok { color: var(--ok); }
@@ -309,11 +395,12 @@ dialog.w960 { width: 960px; }
 .list-plain { list-style: none; padding: 0; margin: 0; }
 .list-plain li { padding: var(--sp-1) 0; }
 .folder-layout { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: var(--sp-3); margin: var(--sp-3) 0; }
-.folder-list { border: 1px solid var(--line); height: 280px; overflow: auto; }
+.folder-list { border: 1px solid var(--line); border-radius: var(--radius); height: 280px; overflow: auto; }
 .folder-list button {
   display: block;
   width: 100%;
   text-align: left;
+  min-height: 36px;
   padding: var(--sp-1) var(--sp-3);
   border: 0;
   background: none;
@@ -323,6 +410,10 @@ dialog.w960 { width: 960px; }
 .folder-list button:hover { background: var(--bg-hover); }
 .folder-list .group { padding: var(--sp-1) var(--sp-3); color: var(--text-muted); border-top: 1px solid var(--line); }
 .folder-list .group:first-child { border-top: 0; }
+@media (max-width: 759px) {
+  .folder-layout { grid-template-columns: minmax(0, 1fr); }
+  .folder-layout > .folder-list:first-child { height: 150px; }
+}
 
 /* パスパターンを自動生成のダイアログの候補の表（4.1.2 の表の規則） */
 .infer-table { width: 100%; border-collapse: collapse; margin-top: var(--sp-3); font-size: var(--fs-table); }

@@ -74,9 +74,9 @@ export async function openCreateJobDialog(opt) {
     const extractChk = checkbox('ダウンロードの後に圧縮ファイルを展開する（zip・tar・gz・bz2・xz）', !!init.extract);
 
     const fetchRows = row('取得の方法', methodR);
-    const tierRows = row('復元先の層', h('div', { class: 'line' }, tierSel, h('span', { text: '優先度' }), prioSel));
-    const dirRows = row('保存先', h('div', null, h('div', { class: 'line' }, dirIn, dirBtn),
-      h('div', { class: 'line' }, folderChk, h('span', { text: 'パス構造' }), structSel, h('span', { text: '同名のファイル' }), conflictSel)));
+    const tierRows = row('復元先の層', h('div', { class: 'line' }, tierSel, h('span', { class: 'labeled' }, h('span', { text: '優先度' }), prioSel)));
+    const dirRows = row('保存先', h('div', null, h('div', { class: 'line grow-first' }, dirIn, dirBtn),
+      h('div', { class: 'line' }, folderChk, h('span', { class: 'labeled' }, h('span', { text: 'パス構造' }), structSel), h('span', { class: 'labeled' }, h('span', { text: '同名のファイル' }), conflictSel))));
     const tmplRows = row('保存するパス', h('div', null, tmplIn, tmplList, examples));
     const checkRows = row('', h('div', null, dupLine, existLine, h('div', { class: 'line' }, mtimeChk, md5Chk), h('div', { class: 'line' }, extractChk)));
     const sasRows = row('認証', h('div', { class: 'status-warn' }, (pv.sas_warnings || []).map((w) => h('div', {

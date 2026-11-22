@@ -6,6 +6,24 @@ import { openMenu } from './menu.js';
 
 const BLOCK = 200;
 const OVERSCAN = 8;
+const CARD_QUERY = '(max-width: 639px)';
+
+/** CSS の変数（px）を数で読みます。 */
+function cssPx(name, fallback) {
+  const v = parseFloat(getComputedStyle(document.documentElement).getPropertyValue(name));
+  return Number.isFinite(v) && v > 0 ? v : fallback;
+}
+
+/**
+ * カードの形での列の置き場所。
+ * lead: 左（チェックボックスなど）/ title: 上の 2 行 / meta: 下の 1 行 / side: 右（メニュー）/ none: 表示しない
+ */
+function cardRole(c) {
+  if (c.card) return c.card;
+  if (['sel', 'grip', 'pin'].includes(c.key)) return 'lead';
+  if (c.key === 'menu') return 'side';
+  return c.flex ? 'title' : 'meta';
+}
 
 /**
  * @typedef {Object} Column
@@ -46,7 +64,10 @@ export class VirtualTable {
    */
   constructor(opt) {
     this.opt = opt;
-    this.rowH = opt.rowHeight || 32;
+    // 狭い幅（640px 未満）では、行をカードの形にします（v1.4.0。opt.cards が false なら表のまま）
+    this.mq = window.matchMedia(CARD_QUERY);
+    this.card = opt.cards !== false && this.mq.matches;
+    this.rowH = this.rowHeightNow();
     this.sort = opt.sort || '';
     this.total = null;
     this.blocks = new Map();
@@ -62,9 +83,35 @@ export class VirtualTable {
     this.el.append(this.head, this.body, this.emptyEl);
     this.rendered = new Map();
     this.el.addEventListener('scroll', () => this.schedule());
-    this._onResize = () => { this.fit(); this.schedule(); };
+    this._onResize = () => { this.updateMode(); this.fit(); this.schedule(); };
     window.addEventListener('resize', this._onResize);
+    this.el.classList.toggle('cards', this.card);
     this.renderHead();
+  }
+
+  /** 行の高さ（px）。文字の大きさの設定と、カードの形かどうかで変わります。 */
+  rowHeightNow() {
+    const fs = cssPx('--fs-table', 13);
+    if (this.card) {
+      return this.opt.cardRowHeight || Math.ceil(fs * 1.4 * 2 + cssPx('--fs-small', 12) * 1.5 + 2 + 18);
+    }
+    if (this.opt.rowHeight) return Math.round(this.opt.rowHeight * (fs / 13));
+    return cssPx('--row-h', 36);
+  }
+
+  /** 画面の幅・文字の大きさが変わったら、行の形と高さを合わせます。 */
+  updateMode() {
+    const card = this.opt.cards !== false && this.mq.matches;
+    const changed = card !== this.card;
+    this.card = card;
+    const rowH = this.rowHeightNow();
+    if (!changed && rowH === this.rowH) return;
+    const idx = Math.floor(this.el.scrollTop / this.rowH);
+    this.rowH = rowH;
+    this.el.classList.toggle('cards', card);
+    this.renderHead();
+    this.rerender();
+    this.el.scrollTop = idx * rowH;
   }
 
   /** 表示中の列。 */
@@ -83,8 +130,37 @@ export class VirtualTable {
     return this.columns.reduce((a, c) => a + (this.widths[c.key] || c.width || 120), 0);
   }
 
+  /** カードの形の見出し: 左の列の見出し（すべて選択など）と、並べ替えのメニュー。 */
+  renderCardHead() {
+    this.head.style.gridTemplateColumns = '';
+    this.head.style.minWidth = '';
+    this.body.style.minWidth = '';
+    for (const c of this.columns) {
+      if (cardRole(c) === 'lead' && c.header) this.head.appendChild(h('div', { class: 'vcell card-lead' }, c.header));
+    }
+    const sortable = this.columns.filter((c) => c.sortable && typeof c.label === 'string' && c.label);
+    if (sortable.length) {
+      const cur = sortable.find((c) => this.sort === (c.sortKey || c.key) || this.sort === `-${c.sortKey || c.key}`);
+      const desc = this.sort.startsWith('-');
+      const btn = h('button', { type: 'button', class: 'link-btn card-sort', 'aria-haspopup': 'menu' },
+        `並べ替え: ${cur ? cur.label : '既定'}`, cur ? icon(desc ? 'sort-desc' : 'sort-asc') : null);
+      btn.addEventListener('click', () => openMenu(btn, sortable.flatMap((c) => {
+        const sk = c.sortKey || c.key;
+        return [
+          { text: `${c.label}（昇順）`, onClick: () => this.setSort(sk) },
+          { text: `${c.label}（降順）`, onClick: () => this.setSort(`-${sk}`) },
+        ];
+      }), { align: 'left' }));
+      this.head.appendChild(h('div', { class: 'vcell card-sortcell' }, btn));
+    }
+  }
+
   renderHead() {
     clear(this.head);
+    if (this.card) {
+      this.renderCardHead();
+      return;
+    }
     this.head.style.gridTemplateColumns = this.template();
     this.head.style.minWidth = `${this.minWidth()}px`;
     this.body.style.minWidth = `${this.minWidth()}px`;
@@ -169,7 +245,10 @@ export class VirtualTable {
   fit() {
     if (!this.el.isConnected) return;
     const top = this.el.getBoundingClientRect().top;
-    const reserve = this.opt.bottomReserve ?? 24;
+    let reserve = this.opt.bottomReserve ?? 24;
+    // 狭い幅では、画面の下のタブの分も空けます
+    const nav = document.getElementById('nav');
+    if (nav && !this.el.closest('dialog') && getComputedStyle(nav).position === 'fixed') reserve += nav.offsetHeight;
     const min = this.opt.minHeight || 160;
     const hgt = Math.max(min, window.innerHeight - top - reserve);
     this.el.style.height = `${hgt}px`;
@@ -267,7 +346,8 @@ export class VirtualTable {
         el = this.renderRow(row, i);
       }
       el.style.top = `${i * this.rowH}px`;
-      el.style.gridTemplateColumns = tpl;
+      el.style.height = `${this.rowH}px`;
+      if (!this.card) el.style.gridTemplateColumns = tpl;
       this.body.appendChild(el);
       this.rendered.set(i, el);
     }
@@ -292,17 +372,36 @@ export class VirtualTable {
       if (extra) cls.push(extra);
     }
     const el = h('div', { class: cls.join(' '), role: 'row', dataset: { index: String(i) } });
+    const parts = this.card ? { lead: h('div.card-lead'), main: h('div.card-main'), meta: h('div.card-meta'), side: h('div.card-side') } : null;
+    let titleCell = null;
     for (const c of this.columns) {
+      const role = parts ? cardRole(c) : null;
+      if (role === 'none') continue;
       const ccls = ['vcell'];
       if (c.align === 'right') ccls.push('right');
       if (c.align === 'center') ccls.push('center');
       if (c.mono) ccls.push('mono');
+      if (role === 'title') ccls.push('card-title');
       const content = c.render ? c.render(row, this) : row[c.key];
       const cell = h('div', { class: ccls.join(' '), role: 'cell' });
       if (content !== null && content !== undefined) append(cell, [content]);
       const title = c.title ? c.title(row) : (typeof content === 'string' ? content : null);
       if (title) cell.title = title;
-      el.appendChild(cell);
+      if (!parts) el.appendChild(cell);
+      else if (role === 'title' && !titleCell) titleCell = cell;
+      else if (role === 'lead' || role === 'side') parts[role].appendChild(cell);
+      else {
+        // カードの下の行では、何の値かが分かるように、列の名前をホバーの名前に加えます
+        if (typeof c.label === 'string' && c.label) cell.title = `${c.label}: ${cell.title || cell.textContent}`;
+        parts.meta.appendChild(cell);
+      }
+    }
+    if (parts) {
+      if (titleCell) parts.main.appendChild(titleCell);
+      parts.main.appendChild(parts.meta);
+      if (parts.lead.firstChild) el.appendChild(parts.lead);
+      el.appendChild(parts.main);
+      if (parts.side.firstChild) el.appendChild(parts.side);
     }
     if (this.opt.onRowClick) {
       el.addEventListener('click', (e) => {

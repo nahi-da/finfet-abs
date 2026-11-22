@@ -55,6 +55,9 @@ SCHEMA: list[Field] = [
     _c("ui.start_page", "jobs", "jobs", "search"),
     _b("ui.browser_notifications", False),
     _c("ui.blob_name_display", "full", "full", "common", "tail"),
+    # v1.4.0: テーマ（dark・light・system）と文字の大きさ
+    _c("ui.theme", "dark", "dark", "light", "system"),
+    _c("ui.font_size", "normal", "normal", "large"),
     Field("ui.tables", "dict", {}),
     # 検索
     _c("search.input_timezone", "local", "local", "utc"),

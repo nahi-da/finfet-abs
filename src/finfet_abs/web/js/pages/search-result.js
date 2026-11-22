@@ -120,9 +120,26 @@ export async function render(ctx) {
   const notesSel = select([['', 'すべて'], ['with', 'あり'], ['without', 'なし']], f.notes, { 'aria-label': '注意' });
   const colBtn = linkButton('列', (e) => table.columnMenu(e.currentTarget));
   const dispSel = select([['full', '全体'], ['common', '共通する階層を省略'], ['tail', '末尾のみ']], display, { 'aria-label': 'Blob 名の表示', onchange: (e) => { display = e.target.value; table.reload(); } });
-  const filterRow = h('div', { class: 'toolbar' }, kw, h('span', { text: '層' }), tierSel, h('span', { text: '種類' }), typeSel,
-    h('span', { text: '最終更新' }), fromIn, h('span', { text: '〜' }), toIn, h('span', { text: '注意' }), notesSel,
-    h('div', { class: 'push' }, h('span', { text: 'Blob 名' }), dispSel, colBtn));
+  // 名前と入力欄をまとまりにして、まとまりごとに折り返します。狭い幅では、キーワードのほかは［絞り込み］で開閉します
+  const field = (label, cls, ...ctl) => h('div', { class: `field ${cls}` }, h('span', { class: 'field-label', text: label }), ...ctl);
+  const filterToggle = h('button', {
+    type: 'button', class: 'btn filter-toggle', 'aria-expanded': 'false',
+    onclick: () => {
+      const open = filterRow.classList.toggle('open');
+      filterToggle.setAttribute('aria-expanded', String(open));
+    },
+  });
+  const filterRow = h('div', { class: 'filters' },
+    field('キーワード', 'kw', kw), filterToggle,
+    field('層', 'more-f', tierSel), field('種類', 'more-f', typeSel),
+    field('最終更新', 'more-f', h('div', { class: 'pair' }, fromIn, h('span', { text: '〜' }), toIn)),
+    field('注意', 'more-f', notesSel),
+    h('div', { class: 'push more-f' }, field('Blob 名の表示', '', dispSel), colBtn));
+  const drawFilterToggle = () => {
+    const n = [f.tier, f.type, f.from || f.to, f.notes].filter(Boolean).length;
+    filterToggle.textContent = n ? `絞り込み（${n}）` : '絞り込み';
+  };
+  drawFilterToggle();
   const selLine = h('span');
   const foundLine = h('span', { class: 'muted' });
   const selAll = linkButton('絞り込みに一致するすべてを選択', async () => {
@@ -145,6 +162,7 @@ export async function render(ctx) {
     f.to = toIn.value;
     f.notes = notesSel.value;
     ctx.updateQuery({ q: f.q, tier: f.tier, type: f.type, from: f.from, to: f.to, notes: f.notes });
+    drawFilterToggle();
     table.reload(false);
     refreshSummary();
   };
@@ -203,11 +221,11 @@ export async function render(ctx) {
   table.el.addEventListener('keydown', async (e) => {
     if (e.key !== ' ' || e.target !== table.el) return;
     e.preventDefault();
-    const first = table.loadedRows().find(({ index }) => table.rendered.has(index) && table.el.scrollTop <= index * 32);
+    const first = table.loadedRows().find(({ index }) => table.rendered.has(index) && table.el.scrollTop <= index * table.rowH);
     if (first) toggle(first.row, !first.row.selected, first.index, false);
   });
   const jobBtn = button('ジョブを作成', () => createJob(), { primary: true });
-  const bottomSel = h('span');
+  const bottomSel = h('span', { class: 'summary' });
   root.append(table.el, h('div', { class: 'sticky-bottom' }, bottomSel, h('span.push'), jobBtn));
   ctx.onLeave(() => table.destroy());
 

@@ -150,7 +150,7 @@ export async function render(ctx) {
   const patternSec = h('section', { class: 'part' });
   const varsSec = h('section', { class: 'part' });
   const searchBtn = button('検索', () => startSearch(), { primary: true });
-  const bottom = h('div', { class: 'search-actions' }, searchBtn);
+  const bottom = h('div', { class: 'sticky-bottom search-actions' }, h('span', { class: 'push' }), searchBtn);
   root.append(targetsSec, patternSec, varsSec, bottom);
   let analysis = null;
   const containerSuggestions = new Map();
