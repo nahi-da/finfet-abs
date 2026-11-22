@@ -60,6 +60,7 @@ def default_options(settings) -> dict:
         "directory": g("fetch.directory"), "job_folder": bool(g("fetch.job_folder")),
         "path_structure": g("fetch.path_structure"), "path_template": g("fetch.path_template"),
         "conflict": g("fetch.conflict"), "set_mtime": bool(g("fetch.set_mtime")), "verify_md5": bool(g("fetch.verify_md5")),
+        "extract": bool(g("fetch.extract_archives")), "extract_max_gib": g("fetch.extract_max_gib"),
         "check_concurrency": g("transfer.check_concurrency"), "rehydrate_concurrency": g("transfer.rehydrate_concurrency"),
         "download_concurrency": g("transfer.download_concurrency"),
         "connections_per_blob": g("transfer.connections_per_blob"), "chunk_size_mib": g("transfer.chunk_size_mib"),
@@ -83,14 +84,14 @@ def clean_options(raw: dict | None, settings) -> dict:
     choice("path_structure", paths.STRUCTURES)
     choice("conflict", CONFLICTS)
     for k, lo, hi in (("check_concurrency", 1, 16), ("rehydrate_concurrency", 1, 16), ("download_concurrency", 1, 16),
-                      ("connections_per_blob", 1, 8), ("chunk_size_mib", 1, 64)):
+                      ("connections_per_blob", 1, 8), ("chunk_size_mib", 1, 64), ("extract_max_gib", 1, 1024)):
         try:
             o[k] = int(o[k])
         except (TypeError, ValueError):
             raise AppError("OPTION_INVALID", f"取得の設定「{k}」の値が正しくありません。", extra={"field": k}) from None
         if not lo <= o[k] <= hi:
             raise AppError("OPTION_INVALID", f"取得の設定「{k}」は {lo}〜{hi} にしてください。", extra={"field": k})
-    for k in ("job_folder", "set_mtime", "verify_md5"):
+    for k in ("job_folder", "set_mtime", "verify_md5", "extract"):
         o[k] = bool(o[k])
     o["directory"] = str(o["directory"] or "").strip()
     o["path_template"] = str(o["path_template"] or "")

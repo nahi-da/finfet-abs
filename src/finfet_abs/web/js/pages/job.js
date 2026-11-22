@@ -277,7 +277,7 @@ export async function render(ctx) {
       ...row('保存先', h('span', { class: 'mono', text: job.job_folder || o.directory })),
       ...row('パス構造', h('span', { text: STRUCT_LABELS[o.path_structure] + (o.path_structure === 'template' ? `（${o.path_template}）` : '') })),
       ...row('同名のファイル', conflictSel),
-      ...row('', h('div', { class: 'line' }, checkbox('最終更新日時をファイルに設定する', o.set_mtime, null, { disabled: !editable }), checkbox('MD5 を照合する', o.verify_md5, null, { disabled: !editable }))),
+      ...row('', h('div', { class: 'line' }, checkbox('最終更新日時をファイルに設定する', o.set_mtime, null, { disabled: !editable }), checkbox('MD5 を照合する', o.verify_md5, null, { disabled: !editable }), checkbox('圧縮ファイルを展開する', !!o.extract, null, { disabled: true }))),
       ...row('状態確認の並列数', numIn('check_concurrency', '状態確認の並列数')),
       ...row('リハイドレートの要求の並列数', numIn('rehydrate_concurrency', 'リハイドレートの要求の並列数')),
       ...row('ダウンロードの同時実行数', numIn('download_concurrency', 'ダウンロードの同時実行数')),

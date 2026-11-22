@@ -72,6 +72,9 @@ SCHEMA: list[Field] = [
     _c("fetch.conflict", "number", "number", "skip", "overwrite"),
     _b("fetch.set_mtime", True),
     _b("fetch.verify_md5", True),
+    # ダウンロードの後の圧縮ファイルの展開（依頼者の意見。v1.3.0）
+    _b("fetch.extract_archives", False),
+    _i("fetch.extract_max_gib", 10, 1, 1024),
     _s("fetch.path_template", ""),
     _i("fetch.reuse_search_info_minutes", 10, 0, 1440),
     # リハイドレート

@@ -35,6 +35,8 @@ function sections(session) {
         ['fetch.conflict', '同名のファイル', 'select', { options: [['number', '番号を付ける'], ['skip', 'スキップ'], ['overwrite', '上書き']] }],
         ['fetch.set_mtime', '最終更新日時', 'check', { text: 'ファイルの更新日時を Blob の最終更新日時にする' }],
         ['fetch.verify_md5', 'MD5 の照合', 'check', { text: 'Content-MD5 がある Blob を、ダウンロード後に照合する' }],
+        ['fetch.extract_archives', '圧縮ファイルの展開', 'check', { text: 'ダウンロードした圧縮ファイル（zip・tar・gz・bz2・xz）を、同じフォルダーに展開する（.tar.gz のような入れ子は最後まで展開し、元のファイルは残す）' }],
+        ['fetch.extract_max_gib', '展開の上限', 'num', { unit: 'GiB（1 つの圧縮ファイルを展開した大きさの合計。超えたら展開を止める）' }],
         ['fetch.reuse_search_info_minutes', '検索結果を確認の代わりに使う時間', 'num', { unit: '分' }],
         ['queue.resume_on_startup', '起動時に実行中だったジョブを再開する', 'check'],
       ],
