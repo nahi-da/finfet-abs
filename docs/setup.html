@@ -25,33 +25,33 @@
 <h2>ダウンロードとハッシュの確認</h2>
 <ol>
 <li>インターネットに接続できる環境で、GitHub の Release のページから <code>finfet-abs-&lt;版&gt;-win-x64.zip</code> と <code>SHA256SUMS.txt</code> をダウンロードします。</li>
-<li>ZIP の SHA-256 を計算し、<code>SHA256SUMS.txt</code> の値と比べます。
+<li>ZIP の SHA-256 を計算し、<code>SHA256SUMS.txt</code> に記載された値と一致することを確認します。
 <pre>certutil -hashfile finfet-abs-&lt;版&gt;-win-x64.zip SHA256</pre></li>
-<li>（任意）GitHub CLI で、このリポジトリの GitHub Actions で作られたことを確かめます。
+<li>（任意）GitHub CLI で、このリポジトリの GitHub Actions で作成されたことを確認します。
 <pre>gh attestation verify finfet-abs-&lt;版&gt;-win-x64.zip --repo nahi-da/finfet-abs</pre></li>
 </ol>
 <h2>インターネットに接続できない環境への持ち込み</h2>
-<p>組織の規程に従って、ZIP を使う PC に運びます。Python やパッケージは ZIP に含まれているため、使う PC での導入はありません。</p>
+<p>所属する組織の規程に従って、ZIP ファイルを使用する PC に移します。Python と必要なパッケージは ZIP ファイルに含まれているため、使用する PC でのインストールは不要です。</p>
 <h2>展開と起動</h2>
 <ol>
-<li>ZIP のプロパティで [許可する] にチェックを入れてから、任意のフォルダー（例: <code>C:\Tools\finfet-abs</code>）に展開します。</li>
-<li><code>finfet-abs.bat</code> を実行します。</li>
+<li>ZIP ファイルのプロパティで [許可する] をオンにしてから、任意のフォルダー（例: <code>C:\Tools\finfet-abs</code>）に展開します。</li>
+<li><code>finfet-abs.bat</code> を実行します。既定のブラウザに本ツールの画面が表示されます。</li>
 </ol>
-<p>ポータブルモードで使う場合は、起動の前に、展開したフォルダーに空の <code>data</code> フォルダーを作ります。</p>
+<p>ポータブルモードで使う場合は、起動の前に、展開したフォルダーに空の <code>data</code> フォルダーを作成します。</p>
 <h2>更新</h2>
 <ol>
-<li>新しい版の ZIP を、上の手順で<strong>新しいフォルダー</strong>に展開します（古いフォルダーに上書きしません）。</li>
+<li>新しい版の ZIP を、上の手順で<strong>新しいフォルダー</strong>に展開します（古いフォルダーには上書きしないでください）。</li>
 <li>本ツールを終了します。</li>
 <li>ポータブルモードの場合は、古いフォルダーの <code>data</code> を新しいフォルダーに移します。</li>
-<li>新しいフォルダーの <code>finfet-abs.bat</code> を起動します。動作を確かめたら、古いフォルダーを削除してかまいません。</li>
+<li>新しいフォルダーの <code>finfet-abs.bat</code> を起動します。動作を確認した後、古いフォルダーは削除できます。</li>
 </ol>
 <h2>pip の使い方</h2>
 <ul>
 <li>導入済みのパッケージの確認: <code>runtime\pip.bat list</code>、<code>runtime\pip.bat check</code></li>
-<li>インターネットに接続できない環境での追加・更新: インターネットに接続できる環境で、Windows x64・Python 3.14 用の wheel を取得して持ち込み、次のように導入します。
+<li>インターネットに接続できない環境での追加・更新: インターネットに接続できる環境で、Windows x64・Python 3.14 用の wheel を取得して持ち込み、次のコマンドでインストールします。
 <pre>runtime\pip.bat install --no-index --find-links &lt;wheel のフォルダー&gt; &lt;パッケージ&gt;</pre></li>
 </ul>
-<p class="note">パッケージを個別に更新すると、本ツールが確認していない版の組み合わせになります。通常は、新しい版の全部入り版で更新してください。</p>
+<p class="note">パッケージを個別に更新すると、動作を確認していない版の組み合わせになります。通常は、新しい版の全部入り版で更新してください。</p>
 <footer>FinFeT <span data-fill="version">（開発版）</span></footer>
 </main>
 </div>
