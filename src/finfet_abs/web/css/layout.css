@@ -22,7 +22,7 @@ body { display: flex; flex-direction: column; min-height: 100vh; min-height: 100
 .topbar .spacer { flex: 1; }
 .topbar .conn-lost { color: var(--danger); min-width: 0; }
 .topbar .link-btn { min-height: var(--tap-small); }
-.topbar #account-btn { min-width: 0; max-width: 32ch; overflow: hidden; text-overflow: ellipsis; display: block; }
+.topbar #account-btn { min-width: 0; max-width: 32ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: block; }
 
 .shell { display: flex; flex: 1; min-height: 0; }
 
