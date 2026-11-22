@@ -28,8 +28,10 @@ _COMPACT = {8: ("YYYYMMDD", "%Y%m%d"), 10: ("YYYYMMDDhh", "%Y%m%d%H"), 12: ("YYY
 _UNIT_OF = {"YYYY": "Y", "MM": "M", "DD": "D", "hh": "h", "mm": "m", "ss": "s"}
 _ORDER = "YMDhms"
 MAX_CHOICES = 4
-#: 日時を含まない階層を選択肢の変数にする、値の種類の上限
+#: 項目を選択肢の変数にする、値の種類の上限
 MAX_SEG_CHOICES = 100
+#: 数字だけの項目を選択肢の変数にする、値の種類の上限（多ければ \d の形にします）
+MAX_DIGIT_CHOICES = 20
 MAX_CANDIDATES = 30
 
 
@@ -137,64 +139,86 @@ def _split_segments(toks: list[Tok]) -> list[list[Tok]]:
     return segs
 
 
-def _tok_shape(toks: list[Tok]) -> tuple:
-    """まとめるためのキー: 区切りはそのまま、日時は書式、数字は桁数を問わず N、英字は A。"""
-    out = []
-    for t in toks:
-        if t.kind == "lit":
-            out.append(t.text)
-        elif t.kind == "date":
-            out.append(f"D:{t.var}:{t.fmt}")
-        elif t.kind == "num":
-            out.append("N")
+#: 階層の中で「項目」を区切る文字。ハイフンは名前の一部（vm-app-01 など）として扱うため、区切りにしません
+_DELIM = re.compile(r"([_. ]+)")
+
+
+def _parts(seg: list[Tok]) -> list[tuple]:
+    """階層を、日時（D）・区切り（L）・項目（F）の並びにします。
+
+    日時のトークンを目印にし、その間の文字を `_` `.` 空白で項目に分けます（例: `VM-APP01_監査_20261121.log` →
+    F(VM-APP01) L(_) F(監査) L(_) D(YYYYMMDD) L(.) F(log)）。
+    """
+    out: list[tuple] = []
+    buf: list[str] = []
+
+    def flush() -> None:
+        text = "".join(buf)
+        buf.clear()
+        for k, piece in enumerate(_DELIM.split(text)):
+            if piece:
+                out.append(("L", piece) if k % 2 else ("F", piece))
+
+    for t in seg:
+        if t.kind == "date":
+            flush()
+            out.append(("D", t.var, t.fmt, t.text))
         else:
-            out.append("A")
-    return tuple(out)
+            buf.append(t.text)
+    flush()
+    return out
 
 
-_EXT = re.compile(r"\.([A-Za-z0-9]{1,5})$")
+def _seg_key(parts: list[tuple], last: bool) -> tuple:
+    """まとめるためのキー: 日時は書式、区切りはその文字、項目は "F"。
 
-
-def _seg_key(seg: list[Tok], last: bool):
-    """階層のキー: 日時を含む階層はトークンの形、含まない階層は "S"（値をまとめて扱う）。
-    最後の階層（ファイル名）は、拡張子が違えば別のグループにします（a/*.csv と b/readme.md をまとめないため）。"""
-    if any(t.kind == "date" for t in seg):
-        return ("D", _tok_shape(seg))
-    if last:
-        m = _EXT.search("".join(t.text for t in seg))
-        return "S." + (m.group(1).lower() if m else "")
-    return "S"
+    最後の階層（ファイル名）の拡張子（最後の「.」の後の項目）は値を含めます（a/*.csv と b/readme.md をまとめないため）。
+    """
+    key = []
+    for i, p in enumerate(parts):
+        if p[0] == "D":
+            key.append(f"D:{p[1]}:{p[2]}")
+        elif p[0] == "L":
+            key.append("L:" + p[1])
+        elif last and i == len(parts) - 1 and i > 0 and parts[i - 1][0] == "L" and parts[i - 1][1].endswith(".") \
+                and len(p[1]) <= 5:
+            key.append("E:" + p[1].lower())
+        else:
+            key.append("F")
+    return tuple(key)
 
 
 @dataclass
-class SegStat:
-    """日時を含まない階層の値の集計。"""
+class FieldStat:
+    """項目（日時・区切り以外の部分）の値の集計。"""
     values: dict[str, int] = field(default_factory=dict)
     overflow: bool = False  # 値の種類が MAX_SEG_CHOICES を超えた
-    shapes: set = field(default_factory=set)  # トークンの形（2 種類まで）
-    tokvals: list[set] = field(default_factory=list)  # 最初の形のときのトークンごとの値
+    shapes: set = field(default_factory=set)  # 英字・数字の並びの形（2 種類まで）
+    tokvals: list[set] = field(default_factory=list)  # 最初の形のときの並びごとの値
     prefix: str | None = None  # すべての値に共通の先頭
     suffix: str | None = None  # すべての値に共通の末尾
     minlen: int = 1 << 30  # 値の長さの最小
+    digits: bool = True  # すべての値が数字だけか
 
-    def add(self, seg: list[Tok]) -> None:
-        text = "".join(t.text for t in seg)
-        self.minlen = min(self.minlen, len(text))
+    def add(self, text: str) -> None:
         if not self.overflow:
             self.values[text] = self.values.get(text, 0) + 1
             if len(self.values) > MAX_SEG_CHOICES:
                 self.overflow = True
         self.prefix = text if self.prefix is None else _common_prefix(self.prefix, text)
         self.suffix = text if self.suffix is None else _common_suffix(self.suffix, text)
-        shape = _tok_shape(seg)
+        self.minlen = min(self.minlen, len(text))
+        self.digits = self.digits and text.isdigit()
+        runs = _RUN.findall(text)
+        shape = tuple("N" if r.isdigit() else "A" if r.isalpha() and r.isascii() else r for r in runs)
         if not self.shapes:
-            self.tokvals = [set() for _ in seg]
+            self.tokvals = [set() for _ in runs]
         if len(self.shapes) < 2:
             self.shapes.add(shape)
         if len(self.shapes) == 1:
-            for i, t in enumerate(seg):
+            for i, r in enumerate(runs):
                 if len(self.tokvals[i]) <= MAX_CHOICES + 1:
-                    self.tokvals[i].add(t.text)
+                    self.tokvals[i].add(r)
 
 
 def _common_prefix(a: str, b: str) -> str:
@@ -204,35 +228,12 @@ def _common_prefix(a: str, b: str) -> str:
     return a[:n]
 
 
-def _common_suffix(a: str, b: str) -> str:
-    n = 0
-    while n < len(a) and n < len(b) and a[-1 - n] == b[-1 - n]:
-        n += 1
-    return a[len(a) - n:]
-
-
-def _cut_prefix(p: str) -> str:
-    """共通の先頭を、最後の区切りの文字（英数字以外）までに切り詰めます（「vm-web01」「vm-db01」→「vm-」）。"""
-    for i in range(len(p) - 1, -1, -1):
-        if not p[i].isalnum():
-            return p[:i + 1]
-    return ""
-
-
-def _cut_suffix(s: str) -> str:
-    """共通の末尾を、最初の区切りの文字（英数字以外）からに切り詰めます（「web01.log」「db01.log」→「.log」）。"""
-    for i, c in enumerate(s):
-        if not c.isalnum():
-            return s[i:]
-    return ""
-
-
 @dataclass
 class Group:
     key: tuple
     names: list[str] = field(default_factory=list)
     sizes: list[int] = field(default_factory=list)
-    segs: list = field(default_factory=list)  # 階層ごと: 日時の階層はトークンごとの値の集合の並び、そのほかは SegStat
+    stats: list = field(default_factory=list)  # 階層ごと・部分ごとの集計（F は FieldStat、D・L は None）
     dates: list[datetime] = field(default_factory=list)  # 日時の変数 dt の値
     dates_merged: list[datetime] = field(default_factory=list)  # dt と、dt2 以降を合わせた値
     conflict: set = field(default_factory=set)  # dt と値が食い違うことがある日時の変数（dt2 など）
@@ -274,29 +275,27 @@ def infer(items: Iterable[tuple[str, int | None]], *, max_candidates: int = MAX_
     groups: dict[tuple, Group] = {}
     for name, size in items:
         toks = tokenize(name)
-        segs = _split_segments(toks)
-        key = tuple(_seg_key(s, i == len(segs) - 1) for i, s in enumerate(segs))
+        segs = [_parts(s) for s in _split_segments(toks)]
+        key = tuple(_seg_key(p, i == len(segs) - 1) for i, p in enumerate(segs))
         g = groups.get(key)
         if g is None:
-            g = groups[key] = Group(key, segs=[[set() for _ in s] if not isinstance(k, str) else SegStat() for s, k in zip(segs, key)])
+            g = groups[key] = Group(key, stats=[[FieldStat() if k == "F" or k.startswith("E:") else None for k in sk]
+                                                for sk in key])
         g.names.append(name)
         g.sizes.append(size or 0)
-        for s, k, st in zip(segs, key, g.segs):
-            if isinstance(k, str):
-                st.add(s)
-            else:
-                for i, t in enumerate(s):
-                    if len(st[i]) <= MAX_CHOICES + 1:
-                        st[i].add(t.text)
-        parts = _date_parts(toks)
-        base = parts.get("dt")
+        for parts, st in zip(segs, g.stats):
+            for p, s in zip(parts, st):
+                if s is not None:
+                    s.add(p[1])
+        dparts = _date_parts(toks)
+        base = dparts.get("dt")
         d = _to_datetime(base)
         if d is not None:
             g.dates.append(d)
-        if len(parts) > 1:
+        if len(dparts) > 1:
             # 同じ日時を 2 回書いた名前（2026/11/21/app_2026112109.log）は、値が食い違わなければ 1 つの dt にします
             comb = dict(base or {})
-            for var, p in parts.items():
+            for var, p in dparts.items():
                 if var == "dt":
                     continue
                 if base is None or any(base[u] != v for u, v in p.items() if u in base):
@@ -347,16 +346,12 @@ def _natural(s: str):
 
 
 def _tokens_pattern(shape: tuple, vals: list[set]) -> str:
+    """英字・数字の並びの形から、正規表現を作ります（種類の多い項目に使います）。"""
     parts: list[str] = []
     for key, vs in zip(shape, vals):
-        if key.startswith("D:"):
-            _, var, fmt = key.split(":")
-            parts.append("{{" + f"{var}={fmt}" + "}}")
-        elif key in ("N", "A"):
+        if key in ("N", "A"):
             if len(vs) == 1:
                 parts.append(escape(next(iter(vs))))
-            elif len(vs) <= MAX_CHOICES:
-                parts.append("(?:" + "|".join(escape(v) for v in sorted(vs)) + ")")
             elif key == "N":
                 lens = {len(v) for v in vs}
                 parts.append(f"\\d{{{lens.pop()}}}" if len(lens) == 1 else "\\d+")
@@ -369,53 +364,88 @@ def _tokens_pattern(shape: tuple, vals: list[set]) -> str:
 
 def _pattern_of(g: Group) -> tuple[str, dict]:
     """グループのパスパターンと、変数の定義。"""
-    out: list[str] = []
+    segs_out: list[str] = []
     variables: dict[str, dict] = {}
     n_choice = 0
-    prev_lit = None  # 直前の階層が 1 種類の値のとき、その文字（選択肢の変数の表示名に使います）
-    for k, st in zip(g.key, g.segs):
+    prev_lit = None  # 直前の階層が 1 種類の値の 1 項目だけのとき、その文字（選択肢の変数の表示名に使います）
+    for sk, st in zip(g.key, g.stats):
         prev, prev_lit = prev_lit, None
-        if not isinstance(k, str):
-            shape = k[1]
-            out.append(_tokens_pattern(shape, st))
-            for key in shape:
-                if key.startswith("D:"):
-                    variables.setdefault(key.split(":")[1], {"type": "datetime"})
-            continue
-        vals = list(st.values)
-        if not st.overflow and len(vals) == 1:
-            out.append(escape(vals[0]))
-            prev_lit = vals[0]
-            continue
-        any_pre, suf = _cut_prefix(st.prefix or ""), _cut_suffix(st.suffix or "")
-        # 選択肢では、共通の先頭は「vm=」の形のときだけ文字として残します（選択肢は、なるべく名前の全体で示すため）
-        pre = any_pre if any_pre.endswith("=") else ""
-        if len(st.shapes) == 1:
-            shape = next(iter(st.shapes))
-            if all(shape[i] == "N" for i, vs in enumerate(st.tokvals) if len(vs) > 1):
-                # 数字だけが変わる階層（server1、server2…）は、選択肢にせず \d の形にします
-                out.append(_tokens_pattern(shape, st.tokvals))
+        whole = len(sk) == 1  # 階層の全体が 1 つの項目
+        out: list[str] = []
+        for k, s in zip(sk, st):
+            if k.startswith("D:"):
+                _, var, fmt = k.split(":")
+                out.append("{{" + f"{var}={fmt}" + "}}")
+                variables.setdefault(var, {"type": "datetime"})
                 continue
-        if not st.overflow and "" not in vals:
-            # 値の種類が少ない階層は、選択肢の変数（共通の先頭・末尾の区切りまでは文字として残します）
-            core = [v[len(pre):len(v) - len(suf)] for v in vals]
-            if any(c == "" for c in core) or len(pre) + len(suf) >= st.minlen:
-                pre, suf, core = "", "", vals
-            n_choice += 1
-            name = _choice_name(pre, n_choice, variables)
-            opts = sorted(set(core), key=_natural)
-            variables[name] = {"type": "choice", "value": {"options": opts, "selected": list(opts)}}
-            if not pre and prev and len(prev) <= 32 and "=" not in prev:
-                variables[name]["label"] = prev
-            out.append(escape(pre) + "{{" + name + "}}" + escape(suf))
-            continue
-        if len(st.shapes) == 1:
-            out.append(_tokens_pattern(next(iter(st.shapes)), st.tokvals))
-        else:
-            if len(any_pre) + len(suf) >= st.minlen:
-                any_pre, suf = "", ""  # 先頭と末尾が重なる短い名前があるとき
-            out.append(escape(any_pre) + "[^/]+" + escape(suf))
-    return "/".join(out), variables
+            if k.startswith("L:"):
+                out.append(escape(k[2:]))
+                continue
+            vals = list(s.values)
+            if not s.overflow and len(vals) == 1:
+                out.append(escape(vals[0]))
+                if whole:
+                    prev_lit = vals[0]
+                continue
+            if s.digits and (s.overflow or len(vals) > MAX_DIGIT_CHOICES):
+                # 数字だけの項目で、値の種類が多いもの（連番など）は \d の形にします
+                lens = {len(v) for v in vals}
+                out.append(f"\\d{{{lens.pop()}}}" if len(lens) == 1 and not s.overflow else "\\d+")
+                continue
+            if not s.overflow:
+                # 値の種類が少ない項目は、項目の全体を選択肢の変数にします（名前の途中の違う部分だけを選択肢にしません）。
+                # 共通の先頭が「vm=」の形なら、その部分は文字として残し、変数の名前にします
+                pre = _cut_key(s.prefix or "")
+                core = [v[len(pre):] for v in vals]
+                if any(c == "" for c in core):
+                    pre, core = "", vals
+                n_choice += 1
+                name = _choice_name(pre, n_choice, variables)
+                opts = sorted(set(core), key=_natural)
+                variables[name] = {"type": "choice", "value": {"options": opts, "selected": list(opts)}}
+                if whole and not pre and prev and len(prev) <= 32 and "=" not in prev:
+                    variables[name]["label"] = prev
+                out.append(escape(pre) + "{{" + name + "}}")
+                continue
+            if len(s.shapes) == 1:
+                out.append(_tokens_pattern(next(iter(s.shapes)), s.tokvals))
+            else:
+                # 種類が多く、形もそろわない項目: 共通の先頭・末尾（区切りの文字まで）は文字として残します
+                pre, suf = _cut_prefix(s.prefix or ""), _cut_suffix(s.suffix or "")
+                if len(pre) + len(suf) >= s.minlen:
+                    pre, suf = "", ""
+                out.append(escape(pre) + "[^/]+" + escape(suf))
+        segs_out.append("".join(out))
+    return "/".join(segs_out), variables
+
+
+def _common_suffix(a: str, b: str) -> str:
+    n = 0
+    while n < len(a) and n < len(b) and a[-1 - n] == b[-1 - n]:
+        n += 1
+    return a[len(a) - n:]
+
+
+def _cut_prefix(p: str) -> str:
+    """共通の先頭を、最後の区切りの文字（英数字以外）までに切り詰めます。"""
+    for i in range(len(p) - 1, -1, -1):
+        if not p[i].isalnum():
+            return p[:i + 1]
+    return ""
+
+
+def _cut_suffix(s: str) -> str:
+    """共通の末尾を、最初の区切りの文字（英数字以外）からに切り詰めます。"""
+    for i, c in enumerate(s):
+        if not c.isalnum():
+            return s[i:]
+    return ""
+
+
+def _cut_key(p: str) -> str:
+    """共通の先頭のうち、「vm=」のような「名前=」の部分（なければ空）。"""
+    i = p.rfind("=")
+    return p[:i + 1] if i >= 0 else ""
 
 
 _IDENT = re.compile(r"([A-Za-z_][A-Za-z0-9_]{0,31})=$")
