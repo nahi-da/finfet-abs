@@ -111,3 +111,10 @@ def setup_services(app) -> None:
     s["jobs"].on_startup()
     s["job_engine"].start()
     app.on_stop(s["job_engine"].stop)
+
+    # 画面をすべて閉じた後の自動の終了（依頼者の意見。v1.3.0）
+    from .core.autoexit import AutoExit
+    s["auto_exit"] = AutoExit(app.settings, on_exit=app.request_shutdown,
+                              busy=lambda: bool(s["jobs"].running_job_names()) or s["search"].any_running())
+    s["auto_exit"].start()
+    app.on_stop(s["auto_exit"].stop)

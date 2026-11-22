@@ -666,6 +666,10 @@ class JobService:
             self.events.publish("job.changed", self.public(row))
         self.events.publish_coalesced("nav.counts", "jobs", {"jobs_attention": self.attention_count()})
 
+    def running_job_names(self) -> list[str]:
+        """実行中のジョブの名前（終了の確認。2.6）。"""
+        return [r[0] for r in self.db.query("SELECT name FROM jobs WHERE status='running' ORDER BY queue_order")]
+
     def attention_count(self) -> int:
         """利用者の操作を待っているジョブ（ダウンロード待ち、サインインが必要・認証情報がない）の件数（4.2）。"""
         return int(self.db.scalar(

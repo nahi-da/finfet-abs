@@ -86,6 +86,9 @@ SCHEMA: list[Field] = [
     _i("queue.concurrent_jobs", 1, 1, 4),
     _b("queue.start_immediately", True),
     _b("queue.resume_on_startup", True),
+    # 画面をすべて閉じた後の自動の終了（依頼者の意見。v1.3.0）
+    _b("exit.when_closed", True),
+    _i("exit.wait_minutes", 1, 1, 1440),
     # 負荷（3.4.5）
     _i("transfer.max_connections", 8, 1, 32),
     _i("transfer.check_concurrency", 4, 1, 16),

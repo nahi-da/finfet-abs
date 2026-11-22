@@ -55,6 +55,18 @@ def register(router, app) -> None:
 
     @router.get("/api/v1/events")
     def events(req: Request):
+        # 画面の ID（client）が付いていれば、自動の終了のために、画面がつながっていることを記録します
+        ae = app.services.get("auto_exit")
+        client = (req.arg("client") or "")[:64]
+        if ae is None or not client:
+            return _events(req)
+        ae.poll_begin(client)
+        try:
+            return _events(req)
+        finally:
+            ae.poll_end(client)
+
+    def _events(req: Request):
         after = req.arg("after")
         if after is None or after == "":
             return json_response({"last": app.events.last, "events": []})
@@ -63,6 +75,17 @@ def register(router, app) -> None:
         except ValueError:
             n = -1
         return json_response(app.events.wait(n, 25.0))
+
+    @router.post("/api/v1/app/client")
+    def client_state(req: Request):
+        # 画面の状態の知らせ（タブを閉じた・凍結された・戻った）。自動の終了に使います
+        body = req.json() or {}
+        client = str(body.get("client") or "")[:64]
+        state = body.get("state")
+        ae = app.services.get("auto_exit")
+        if ae is not None and client and state in ("closed", "frozen", "active"):
+            ae.set_state(client, state)
+        return json_response({"ok": True})
 
     @router.post("/api/v1/app/shutdown")
     def shutdown(req: Request):
