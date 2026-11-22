@@ -1,5 +1,6 @@
-/* ページの骨組み（4.2.1） */
-body { display: flex; flex-direction: column; min-height: 100vh; }
+/* ページの骨組み。v1.4.0（依頼者の意見 5）で、画面の幅に合わせて配置を 3 段階で切り替えます。
+   広い（1000px〜）: 左のナビゲーション / 中（640〜999px）: アイコンのナビゲーション / 狭い（〜639px）: 画面の下のタブ */
+body { display: flex; flex-direction: column; min-height: 100vh; min-height: 100dvh; }
 
 .topbar {
   position: sticky;
@@ -13,12 +14,15 @@ body { display: flex; flex-direction: column; min-height: 100vh; }
   background: var(--bg-raised);
   border-bottom: 1px solid var(--line);
   flex: none;
+  min-width: 0;
 }
-.topbar .app-name { color: var(--text); font-weight: 700; font-size: 16px; }
+.topbar .app-name { color: var(--text); font-weight: 700; font-size: calc(var(--fs-body) + 2px); }
 .topbar .app-name:hover { text-decoration: none; }
-.topbar .demo-label { color: var(--warn); }
+.topbar .demo-label { color: var(--warn); border: 1px solid var(--warn); border-radius: 999px; padding: 0 var(--sp-2); font-size: var(--fs-small); white-space: nowrap; }
 .topbar .spacer { flex: 1; }
-.topbar .conn-lost { color: var(--danger); }
+.topbar .conn-lost { color: var(--danger); min-width: 0; }
+.topbar .link-btn { min-height: var(--tap-small); }
+.topbar #account-btn { min-width: 0; max-width: 32ch; overflow: hidden; text-overflow: ellipsis; display: block; }
 
 .shell { display: flex; flex: 1; min-height: 0; }
 
@@ -30,38 +34,118 @@ body { display: flex; flex-direction: column; min-height: 100vh; }
   padding: var(--sp-2) 0;
   display: flex;
   flex-direction: column;
+  gap: 2px;
   position: sticky;
   top: var(--topbar-h);
   height: calc(100vh - var(--topbar-h));
+  height: calc(100dvh - var(--topbar-h));
+  z-index: 15;
 }
 .nav a {
+  position: relative;
   display: flex;
   align-items: center;
-  height: 36px;
+  gap: var(--sp-3);
+  min-height: var(--tap);
   padding: 0 var(--sp-4);
   color: var(--text);
-  border-left: 2px solid transparent;
+  border-left: 3px solid transparent;
 }
 .nav a:hover { background: var(--bg-hover); text-decoration: none; }
 .nav a[aria-current="page"] { background: var(--bg-selected); border-left-color: var(--link); }
 .nav a .count { margin-left: auto; color: var(--warn); font-variant-numeric: tabular-nums; }
+.nav a .count:empty { display: none; }
 .nav .nav-bottom { margin-top: auto; }
-body.nav-closed .nav { display: none; }
+.nav .nav-bottom a .icon-external { margin-left: auto; }
+
+/* 広い画面でも、[ナビゲーションを開閉] でアイコンだけにできます */
+body.nav-compact .nav { width: var(--rail-w); }
 
 main.page {
   flex: 1;
   min-width: 0;
+  display: flex;
+  flex-direction: column;
   padding: var(--sp-4) var(--sp-6) var(--sp-8);
 }
+main.page > * { flex: none; }
+
+/* ---- 中くらいの幅: アイコンだけのナビゲーション */
+@media (max-width: 999px) {
+  #nav-toggle { display: none; }
+  .nav { width: var(--rail-w); }
+  main.page { padding: var(--sp-4) var(--sp-4) var(--sp-6); }
+}
+body.nav-compact .nav a,
+body.nav-compact .nav .nav-bottom a {
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px;
+  padding: var(--sp-1) 2px;
+  margin: 0 6px;
+  border-left-width: 0;
+  border-radius: var(--radius);
+  font-size: 11px;
+  text-align: center;
+  line-height: 1.3;
+}
+body.nav-compact .nav a .count { position: absolute; top: 2px; right: 6px; margin: 0; font-size: 11px; }
+body.nav-compact .nav .nav-bottom a .icon-external { display: none; }
+@media (max-width: 999px) {
+  .nav a, .nav .nav-bottom a {
+    flex-direction: column;
+    justify-content: center;
+    gap: 2px;
+    padding: var(--sp-1) 2px;
+    margin: 0 6px;
+    border-left-width: 0;
+    border-radius: var(--radius);
+    font-size: 11px;
+    text-align: center;
+    line-height: 1.3;
+    min-height: 52px;
+  }
+  .nav a .count { position: absolute; top: 2px; right: 6px; margin: 0; font-size: 11px; }
+  .nav .nav-bottom a .icon-external { display: none; }
+}
+
+/* ---- 狭い幅: 画面の下のタブ */
+@media (max-width: 639px) {
+  .topbar { padding: 0 var(--sp-3); gap: var(--sp-2); }
+  .topbar .app-name { margin-left: var(--sp-1); }
+  .topbar .conn-lost { position: fixed; left: 0; right: 0; top: var(--topbar-h); padding: var(--sp-1) var(--sp-3); background: var(--bg-raised); border-bottom: 1px solid var(--danger); }
+  .topbar #account-btn { max-width: 14ch; }
+  .nav {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    top: auto;
+    width: auto;
+    height: auto;
+    flex-direction: row;
+    padding: var(--sp-1) var(--sp-1) calc(var(--sp-1) + env(safe-area-inset-bottom, 0px));
+    border-right: 0;
+    border-top: 1px solid var(--line);
+    z-index: 25;
+  }
+  .nav a { flex: 1 1 0; margin: 0; min-width: 0; min-height: 47px; }
+  .nav .nav-bottom { display: none; }
+  body { padding-bottom: calc(var(--bottomnav-h) + env(safe-area-inset-bottom, 0px)); }
+  main.page { padding: var(--sp-3) var(--sp-3) var(--sp-6); }
+}
+
+.nav .nav-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
 
 .page-head {
   display: flex;
   align-items: center;
-  gap: var(--sp-4);
+  gap: var(--sp-2) var(--sp-4);
   flex-wrap: wrap;
   margin-bottom: var(--sp-3);
 }
-.page-head .actions { margin-left: auto; display: flex; gap: var(--sp-3); align-items: center; flex-wrap: wrap; }
+.page-head .actions { margin-left: auto; display: flex; gap: var(--sp-2) var(--sp-4); align-items: center; flex-wrap: wrap; }
+.page-head .actions .link-btn, .page-head .actions > a { min-height: var(--tap-small); }
 
 .breadcrumb { color: var(--text-muted); margin-bottom: var(--sp-1); }
 .breadcrumb a { color: var(--text-muted); }
@@ -69,16 +153,33 @@ main.page {
 section.part { padding: var(--sp-4) 0; border-top: 1px solid var(--line); }
 section.part:first-of-type { border-top: 0; }
 
-/* ページの下に固定する行 */
+/* ページの下に固定する操作の帯（主な操作を、スクロールの位置にかかわらず実行できます） */
 .sticky-bottom {
   position: sticky;
   bottom: 0;
   z-index: 10;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: var(--sp-3);
-  padding: var(--sp-2) 0;
-  background: var(--bg);
+  gap: var(--sp-2) var(--sp-3);
+  /* 内容が短いときも、画面の下端に置きます（main.page の下の余白を打ち消します） */
+  margin: auto calc(-1 * var(--sp-6)) calc(-1 * var(--sp-8));
+  padding: var(--sp-2) var(--sp-6);
+  background: var(--bg-raised);
   border-top: 1px solid var(--line);
 }
 .sticky-bottom .push { margin-left: auto; }
+.sticky-bottom .summary { min-width: 0; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+@media (max-width: 999px) {
+  .sticky-bottom { margin: auto calc(-1 * var(--sp-4)) calc(-1 * var(--sp-6)); padding: var(--sp-2) var(--sp-4); }
+}
+@media (max-width: 639px) {
+  .sticky-bottom {
+    bottom: calc(var(--bottomnav-h) + env(safe-area-inset-bottom, 0px));
+    margin: auto calc(-1 * var(--sp-3)) calc(-1 * var(--sp-6));
+    padding: var(--sp-2) var(--sp-3);
+  }
+  .sticky-bottom .btn.primary { flex: 1 1 10em; justify-content: center; }
+  .sticky-bottom .push { flex: 0 0 0; margin: 0; }
+  .sticky-bottom .summary { flex: 1 1 100%; }
+}

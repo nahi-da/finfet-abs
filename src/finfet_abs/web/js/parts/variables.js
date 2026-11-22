@@ -260,9 +260,9 @@ export function variableRow(ctx) {
       const extra = textInput(v.extra || '', { width: 'w-short', placeholder: '-_.', 'aria-label': '指定した文字', mono: true });
       extra.addEventListener('change', () => { v.extra = extra.value; changed(); });
       body.append(h('div', { class: 'line' }, ...boxes),
-        h('div', { class: 'line' }, h('span', { text: '指定した文字' }), extra,
+        h('div', { class: 'line' }, h('span', { class: 'labeled' }, h('span', { text: '指定した文字' }), extra),
           checkbox('/ を含める', !!v.allow_slash, (on) => { v.allow_slash = on; changed(); }),
-          h('span', { text: '長さ' }), numIn(v.min, '最小の長さ', (n) => { v.min = n; }), h('span', { text: '〜' }), numIn(v.max, '最大の長さ', (n) => { v.max = n; })));
+          h('span', { class: 'labeled' }, h('span', { text: '長さ' }), numIn(v.min, '最小の長さ', (n) => { v.min = n; }), h('span', { text: '〜' }), numIn(v.max, '最大の長さ', (n) => { v.max = n; }))));
     }
   }
 
@@ -359,10 +359,10 @@ export function variableRow(ctx) {
     const line = h('div', { class: 'line' }, typeSel, modeSel);
     if (v.mode === 'fixed') line.append(numIn(v.value, '値', (n) => { v.value = n; }));
     if (v.mode === 'range') {
-      line.append(numIn(v.start, '開始', (n) => { v.start = n; }), h('span', { text: '〜' }), numIn(v.end, '終了', (n) => { v.end = n; }),
-        h('span', { text: '間隔' }), numIn(v.step ?? 1, '間隔', (n) => { v.step = n; }));
+      line.append(h('span', { class: 'labeled' }, numIn(v.start, '開始', (n) => { v.start = n; }), h('span', { text: '〜' }), numIn(v.end, '終了', (n) => { v.end = n; })),
+        h('span', { class: 'labeled' }, h('span', { text: '間隔' }), numIn(v.step ?? 1, '間隔', (n) => { v.step = n; })));
     }
-    line.append(h('span', { text: '桁数' }), numIn(d.padding, '桁数（ゼロ埋め）', (n) => { d.padding = n || undefined; }));
+    line.append(h('span', { class: 'labeled' }, h('span', { text: '桁数' }), numIn(d.padding, '桁数（ゼロ埋め）', (n) => { d.padding = n || undefined; })));
     body.append(line);
   }
 

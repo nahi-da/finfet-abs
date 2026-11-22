@@ -112,7 +112,7 @@ export async function render(ctx) {
     bwNote.textContent = bw.mbps ? `≒ ${mbps(bw.mbps)}` : '（無制限）';
     speedEl.textContent = `速度 ${speed(bw.speed)}`;
     clear(speedLine);
-    speedLine.append(speedEl, h('span', { text: '帯域の上限' }), bwIn, h('span', { text: 'MB/s' }), bwNote);
+    speedLine.append(speedEl, h('span', { class: 'labeled' }, h('span', { text: '帯域の上限' }), bwIn, h('span', { text: 'MB/s' })), bwNote);
     if (job.next_check_at) speedLine.append(h('span.push'), h('span', { class: 'muted', text: `次の確認 ${timeShort(job.next_check_at)}` }), linkButton('今すぐ確認', () => action('check-now')));
   }
 
@@ -151,7 +151,7 @@ export async function render(ctx) {
       selected.clear();
       refresh();
     };
-    body.append(h('div', { class: 'toolbar' }, kw, h('span', { text: '状態' }), stSel, h('span', { text: '層' }), tierSel,
+    body.append(h('div', { class: 'toolbar' }, kw, h('span', { class: 'labeled' }, h('span', { text: '状態' }), stSel), h('span', { class: 'labeled' }, h('span', { text: '層' }), tierSel),
       h('div', { class: 'push' }, linkButton('優先度を高にする', () => bulk('raise-priority')), linkButton('再試行', () => bulk('retry')),
         linkButton('再要求', () => bulk('re-request')), ENDED.has(job.status) ? linkButton('選択した Blob を再実行', () => bulk('rerun-selected')) : null)));
     const table = new VirtualTable({
@@ -273,7 +273,7 @@ export async function render(ctx) {
     const conns = h('span', { class: 'muted', text: `同時に開く接続: 最大 ${num(8)}（ダウンロード ${o.download_concurrency} × ${o.connections_per_blob} = ${o.download_concurrency * o.connections_per_blob}、ほか ${Math.max(0, 8 - o.download_concurrency * o.connections_per_blob)}）` });
     const err = h('div', { class: 'field-error', hidden: true });
     body.append(formGrid(
-      ...row('取得の方法', methodR), ...row('復元先の層', h('div', { class: 'line' }, tierSel, h('span', { text: '優先度' }), prioSel)),
+      ...row('取得の方法', methodR), ...row('復元先の層', h('div', { class: 'line' }, tierSel, h('span', { class: 'labeled' }, h('span', { text: '優先度' }), prioSel))),
       ...row('保存先', h('span', { class: 'mono', text: job.job_folder || o.directory })),
       ...row('パス構造', h('span', { text: STRUCT_LABELS[o.path_structure] + (o.path_structure === 'template' ? `（${o.path_template}）` : '') })),
       ...row('同名のファイル', conflictSel),
@@ -313,7 +313,7 @@ export async function render(ctx) {
     };
     blobIn.addEventListener('input', debounce(load, 300));
     lvSel.addEventListener('change', load);
-    body.append(h('div', { class: 'toolbar' }, blobIn, h('span', { text: 'レベル' }), lvSel,
+    body.append(h('div', { class: 'toolbar' }, blobIn, h('span', { class: 'labeled' }, h('span', { text: 'レベル' }), lvSel),
       h('div', { class: 'push' }, linkButton('ログをコピー', () => navigator.clipboard.writeText(pre.textContent).then(() => toast('ログをコピーしました。'))))), pre);
     load();
     reloadTab = load;

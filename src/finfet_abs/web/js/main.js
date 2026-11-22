@@ -176,10 +176,40 @@ document.addEventListener('keydown', (e) => {
 
 // ---------------------------------------------------------------- 上部のバー
 
+const LOOK_KEY = 'finfet.look';
+const NAV_KEY = 'finfet.nav.compact';
+
+/**
+ * テーマと文字の大きさ（設定の ui.theme・ui.font_size）を画面に反映します。
+ * 次に開いたときにちらつかないよう、ブラウザにも覚えておきます。
+ */
+export function applyLook(values) {
+  const theme = values && ['dark', 'light', 'system'].includes(values['ui.theme']) ? values['ui.theme'] : 'dark';
+  const sizeV = values && values['ui.font_size'] === 'large' ? 'large' : 'normal';
+  const root = document.documentElement;
+  const before = `${root.dataset.theme || ''}|${root.dataset.size || ''}`;
+  root.dataset.theme = theme;
+  if (sizeV === 'large') root.dataset.size = 'large';
+  else delete root.dataset.size;
+  try { localStorage.setItem(LOOK_KEY, JSON.stringify({ theme, size: sizeV })); } catch { /* 覚えておけなくても使えます */ }
+  // 表の行の高さなどを合わせ直します
+  if (before !== `${root.dataset.theme || ''}|${root.dataset.size || ''}`) window.dispatchEvent(new Event('resize'));
+}
+
+try {
+  const look = JSON.parse(localStorage.getItem(LOOK_KEY) || 'null');
+  if (look) applyLook({ 'ui.theme': look.theme, 'ui.font_size': look.size });
+} catch { /* 初めて開いたとき */ }
+
 function setupNav() {
+  // 広い画面（1000px 以上）では、[ナビゲーションの表示を切り替え] で、名前付き ↔ アイコンだけを切り替えます
   const toggle = document.getElementById('nav-toggle');
-  if (window.innerWidth < 1200) document.body.classList.add('nav-closed');
-  toggle.addEventListener('click', () => document.body.classList.toggle('nav-closed'));
+  try { if (localStorage.getItem(NAV_KEY) === '1') document.body.classList.add('nav-compact'); } catch { /* 既定のまま */ }
+  toggle.addEventListener('click', () => {
+    const on = document.body.classList.toggle('nav-compact');
+    try { localStorage.setItem(NAV_KEY, on ? '1' : '0'); } catch { /* 覚えておけなくても使えます */ }
+    window.dispatchEvent(new Event('resize'));
+  });
 }
 
 function updateNoticeButton() {
@@ -257,6 +287,7 @@ async function accountMenu(anchor) {
     items.push({ text: 'サインイン', onClick: () => import('./parts/signin.js').then((m) => m.startSignIn()) });
   }
   if (items.length) items.push('sep');
+  items.push({ text: 'ヘルプ（別のタブで開きます）', href: '/docs/index.html', target: '_blank' });
   items.push({ text: 'このツールについて', onClick: aboutDialog });
   items.push({ text: '終了', onClick: () => shutdownApp().catch((e) => toastError(e)) });
   openMenu(anchor, items);
@@ -305,7 +336,10 @@ async function boot() {
   events.on('auth.changed', (d) => setAuth(d));
   events.on('settings.changed', async (d) => {
     if ((d.keys || []).some((k) => k.startsWith('ui.'))) {
-      try { app.settings = (await api.get('/api/v1/settings')).values; } catch { /* 次の機会に */ }
+      try {
+        app.settings = (await api.get('/api/v1/settings')).values;
+        applyLook(app.settings);
+      } catch { /* 次の機会に */ }
     }
   });
   events.on('nav.counts', (d) => {
@@ -318,6 +352,7 @@ async function boot() {
   }
   for (const w of s.warnings || []) addNotice('warn', w);
   try { app.settings = (await api.get('/api/v1/settings')).values; } catch { app.settings = {}; }
+  applyLook(app.settings);
   refreshAuth();
   events.start(s.events_last);
   await renderCurrent();
