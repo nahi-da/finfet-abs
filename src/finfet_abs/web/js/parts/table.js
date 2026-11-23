@@ -209,11 +209,16 @@ export class VirtualTable {
     e.stopPropagation();
     const startX = e.clientX;
     const startW = this.widths[col.key] || col.width || 120;
+    const rz = e.currentTarget;
+    rz.classList.add('active');
+    document.body.style.cursor = 'col-resize';
     const move = (ev) => {
       this.widths[col.key] = Math.max(40, Math.round(startW + ev.clientX - startX));
       this.applyTemplate();
     };
     const up = () => {
+      rz.classList.remove('active');
+      document.body.style.cursor = '';
       document.removeEventListener('mousemove', move);
       document.removeEventListener('mouseup', up);
       this.saveLayout();

@@ -5,10 +5,68 @@ import { button, h, linkButton } from '../dom.js';
 import { mbps } from '../format.js';
 import { confirmDialog } from '../parts/dialog.js';
 import { pickFolder } from '../parts/folder.js';
+import { hint } from '../parts/hint.js';
 import { checkbox, focusFirstError, formGrid, row, select, setError, showRow, textInput } from '../parts/form.js';
 import { toast, toastError } from '../parts/toast.js';
 
 const TZ = [['local', 'ローカル時刻'], ['utc', 'UTC']];
+
+/** 各項目の説明（v1.5.0。[?] で表示します。範囲・既定値は、スキーマから加えます）。 */
+const HELP = {
+  'search.max_results': '1 回の検索で保持する Blob の数の上限です。上限に達すると、検索を打ち切ります。条件を絞れない大きな検索で、メモリと時間を使いすぎないためのものです。',
+  'search.max_prefixes': 'パスパターンから作る prefix（一覧を取る範囲）の数の上限です。多いほど、取得する Blob が減って速くなりますが、要求の数が増えます。超えると、より短い prefix にまとめます。',
+  'search.merge_trial_pages': '短い prefix でまとめて一覧を取った方が速いかを試すページ数です。通常は変える必要はありません。',
+  'search.list_concurrency': '一覧の取得を、同時にいくつ行うかです。増やすと速くなりますが、Azure の要求の速度の制限（スロットリング）にかかりやすくなります。',
+  'search.input_timezone': '検索のページで日時を入力するときの、既定の基準です。ログの多くは、パスの日時が UTC です。',
+  'search.exclude_adls_directories': 'Data Lake Storage（階層型の名前空間）のディレクトリは、一覧で Blob のように見えます。有効にすると、検索結果に含めません。',
+  'search.keep_recent': '検索結果を、新しいものからいくつ残すかです。古い結果は自動で消します（検索履歴の条件は残ります）。',
+  'fetch.directory': 'ダウンロードしたファイルを保存するフォルダーの既定です。ジョブの作成のときに変えられます。%USERPROFILE% のような環境変数を使えます。',
+  'fetch.job_folder': '有効にすると、保存先の下にジョブの名前のフォルダーを作って保存します。ジョブごとにファイルを分けられます。',
+  'fetch.path_structure': '保存するファイルの名前の付け方です。「階層を保つ」は Blob 名の「/」をフォルダーにします。「階層を名前にする」は「/」を「_」に変えて 1 つのフォルダーに置きます。',
+  'fetch.conflict': '保存先に同じ名前のファイルがあるときの扱いです。',
+  'fetch.set_mtime': '保存したファイルの更新日時を、Blob の最終更新日時にそろえます。',
+  'fetch.verify_md5': 'Blob に Content-MD5 があれば、ダウンロードした内容と照合します。一致しなければエラーにします。',
+  'fetch.extract_archives': 'ダウンロードした圧縮ファイルを展開します。展開できなくても、ダウンロードは完了のままです。',
+  'fetch.extract_max_gib': '1 つの圧縮ファイルを展開した大きさの合計の上限です。超えたら展開を止めます（極端に大きく膨らむファイルへの備え）。',
+  'fetch.reuse_search_info_minutes': '検索してからこの時間以内にジョブを作ると、Blob の状態の確認を省き、検索結果の情報を使います。0 にすると、毎回確認します。',
+  'queue.resume_on_startup': '本ツールを終了したときに実行中だったジョブを、次に起動したときに自動で再開します。',
+  'rehydrate.target_tier': 'Archive の Blob をリハイドレートするときの、復元先の層の既定です。',
+  'rehydrate.priority': 'リハイドレートの優先度の既定です。「高」は速く（多くは 1 時間以内）終わりますが、料金が高くなります。「標準」は最大 15 時間ほどかかります。',
+  'rehydrate.poll_first_minutes.high': 'リハイドレートの完了を確かめる間隔です。最初の確認までの時間と、その後の間隔を指定します。',
+  'rehydrate.poll_first_minutes.standard': 'リハイドレートの完了を確かめる間隔です。最初の確認までの時間と、その後の間隔を指定します。',
+  'rehydrate.check_on_startup': '起動したときに、リハイドレートの完了を待っているジョブの状態を確かめます。',
+  'queue.concurrent_jobs': '同時に実行するジョブの数です。1 にすると、キューの順に 1 つずつ実行します。',
+  'transfer.max_connections': '本ツール全体で、Azure に同時につなぐ数の上限です。',
+  'transfer.check_concurrency': 'Blob の状態の確認を、同時にいくつ行うかです。',
+  'transfer.rehydrate_concurrency': 'リハイドレートの要求を、同時にいくつ送るかです。',
+  'transfer.download_concurrency': '同時にダウンロードする Blob の数です。',
+  'transfer.connections_per_blob': '大きな Blob を、いくつの接続に分けて並行してダウンロードするかです。',
+  'transfer.chunk_size_mib': '1 回の要求でダウンロードする大きさです。回線が不安定なときは小さくすると、やり直す量が減ります。',
+  'transfer.bandwidth_mbps': 'ダウンロードの速さの上限です。0 で無制限です。実行中のジョブにもすぐ反映されます。',
+  'transfer.request_rate': '1 秒あたりに Azure に送る要求の数の上限です。',
+  'transfer.retry_total': '一時的な失敗（通信の切断、スロットリングなど）のときに、やり直す回数です。',
+  'transfer.connect_timeout': '接続と読み取りを待つ時間です。この時間を過ぎると、失敗としてやり直します。',
+  'load.process_priority': '本ツールの処理の優先度（Windows のプロセスの優先度）です。低くすると、ほかの作業の邪魔をしにくくなります。',
+  'load.prevent_sleep_downloading': 'ジョブの実行中に、PC がスリープしないようにします。',
+  'auth.default_entra_mode': '接続先の追加で、Azure にサインインして選ぶときの既定の認証の方式です。',
+  'auth.default_tenant': 'サインインするテナントの既定です。organizations は、サインインしたアカウントの所属するテナントです。',
+  'auth.client_id': 'サインインに使うアプリケーション（クライアント）の ID です。組織で指定されている場合だけ変えます。',
+  'auth.sas_expiry_warn_hours': 'SAS の有効期限がこの時間以内になったら、警告を表示します。',
+  'network.proxy.mode': '「自動」は Windows のプロキシの設定（環境変数・システムの設定）を使います。',
+  'network.proxy.url': 'プロキシの URL です（例: http://proxy.example:8080）。',
+  'network.proxy.bypass': 'プロキシを使わない宛先です。「,」で区切ります。',
+  'network.ca_bundle': '組織のプロキシが通信を検査する場合など、追加で信頼する CA 証明書（PEM 形式）のファイルです。',
+  'ui.theme': '画面の色の組み合わせです。',
+  'ui.font_size': '画面の文字の大きさです。「大」では、表の行やボタンも大きくなります。',
+  'ui.start_page': '本ツールを起動したときに最初に開くページです。',
+  'ui.browser_notifications': 'リハイドレートの完了などを、Windows の通知（ブラウザの通知）でも知らせます。本ツールの画面が裏にあるときだけ通知します。',
+  'ui.blob_name_display': '検索結果などでの、Blob 名の表示のしかたの既定です。',
+  'exit.when_closed': '本ツールの画面をすべて閉じたら、本ツールを終了します。',
+  'exit.wait_minutes': '画面をすべて閉じてから、本ツールを終了するまでの時間です。',
+  'log.level': 'ログに書く内容の細かさです。問題を調べるときは DEBUG にします。',
+  'log.max_files': 'ログのファイルを残す日数です。古いものから消します。',
+  'history.max_entries': '検索履歴を残す数の上限です。ピン留めした履歴は消しません。',
+};
 
 /**
  * 節の定義。項目は [キー, ラベル, 種類, 追加の指定]。
@@ -270,12 +328,54 @@ export async function render(ctx) {
     }
   };
 
+  // 項目の説明と、範囲・既定値（v1.5.0）
+  const fmtNum = (v) => Number(v).toLocaleString('en-US');
+  const metaOf = (key, kind, opt) => {
+    const s = schema[key];
+    if (!s) return '';
+    const unit = opt.unit && !opt.unit.includes('（') ? ` ${opt.unit}` : '';
+    if (s.kind === 'int' || s.kind === 'float') {
+      const zero = opt.mbps ? '（0 で無制限）' : '';
+      return `範囲: ${fmtNum(s.min)}〜${fmtNum(s.max)}${unit}${zero}　既定: ${fmtNum(s.default)}${unit}`;
+    }
+    if (s.kind === 'bool') return `既定: ${s.default ? '有効' : '無効'}`;
+    if (opt.options) {
+      const o = opt.options.find(([v]) => v === s.default);
+      return o ? `既定: ${o[1]}` : '';
+    }
+    if (s.kind === 'str' && s.default) return `既定: ${s.default}`;
+    return '';
+  };
+  const helpFor = (item) => {
+    const [key, label, kind, opt = {}] = item;
+    const keys = Array.isArray(key) ? key : [key];
+    const text = HELP[keys[0]];
+    const metas = keys.map((k, i) => {
+      const m = metaOf(k, kind, opt);
+      if (!m || keys.length === 1) return m;
+      const names = { poll: ['最初', '以降'], timeouts: ['接続（秒）', '読み取り（秒）'], sleep: ['ダウンロード中', 'リハイドレート待ち'] }[kind] || [];
+      return `${names[i] || k}: ${m}`;
+    }).filter(Boolean);
+    if (!text && !metas.length) return null;
+    return hint(() => [text ? h('p', { text }) : null, ...metas.map((m) => h('p', { class: 'hint-meta', text: m }))].filter(Boolean), `${label || opt.text || ''} の説明`);
+  };
+  const buildWithHelp = (item) => {
+    const nodes = buildItem(item);
+    if (!Array.isArray(nodes) || nodes.length !== 2) return nodes;
+    const btn = helpFor(item);
+    if (!btn) return nodes;
+    const [lab, ctl] = nodes;
+    if (lab.textContent.trim()) lab.append(btn);
+    else ctl.append(btn);
+    return nodes;
+  };
+
   const secs = sections(session);
   const toc = h('nav', { class: 'settings-toc', 'aria-label': '設定の節' });
   const body = h('div', { class: 'settings-body' });
   for (const sec of secs) {
     toc.appendChild(h('a', { href: `#${sec.id}`, dataset: { sec: sec.id } }, sec.title));
-    body.appendChild(h('section', { id: sec.id }, h('h2', { text: sec.title }), formGrid(...sec.items.map(buildItem))));
+    body.appendChild(h('section', { id: sec.id }, h('h2', { text: sec.title }), formGrid(...sec.items.map(buildWithHelp))));
   }
 
   const load = (values) => {
@@ -323,17 +423,38 @@ export async function render(ctx) {
   updateDirty();
   ctx.setGuard(() => (Object.keys(changes()).length ? '保存していない設定の変更があります。' : null));
 
-  // 現在の節を目次で示します
+  // 現在の節を目次で示します。上端を過ぎた最後の節を現在の節とし、最後までスクロールしたら最後の節にします
+  // （v1.5.0: 最後の節が短いと、上端まで来ずにハイライトされなかったため）。目次をクリックした節は、次に手で動かすまで保ちます
   const links = new Map([...toc.querySelectorAll('a')].map((a) => [a.dataset.sec, a]));
-  const io = new IntersectionObserver((entries) => {
-    for (const e of entries) {
-      if (e.isIntersecting) {
-        links.forEach((a) => a.classList.remove('current'));
-        links.get(e.target.id)?.classList.add('current');
-      }
+  const sectionEls = [...body.querySelectorAll(':scope > section')];
+  const scroller = (() => {
+    for (let el = body.parentElement; el && el !== document.body; el = el.parentElement) {
+      const oy = getComputedStyle(el).overflowY;
+      if ((oy === 'auto' || oy === 'scroll') && el.scrollHeight > el.clientHeight) return el;
     }
-  }, { rootMargin: '-60px 0px -70% 0px' });
-  body.querySelectorAll('section').forEach((s) => io.observe(s));
-  ctx.onLeave(() => io.disconnect());
+    return document.scrollingElement || document.documentElement;
+  })();
+  let pinned = null;
+  const setCurrent = (id) => links.forEach((a, k) => a.classList.toggle('current', k === id));
+  const updateCurrent = () => {
+    if (pinned) { setCurrent(pinned); return; }
+    const top = (scroller === document.scrollingElement || scroller === document.documentElement) ? 0 : scroller.getBoundingClientRect().top;
+    let cur = sectionEls[0]?.id;
+    for (const s of sectionEls) if (s.getBoundingClientRect().top - top <= 80) cur = s.id;
+    if (scroller.scrollTop + scroller.clientHeight >= scroller.scrollHeight - 4 && scroller.scrollTop > 0) cur = sectionEls[sectionEls.length - 1]?.id;
+    setCurrent(cur);
+  };
+  const scrollTarget = scroller === document.scrollingElement || scroller === document.documentElement ? window : scroller;
+  let raf = 0;
+  const onScroll = () => { if (!raf) raf = requestAnimationFrame(() => { raf = 0; updateCurrent(); }); };
+  const unpin = () => { pinned = null; };
+  scrollTarget.addEventListener('scroll', onScroll, { passive: true });
+  for (const ev of ['wheel', 'touchstart', 'keydown']) window.addEventListener(ev, unpin, { passive: true });
+  toc.addEventListener('click', (e) => { const a = e.target.closest('a[data-sec]'); if (a) { pinned = a.dataset.sec; setCurrent(pinned); } });
+  ctx.onLeave(() => {
+    scrollTarget.removeEventListener('scroll', onScroll);
+    for (const ev of ['wheel', 'touchstart', 'keydown']) window.removeEventListener(ev, unpin);
+  });
+  updateCurrent();
   if (ctx.hash) document.getElementById(ctx.hash)?.scrollIntoView();
 }
