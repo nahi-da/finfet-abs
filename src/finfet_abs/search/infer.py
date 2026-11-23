@@ -532,10 +532,10 @@ class NameCache:
 def collect(backend, target: ContainerRef, *, mode: str = "sample", prefix: str = "", limit: int = 10000,
             per_level: int = 10, max_depth: int = 40, max_requests: int = 500, cancel: threading.Event | None = None,
             progress: Callable[[int, int], None] | None = None,
-            connection: Callable[[], object] | None = None) -> tuple[list[tuple[str, int | None]], dict]:
+            connection: Callable[[], object] | None = None, page_size: int = 5000) -> tuple[list[tuple[str, int | None]], dict]:
     """Blob 名を集めます。戻り値は [(名前, 大きさ)] と、要求の回数・打ち切ったかの情報。
 
-    - sample: 階層ごとに、まず名前の順の一覧の 1 ページ（最大 5,000 件）を取ります。1 ページで終われば、その下は
+    - sample: 階層ごとに、まず名前の順の一覧の 1 ページ（page_size 件。既定 5,000 件）を取ります。1 ページで終われば、その下は
       すべて取れたので、たどりません。終わらなければ、下の階層の名前を取り、最大 per_level 件の見本（先頭・末尾・
       等間隔）のうち、1 ページに含まれなかった階層だけを下へたどります（要求は最大 max_requests 回）
     - first: 名前の順に、先頭から limit 件
@@ -545,6 +545,7 @@ def collect(backend, target: ContainerRef, *, mode: str = "sample", prefix: str 
     たどった場合は False）、sizes_known（すべての大きさが分かっている。sample で階層の名前だけ取れた Blob は不明）
     """
     from contextlib import nullcontext
+    page_size = max(1, min(5000, int(page_size)))  # 1 回の要求で取得する件数（設定 search.page_size。v1.5.0）
     cancel = cancel or threading.Event()
     connection = connection or nullcontext
     progress = progress or (lambda n, r: None)
@@ -569,7 +570,7 @@ def collect(backend, target: ContainerRef, *, mode: str = "sample", prefix: str 
                 break
             pre, depth = stack.pop()
             with connection():
-                page = backend.list_blobs_page(target, pre, None)
+                page = backend.list_blobs_page(target, pre, None, page_size)
             info["requests"] += 1
             for b in page.items:
                 add(b.name, b.size)
@@ -607,7 +608,7 @@ def collect(backend, target: ContainerRef, *, mode: str = "sample", prefix: str 
         if cancel.is_set():
             raise Cancelled()
         with connection():
-            page = backend.list_blobs_page(target, prefix, cont)
+            page = backend.list_blobs_page(target, prefix, cont, page_size)
         info["requests"] += 1
         for b in page.items:
             out.append((b.name, b.size))
