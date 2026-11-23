@@ -177,9 +177,12 @@ class JobEngine:
     def wake(self) -> None:
         self._wake.set()
 
-    def notify(self, level: str, text: str, job_id: str | None = None) -> None:
-        """上部のバーの「お知らせ」に残すもの（4.3.5。リハイドレートの完了、ジョブの終了、エラー）。"""
-        self.events.publish("notify", {"level": level, "text": text, "url": f"/jobs/{job_id}" if job_id else None})
+    def notify(self, level: str, text: str, job_id: str | None = None, url: str | None = None) -> None:
+        """上部のバーの「お知らせ」に残すもの（4.3.5。ジョブの開始〈v1.5.0〉、リハイドレートの完了、ジョブの終了、エラー）。
+        画面は、届いたお知らせをポップアップでも表示します（v1.5.0）。url はクリックで開くページ。"""
+        if url is None and job_id:
+            url = f"/jobs/{job_id}"
+        self.events.publish("notify", {"level": level, "text": text, "url": url})
 
     def auth_problem(self, job_id: str, code: str, message: str, account: str | None = None) -> None:
         """認証が使えないことを、ジョブの一覧と詳細に表示します（3.3.9）。account はサインインが必要なアカウント（分かる場合）。"""
@@ -343,6 +346,7 @@ class JobEngine:
         ok = self.db.write(fn)
         if ok:
             self.service._publish(job_id)
+            self.notify("info", f"「{self.job_name(job_id)}」を開始しました", job_id)
         return ok
 
     def heartbeat(self) -> None:
@@ -490,7 +494,8 @@ class JobEngine:
         if status == "completed":
             self.notify("ok", f"「{self.job_name(job_id)}」が完了しました", job_id)
         else:
-            self.notify("error", f"「{self.job_name(job_id)}」は一部が失敗しました（エラー {n_err:,} 件）", job_id)
+            self.notify("error", f"「{self.job_name(job_id)}」は一部が失敗しました（エラー {n_err:,} 件）", job_id,
+                        url=f"/jobs/{job_id}?status=error")
         log.info("ジョブが終わりました（%s）", STATUS_LABELS[status])
         return status
 
@@ -735,7 +740,8 @@ class JobRunner(threading.Thread):
                         "updated_at=?, lock_json=NULL WHERE id=?",
                         (json.dumps({"message": message}, ensure_ascii=False), 1 if pause else 0, now, self.job_id))
         self.log.write("ERROR", message)
-        self.engine.notify("error", f"「{self.engine.job_name(self.job_id)}」: {message}", self.job_id)
+        self.engine.notify("error", f"「{self.engine.job_name(self.job_id)}」: {message}", self.job_id,
+                           url=f"/jobs/{self.job_id}/log?level=ERROR")
 
     def _auth_blocked(self, rows: list, errors: dict, cur: str, back: str) -> bool:
         """認証が使えない Blob を戻し、探し直すか、ジョブを一時停止して「サインインが必要です」などを表示します（3.1.9）。

@@ -151,7 +151,8 @@ export async function render(ctx) {
   const varsSec = h('section', { class: 'part' });
   const searchBtn = button('検索', () => startSearch(), { primary: true });
   const bottom = h('div', { class: 'sticky-bottom search-actions' }, h('span', { class: 'push' }), searchBtn);
-  root.append(targetsSec, patternSec, varsSec, bottom);
+  // 広い画面では 2 列（左: 接続先・パスパターン、右: 変数）にします（v1.5.0。依頼者の意見: 大きい画面で余白が多い）
+  root.append(h('div', { class: 'search-cols' }, h('div', { class: 'search-col' }, targetsSec, patternSec), h('div', { class: 'search-col vars-col' }, varsSec)), bottom);
   let analysis = null;
   const containerSuggestions = new Map();
 
@@ -385,6 +386,8 @@ export async function render(ctx) {
     };
     v.start = shift(v.start);
     v.end = shift(v.end);
+    // 追加の期間（v1.5.0）も、同じ日数だけ動かします
+    for (const p of Array.isArray(v.more) ? v.more : []) { p.start = shift(p.start); p.end = shift(p.end); }
     def.touched = true;
     save();
     drawVars();

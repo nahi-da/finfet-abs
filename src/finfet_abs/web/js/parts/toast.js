@@ -30,6 +30,40 @@ export function toast(text, opt = {}) {
   setTimeout(() => el.remove(), opt.error ? 8000 : 5000);
 }
 
+const POPUP_LABEL = { info: '開始', ok: '完了', warn: '注意', error: 'エラー' };
+const MAX_POPUPS = 4;
+
+/**
+ * アクティビティ（ジョブの開始・完了・エラー、検索の終了など）のポップアップ（v1.5.0。依頼者の依頼）。
+ * 画面の右下に表示し、クリックすると詳細のページ（エラーはエラーの内容）を開きます。
+ * 表示の時間は 8 秒（エラーは 20 秒）。マウスを重ねている間は消しません。
+ * @param {string} level info / ok / warn / error
+ * @param {string} text
+ * @param {string} [url]
+ */
+export function activityPopup(level, text, url) {
+  let box = document.getElementById('popups');
+  if (!box) {
+    box = h('div', { id: 'popups', class: 'popups', 'aria-live': 'polite' });
+    document.body.appendChild(box);
+  }
+  while (box.children.length >= MAX_POPUPS) box.firstElementChild.remove();
+  const remove = () => el.remove();
+  const body = url
+    ? h('a', { href: url, class: 'popup-body', title: '詳細を開く' }, h('span', { class: 'popup-text', text }), h('span', { class: 'popup-open', text: level === 'error' ? 'エラーの詳細を開く' : '詳細を開く' }))
+    : h('div', { class: 'popup-body' }, h('span', { class: 'popup-text', text }));
+  if (url) body.addEventListener('click', () => setTimeout(remove, 0));
+  const el = h('div', { class: `popup ${level}`, role: level === 'error' ? 'alert' : 'status' },
+    h('span', { class: 'popup-level', text: POPUP_LABEL[level] || 'お知らせ' }),
+    body,
+    h('button', { type: 'button', class: 'popup-close', 'aria-label': '閉じる', title: '閉じる', text: '×', onclick: remove }));
+  const ms = level === 'error' ? 20000 : 8000;
+  let timer = setTimeout(remove, ms);
+  el.addEventListener('mouseenter', () => clearTimeout(timer));
+  el.addEventListener('mouseleave', () => { clearTimeout(timer); timer = setTimeout(remove, 4000); });
+  box.appendChild(el);
+}
+
 /**
  * 誤りを、文とエラーコードで左下に表示し、[詳細をコピー] で問い合わせ用の詳細をコピーできるようにします（3.7）。
  * 詳細には、本ツールの版、日時、エラーコード、状態コード、要求 ID を含めます（秘密情報は含めません）。
@@ -53,11 +87,12 @@ export function toastError(e) {
  * @param {string} [url]
  */
 export function addNotice(level, text, url, { seq = null, at = null, read = false } = {}) {
-  if (seq != null && notices.some((n) => n.seq === seq)) return;
+  if (seq != null && notices.some((n) => n.seq === seq)) return false;
   notices.unshift({ level, text, url, at: at ? new Date(at * 1000) : new Date(), read, seq });
   notices.sort((a, b) => b.at - a.at);
   notices.length = Math.min(notices.length, MAX_NOTICES);
   onChange();
+  return true;
 }
 
 /** 既読にした最後のお知らせの番号（サーバーに覚えます。ほかのタブと共有）。 */

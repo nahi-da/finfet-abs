@@ -6,12 +6,29 @@ import { on } from '../events.js';
 import { dateFull, dateShort, duration, num, size, statusClass } from '../format.js';
 import { confirmDialog } from '../parts/dialog.js';
 import { select, textInput } from '../parts/form.js';
+import { externalLink, hint } from '../parts/hint.js';
 import { openMenu } from '../parts/menu.js';
 import { VirtualTable } from '../parts/table.js';
 import { toast, toastError } from '../parts/toast.js';
 
 const NOTE_TEXT = { rehydrating: 'リハイドレート中', downloaded: 'ダウンロード済み', writing: '更新中の可能性' };
 const NOTE_FULL = { rehydrating: 'すでにリハイドレート中です', downloaded: '過去のジョブでダウンロード済みです', writing: '更新中の可能性があります' };
+// 注意の説明（v1.5.0。依頼者の意見: 「更新中の可能性」が何を示すかわからない）
+const DOC_RESOURCE_LOGS = 'https://learn.microsoft.com/azure/azure-monitor/platform/resource-logs#send-to-azure-storage';
+const DOC_REHYDRATE = 'https://learn.microsoft.com/azure/storage/blobs/archive-rehydrate-overview';
+const NOTE_HELP = {
+  writing: () => [
+    h('p', null, h('strong', { text: '更新中の可能性' }), '：最終更新日時が 1 時間以内の Blob です。まだ書き込みが続いている可能性があります。'),
+    h('p', { text: '診断設定（リソースログ）をストレージに送る場合、ログは 1 時間ごとの Blob（PT1H.json など）に追記され、その時間が終わるまで書き込みが続きます。今ダウンロードすると、後から追記された分が含まれません。時間をおいてから取得し直してください。' }),
+    h('p', null, externalLink(DOC_RESOURCE_LOGS, 'Microsoft のドキュメント: リソースログをストレージに送る')),
+  ],
+  rehydrating: () => [
+    h('p', null, h('strong', { text: 'リハイドレート中' }), '：Archive の層から戻す処理（リハイドレート）が、すでに進んでいる Blob です。ジョブではリハイドレートを要求し直さず、完了を待ってダウンロードします。'),
+    h('p', null, externalLink(DOC_REHYDRATE, 'Microsoft のドキュメント: Archive の層からのリハイドレート')),
+  ],
+  downloaded: () => [h('p', null, h('strong', { text: 'ダウンロード済み' }), '：過去のジョブでダウンロードしたことがある Blob です（同じ接続先・同じ名前）。もう一度取得する必要があるかを確かめてください。')],
+};
+const notesHelp = (codes) => () => codes.flatMap((c) => (NOTE_HELP[c] ? NOTE_HELP[c]() : []));
 
 /** 層の表示（リハイドレート中は「Archive → Hot（標準）」）。 */
 export function tierText(r) {
@@ -52,23 +69,37 @@ export async function render(ctx) {
   root.append(
     h('div', { class: 'breadcrumb' }, h('a', { href: '/search', text: '検索' }), ' › ', `検索結果（${dateShort(info.started_at)}）`),
     h('div', { class: 'page-head' }, h('h1', { text: '検索結果' }),
-      h('div', { class: 'actions' }, h('a', { href: `/search?search=${sid}`, text: '条件を変えて検索' }), csvMenu)),
+      h('div', { class: 'actions' }, h('a', { href: `/search?search=${sid}`, class: 'link-btn', text: '条件を変えて検索' }), csvMenu)),
     h('div', { class: 'summary-line cond-line' }, h('span', { text: info.targets_summary }), h('span', { class: 'mono ellipsis', title: info.condition.path_pattern, text: info.condition.path_pattern }), h('span', { class: 'muted', text: info.variables_summary })),
   );
   const progress = h('section', { class: 'part progress-sec' });
   root.append(progress);
   let expanded = false;
 
+  // 検索中は、表を薄くして操作できなくします（v1.5.0。依頼者の意見: 取得中であることをわかりやすく）
+  let searching = info.status === 'running';
+  let partsReady = false; // 表・ボタンを作り終えたか（作る前の drawProgress では、状態だけ覚えます）
+  const setBusy = (on) => {
+    searching = on;
+    if (!partsReady) return;
+    table.el.classList.toggle('busy', on);
+    table.el.setAttribute('aria-busy', String(on));
+    table.el.inert = on;
+    for (const b of [selAll, clearSel, csvMenu]) b.disabled = on;
+    if (on) jobBtn.disabled = true;
+  };
+
   function drawProgress(p) {
     clear(progress);
     const running = p.status === 'running';
+    setBusy(running);
     const targets = p.targets || [];
     const listed = targets.reduce((a, t) => a + (t.listed || 0), 0);
     const requests = targets.reduce((a, t) => a + (t.requests || 0), 0);
     const hasError = targets.some((t) => t.status === 'error');
     const head = h('div', { class: 'line' });
     if (running) {
-      head.append(h('strong', { text: '検索中' }), h('span', { text: `取得 ${num(listed)} 件・一致 ${num(p.matched_count ?? p.matched)} 件` }), h('span.push'),
+      head.append(h('strong', { text: 'Blob を取得しています…' }), h('span', { text: `取得 ${num(listed)} 件・一致 ${num(p.matched_count ?? p.matched)} 件。終わるまで、一覧は操作できません` }), h('span.push'),
         button('中止', async () => {
           try { await api.post(`/api/v1/searches/${sid}/cancel`, {}); } catch (e) { toastError(e); }
         }));
@@ -81,6 +112,7 @@ export async function render(ctx) {
       }
     }
     progress.append(head);
+    if (running) progress.append(h('div', { class: 'busy-bar', role: 'progressbar', 'aria-label': '検索中' }));
     if (p.status === 'cancelled') progress.append(h('div', { class: 'warn', text: '中止したため、結果は不完全です。' }));
     if (p.truncated) progress.append(h('div', { class: 'warn', text: '上限で打ち切りました。条件を絞ってください。' }));
     if (running || expanded || hasError) {
@@ -129,11 +161,13 @@ export async function render(ctx) {
       filterToggle.setAttribute('aria-expanded', String(open));
     },
   });
+  const notesField = field('注意', 'more-f', notesSel);
+  notesField.querySelector('.field-label').append(hint(notesHelp(['writing', 'rehydrating', 'downloaded']), '注意の説明'));
   const filterRow = h('div', { class: 'filters' },
     field('キーワード', 'kw', kw), filterToggle,
     field('層', 'more-f', tierSel), field('種類', 'more-f', typeSel),
     field('最終更新', 'more-f', h('div', { class: 'pair' }, fromIn, h('span', { text: '〜' }), toIn)),
-    field('注意', 'more-f', notesSel),
+    notesField,
     h('div', { class: 'push more-f' }, field('Blob 名の表示', '', dispSel), colBtn));
   const drawFilterToggle = () => {
     const n = [f.tier, f.type, f.from || f.to, f.notes].filter(Boolean).length;
@@ -142,11 +176,11 @@ export async function render(ctx) {
   drawFilterToggle();
   const selLine = h('span');
   const foundLine = h('span', { class: 'muted' });
-  const selAll = linkButton('絞り込みに一致するすべてを選択', async () => {
+  const selAll = linkButton('すべて選択', async () => {
     await api.post(`/api/v1/searches/${sid}/results/select`, { all_matching: true, filter: filterBody(), selected: true });
     refreshRows();
   });
-  const clearSel = linkButton('選択を解除', async () => {
+  const clearSel = linkButton('すべての選択を解除', async () => {
     await api.post(`/api/v1/searches/${sid}/results/select`, { clear: true });
     refreshRows();
   });
@@ -182,11 +216,13 @@ export async function render(ctx) {
     lastClicked = index;
     refreshRows();
   };
+  // 見出しのチェックボックスは、絞り込みに一致するすべての行を選ぶ・外す（v1.5.0。依頼者の意見: 表示中の行だけでなく全体を選ぶ）
   const headCheck = h('input', {
-    type: 'checkbox', 'aria-label': '表示中の行すべて',
+    type: 'checkbox', 'aria-label': '絞り込みに一致するすべての行を選択',
     onchange: async (e) => {
-      const ids = table.loadedRows().filter(({ index }) => table.rendered.has(index)).map(({ row }) => row.id);
-      await api.post(`/api/v1/searches/${sid}/results/select`, { ids, selected: e.target.checked });
+      try {
+        await api.post(`/api/v1/searches/${sid}/results/select`, { all_matching: true, filter: filterBody(), selected: e.target.checked });
+      } catch (err) { toastError(err); }
       refreshRows();
     },
   });
@@ -211,7 +247,13 @@ export async function render(ctx) {
       { key: 'creation_time', label: '作成日時', width: 110, sortable: true, hidden: true, render: (r) => dateShort(r.creation_time), title: (r) => dateFull(r.creation_time) },
       { key: 'tier_change', label: '層の変更日時', width: 110, sortable: true, hidden: true, render: (r) => dateShort(r.access_tier_change_time), title: (r) => dateFull(r.access_tier_change_time) },
       { key: 'type', label: '種類', width: 80, sortable: true, hidden: true, render: (r) => ({ BlockBlob: 'ブロック', AppendBlob: '追加', PageBlob: 'ページ' }[r.blob_type] || r.blob_type) },
-      { key: 'notes', label: '注意', width: 130, sortable: true, render: (r) => r.notes.map((n) => NOTE_TEXT[n.code]).filter(Boolean).join('・'), title: (r) => r.notes.map((n) => NOTE_FULL[n.code] + (n.at ? `（${dateShort(n.at)}）` : '')).join('\n') },
+      { key: 'notes', label: '注意', width: 150, sortable: true,
+        render: (r) => {
+          const codes = r.notes.map((n) => n.code).filter((c) => NOTE_TEXT[c]);
+          if (!codes.length) return '';
+          return h('span', { class: 'note-cell' }, h('span', { class: 'ellipsis', text: codes.map((c) => NOTE_TEXT[c]).join('・') }), hint(notesHelp(codes), '注意の説明'));
+        },
+        title: (r) => r.notes.map((n) => NOTE_FULL[n.code] + (n.at ? `（${dateShort(n.at)}）` : '')).join('\n') },
     ],
     rowClass: (r) => (r.selected ? 'selected' : ''),
     fetch: (offset, limit, sort) => api.get(`/api/v1/searches/${sid}/results${qs({ offset, limit, sort, display })}`),
@@ -228,6 +270,8 @@ export async function render(ctx) {
   const bottomSel = h('span', { class: 'summary' });
   root.append(table.el, h('div', { class: 'sticky-bottom' }, bottomSel, h('span.push'), jobBtn));
   ctx.onLeave(() => table.destroy());
+  partsReady = true;
+  setBusy(searching);
 
   async function refreshSummary() {
     try {
@@ -238,8 +282,18 @@ export async function render(ctx) {
       bottomSel.textContent = `選択 ${num(sel.count)} 件・${size(sel.bytes)}`;
       const filtered = s.filtered.count !== s.all.count ? `   絞り込み ${num(s.filtered.count)} 件・${size(s.filtered.bytes)}` : '';
       foundLine.textContent = `見つかった ${num(s.all.count)} 件・${size(s.all.bytes)}${filtered}`;
-      selAll.textContent = `絞り込みに一致するすべてを選択（${num(s.filtered.count)} 件）`;
-      jobBtn.disabled = sel.count === 0;
+      // 「すべて選択」は表示中（絞り込みに一致する）の行が対象。「すべての選択を解除」は、絞り込みで隠れた行の選択も外す
+      const filteredOn = s.filtered.count !== s.all.count;
+      selAll.textContent = filteredOn ? `すべて選択（絞り込みに一致する ${num(s.filtered.count)} 件）` : `すべて選択（${num(s.all.count)} 件）`;
+      selAll.title = '見えていない行も含めて、絞り込みに一致するすべての行を選びます（見出しのチェックボックスと同じ）';
+      clearSel.title = '絞り込みで隠れている行も含めて、すべての選択を外します';
+      const inFilter = sel.count - (s.hidden_selected || 0);
+      headCheck.checked = s.filtered.count > 0 && inFilter >= s.filtered.count;
+      headCheck.indeterminate = inFilter > 0 && inFilter < s.filtered.count;
+      headCheck.title = headCheck.checked ? 'すべての選択を外す' : `絞り込みに一致する ${num(s.filtered.count)} 件をすべて選択`;
+      clearSel.disabled = searching || sel.count === 0;
+      selAll.disabled = searching || s.filtered.count === 0;
+      jobBtn.disabled = sel.count === 0 || searching;
       jobBtn.dataset.hidden = String(s.hidden_selected);
       // 選択の行の文が長くなって折り返すと、ページが伸びるため、表の高さを合わせ直します
       table.fit();

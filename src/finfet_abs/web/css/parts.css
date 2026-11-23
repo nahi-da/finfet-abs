@@ -54,21 +54,25 @@
 .btn.primary:disabled { background: transparent; border-color: var(--line); color: var(--text-disabled); }
 .btn.small { min-height: var(--tap-small); padding: 0 var(--sp-3); }
 
-.link-btn {
+/* 補助の操作のボタン（v1.5.0: 依頼者の意見で、文字のリンクの形をやめて小さいボタンにそろえた） */
+.link-btn, a.link-btn {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: var(--sp-1);
-  min-height: 28px;
-  padding: 0;
-  border: 0;
-  background: none;
-  color: var(--link);
+  min-height: var(--tap-small);
+  padding: 0 var(--sp-3);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  background: var(--bg-raised);
+  color: var(--text);
   cursor: pointer;
-  text-align: left;
+  white-space: nowrap;
+  text-decoration: none;
 }
-.link-btn:hover:not(:disabled) { text-decoration: underline; }
-.link-btn:disabled { color: var(--text-disabled); cursor: default; }
-.link-btn.warn { color: var(--warn); }
+.link-btn:hover:not(:disabled) { background: var(--bg-hover); text-decoration: none; }
+.link-btn:disabled { color: var(--text-disabled); border-color: var(--line); background: transparent; cursor: default; }
+.link-btn.warn { color: var(--warn); border-color: var(--warn); }
 
 .icon-btn {
   display: inline-flex;
@@ -226,15 +230,29 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--accent); width
 .vtable .vhead .vcell.right { justify-content: flex-end; }
 .vtable .vhead .vcell.sortable { cursor: pointer; }
 .vtable .vhead .vcell.sortable:hover { color: var(--text); }
+/* 列の幅を変える境界（v1.5.0: 依頼者の意見で、常に縦線を見せ、つかめる幅を広げた） */
 .vtable .vhead .resizer {
   position: absolute;
   top: 0;
   right: 0;
-  width: 6px;
+  z-index: 1;
+  width: 10px;
   height: 100%;
   cursor: col-resize;
 }
-.vtable .vhead .resizer:hover { background: var(--line-strong); }
+.vtable .vhead .resizer::after {
+  content: "";
+  position: absolute;
+  top: 20%;
+  bottom: 20%;
+  right: 0;
+  width: 2px;
+  border-radius: 1px;
+  background: var(--line-strong);
+}
+.vtable .vhead .resizer:hover::after, .vtable .vhead .resizer.active::after { top: 0; bottom: 0; background: var(--accent); }
+.vtable .vbody .note-cell { display: inline-flex; align-items: center; max-width: 100%; min-width: 0; }
+.vtable .vbody .note-cell .hint-btn { margin-left: var(--sp-1); }
 .vtable .empty { padding: var(--sp-4) var(--sp-2); color: var(--text-muted); }
 .vtable .loading-row { color: var(--text-muted); padding: 0 var(--sp-2); }
 .vtable .grip { cursor: grab; color: var(--text-muted); display: flex; align-items: center; }
@@ -421,3 +439,105 @@ dialog.w960 { width: 960px; }
 .infer-table td { border-bottom: 1px solid var(--line); height: var(--row-h); padding: 0 var(--sp-2); word-break: break-all; }
 .infer-table td.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .infer-table td.nowrap { white-space: nowrap; word-break: normal; }
+
+/* ---- 説明の吹き出し（v1.5.0） */
+.hint-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  margin-left: var(--sp-1);
+  padding: 0;
+  border: 1px solid var(--line-strong);
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1;
+  cursor: help;
+  vertical-align: middle;
+  flex: none;
+}
+.hint-btn:hover, .hint-btn[aria-expanded="true"] { color: var(--text); border-color: var(--accent); }
+.hint-pop {
+  position: fixed;
+  z-index: 1000;
+  max-width: min(420px, calc(100vw - 16px));
+  padding: var(--sp-2) var(--sp-3);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  background: var(--bg-raised);
+  color: var(--text);
+  box-shadow: 0 4px 16px var(--shadow);
+  font-weight: normal;
+  line-height: 1.6;
+  white-space: normal;
+}
+.hint-pop p { margin: 0 0 var(--sp-1); }
+.hint-pop p:last-child { margin-bottom: 0; }
+.hint-pop .hint-meta { color: var(--text-muted); }
+
+/* ---- 検索中の表（v1.5.0） */
+.vtable.busy { opacity: .45; pointer-events: none; user-select: none; }
+.busy-bar {
+  position: relative;
+  height: 3px;
+  margin-top: var(--sp-2);
+  overflow: hidden;
+  border-radius: 2px;
+  background: var(--line);
+}
+.busy-bar::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 30%;
+  background: var(--accent);
+  animation: busy-slide 1.2s ease-in-out infinite;
+}
+@keyframes busy-slide { from { left: -30%; } to { left: 100%; } }
+@media (prefers-reduced-motion: reduce) { .busy-bar::before { animation: none; left: 0; width: 100%; opacity: .6; } }
+
+/* ---- アクティビティのポップアップ（v1.5.0。上部のバーの下の右。クリックで詳細を開く） */
+.popups {
+  position: fixed;
+  top: calc(var(--topbar-h) + var(--sp-2));
+  right: var(--sp-4);
+  z-index: 70;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  width: min(400px, calc(100vw - 2 * var(--sp-4)));
+  pointer-events: none;
+}
+.popup {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sp-2);
+  padding: var(--sp-2) var(--sp-2) var(--sp-2) var(--sp-3);
+  border: 1px solid var(--line-strong);
+  border-left: 4px solid var(--accent);
+  border-radius: var(--radius);
+  background: var(--bg-raised);
+  box-shadow: 0 8px 24px var(--shadow);
+  pointer-events: auto;
+}
+.popup.ok { border-left-color: var(--ok); }
+.popup.warn { border-left-color: var(--warn); }
+.popup.error { border-left-color: var(--danger); }
+.popup-level { flex: none; font-weight: 600; padding-top: 2px; }
+.popup.ok .popup-level { color: var(--ok); }
+.popup.warn .popup-level { color: var(--warn); }
+.popup.error .popup-level { color: var(--danger); }
+.popup-body { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; padding-top: 2px; color: var(--text); text-decoration: none; }
+a.popup-body:hover .popup-open { text-decoration: underline; }
+.popup-text { overflow-wrap: anywhere; }
+.popup-open { color: var(--link); font-size: var(--fs-small); }
+.popup-close { flex: none; width: 28px; height: 28px; border: 0; border-radius: var(--radius); background: none; color: var(--text-muted); cursor: pointer; font-size: 16px; }
+.popup-close:hover { background: var(--bg-hover); color: var(--text); }
+@media (max-width: 639px) {
+  .popups { right: var(--sp-2); left: var(--sp-2); width: auto; }
+}

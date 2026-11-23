@@ -71,6 +71,32 @@ class RedactTest(TempDirMixin):
         for secret in secrets_list() + [FAKE_SIG]:
             self.assertNotIn(secret, text)
 
+    def test_console_log(self) -> None:
+        """コンソールへのログ（v1.5.0）も伏せ字にし、レベルと有無を切り替えられること。"""
+        import io
+        stream = io.StringIO()
+        logs.setup(self.tmp / "logs", "DEBUG")
+        try:
+            logs.set_console(True, "INFO", stream=stream)
+            log = logging.getLogger("finfet_abs.test")
+            for s in samples():
+                log.info("console %s", s)
+            log.debug("debug-line-hidden")
+            logs.set_console(True, "DEBUG")
+            log.debug("debug-line-shown")
+            logs._console_handler.flush_queue()
+            logs.set_console(False)
+            log.info("after-disabled")
+        finally:
+            logs.setup(None)
+        text = stream.getvalue()
+        self.assertIn("[INFO] [test] console", text)
+        self.assertNotIn("debug-line-hidden", text)
+        self.assertIn("debug-line-shown", text)
+        self.assertNotIn("after-disabled", text)
+        for secret in secrets_list() + [FAKE_SIG]:
+            self.assertNotIn(secret, text)
+
     def test_job_log(self) -> None:
         jl = logs.JobLog(self.tmp / "jobs")
         jl.write("job1", logging.INFO, f"stexample01/logs/a.json {samples()[0]} {samples()[2]}")

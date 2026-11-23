@@ -91,16 +91,115 @@ class DailyFileHandler(logging.Handler):
         super().close()
 
 
+#: コンソールの表示の形（日付は省き、時刻だけにします）
+CONSOLE_FORMAT = "%(asctime)s [%(levelname)s] [%(category)s] %(message)s"
+CONSOLE_DATE_FORMAT = "%H:%M:%S"
+
+
+class ConsoleHandler(logging.Handler):
+    """コンソール（本ツールを起動したウィンドウ）にログを表示するハンドラー（v1.5.0。依頼者の依頼）。
+
+    Windows のコンソールは、範囲を選択している間（簡易編集モード）は書き込みが止まります。本体の処理が
+    止まらないよう、行を待ち行列に入れ、別のスレッドで書き込みます。待ち行列があふれたら、その行は捨てます。
+    """
+
+    MAX_QUEUE = 5000
+
+    def __init__(self, stream=None) -> None:
+        super().__init__()
+        import queue
+        self._stream = stream
+        self._queue: queue.Queue[str | None] = queue.Queue(self.MAX_QUEUE)
+        self.dropped = 0
+        self._thread = threading.Thread(target=self._writer, name="console-log", daemon=True)
+        self._thread.start()
+
+    def _target(self):
+        import sys
+        return self._stream if self._stream is not None else sys.stderr
+
+    def emit(self, record: logging.LogRecord) -> None:
+        import queue
+        try:
+            line = self.format(record)
+        except Exception:  # noqa: BLE001
+            return
+        try:
+            self._queue.put_nowait(line)
+        except queue.Full:
+            self.dropped += 1
+
+    def _writer(self) -> None:
+        while True:
+            line = self._queue.get()
+            if line is None:
+                return
+            stream = self._target()
+            if stream is None:
+                continue
+            try:
+                if self.dropped:
+                    n, self.dropped = self.dropped, 0
+                    stream.write(f"（コンソールへの表示が追いつかず、ログを {n} 行省きました。すべてのログはファイルにあります）\n")
+                stream.write(line + "\n")
+                stream.flush()
+            except (OSError, ValueError, UnicodeEncodeError):
+                pass
+
+    def flush_queue(self, timeout: float = 2.0) -> None:
+        """待ち行列の行を書き終えるまで待ちます（終了の前とテスト用）。"""
+        end = time.monotonic() + timeout
+        while not self._queue.empty() and time.monotonic() < end:
+            time.sleep(0.01)
+
+    def close(self) -> None:
+        self.flush_queue(1.0)
+        try:
+            self._queue.put_nowait(None)
+        except Exception:  # noqa: BLE001
+            pass
+        super().close()
+
+
 _file_handler: DailyFileHandler | None = None
+_console_handler: ConsoleHandler | None = None
+
+
+def _has_console() -> bool:
+    import sys
+    s = sys.stderr
+    return s is not None and hasattr(s, "write")
+
+
+def set_console(enabled: bool, level: str = "INFO", stream=None) -> None:
+    """コンソールへのログの表示を切り替えます（設定 log.console・log.console_level）。"""
+    global _console_handler
+    root = logging.getLogger()
+    if not enabled:
+        if _console_handler is not None:
+            root.removeHandler(_console_handler)
+            _console_handler.close()
+            _console_handler = None
+        return
+    if _console_handler is None:
+        if stream is None and not _has_console():
+            return
+        handler = ConsoleHandler(stream)
+        handler.addFilter(RedactingFilter())
+        handler.setFormatter(logging.Formatter(CONSOLE_FORMAT, CONSOLE_DATE_FORMAT))
+        root.addHandler(handler)
+        _console_handler = handler
+    _console_handler.setLevel(getattr(logging, level, logging.INFO))
 
 
 def setup(logs_dir: Path | None, level: str = "INFO", max_files: int = 30) -> None:
     """ログを初期化します。logs_dir が None ならファイルに出しません（テスト用）。"""
-    global _file_handler
+    global _file_handler, _console_handler
     root = logging.getLogger()
     for h in list(root.handlers):
         root.removeHandler(h)
         h.close()
+    _console_handler = None
     root.setLevel(logging.DEBUG)
     if logs_dir is None:
         root.addHandler(logging.NullHandler())

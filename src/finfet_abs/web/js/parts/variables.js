@@ -277,7 +277,11 @@ export function variableRow(ctx) {
     const count = h('span', { class: 'muted' });
     const list = h('div', { class: 'choice-list', role: 'group', 'aria-label': `${ctx.name} の選択肢` });
     const filterIn = textInput(filter, { width: 'w-mid', placeholder: 'キーワードで絞り込み', 'aria-label': `${ctx.name} の選択肢の絞り込み`, type: 'search' });
-    const shown = () => v.options.filter((o) => !filter || o.toLowerCase().includes(filter.toLowerCase()));
+    let onlySelected = false;
+    const shown = () => {
+      const sel = new Set(v.selected);
+      return v.options.filter((o) => (!filter || o.toLowerCase().includes(filter.toLowerCase())) && (!onlySelected || sel.has(o)));
+    };
     const drawList = () => {
       clear(list);
       const sel = new Set(v.selected);
@@ -293,11 +297,11 @@ export function variableRow(ctx) {
         list.append(cb);
       }
       if (!v.options.length) list.append(h('div', { class: 'muted choice-empty', text: '選択肢がありません。値を入力して追加してください。' }));
-      else if (!items.length) list.append(h('div', { class: 'muted choice-empty', text: '絞り込みに一致する選択肢はありません。' }));
+      else if (!items.length) list.append(h('div', { class: 'muted choice-empty', text: onlySelected && !filter ? '選んだ選択肢はありません。' : '絞り込みに一致する選択肢はありません。' }));
       drawCount();
     };
     const drawCount = () => {
-      count.textContent = `${v.selected.length} / ${v.options.length} 件を選択` + (filter ? `（${shown().length} 件を表示）` : '');
+      count.textContent = `${v.selected.length} / ${v.options.length} 件を選択` + (filter || onlySelected ? `（${shown().length} 件を表示）` : '');
     };
     filterIn.addEventListener('input', () => { filter = filterIn.value.trim(); ctx.choiceFilter?.set?.(filter); drawList(); });
     const setShown = (on) => {
@@ -320,8 +324,9 @@ export function variableRow(ctx) {
       const t = e.clipboardData.getData('text');
       if (t.includes('\n')) { e.preventDefault(); addValues(t.split(/\r?\n/)); }
     });
-    body.append(h('div', { class: 'line' }, typeSel, filterIn, linkButton('すべて選ぶ', () => setShown(true)),
-      linkButton('選択を外す', () => setShown(false)), count));
+    const onlySel = checkbox('選んだものだけ表示', false, (on) => { onlySelected = on; drawList(); });
+    body.append(h('div', { class: 'line' }, typeSel, filterIn, linkButton('表示中をすべて選ぶ', () => setShown(true)),
+      linkButton('表示中の選択を外す', () => setShown(false)), onlySel, count));
     body.append(list);
     const foot = h('div', { class: 'line' }, addIn);
     if (ctx.fetchCandidates) foot.append(linkButton('Azure から候補を取得', () => candidates(addValues)));
@@ -427,7 +432,35 @@ export function variableRow(ctx) {
     body.append(h('div', { class: 'fields' },
       h('label', { class: 'field grow' }, h('span', { class: 'field-label', text: '開始' }), mk(v.start, false, '期間の開始')),
       h('label', { class: 'field grow' }, h('span', { class: 'field-label', text: '終了（この日時を含む）' }), mk(v.end, true, '期間の終了'))));
-    if (found) body.append(rangeBar(found, v.start && v.end ? [normPoint(v.start, false), normPoint(v.end, true)] : null, tz));
+
+    // 追加の期間（v1.5.0。依頼者の依頼: 2026/01/01〜03/31 と 05/01〜06/30 のように、複数の期間を指定する）。
+    // どれかの期間に入る Blob を検索します。データは value.more = [{start, end}, …]
+    const more = Array.isArray(v.more) ? v.more : [];
+    more.forEach((p, i) => {
+      const mkMore = (isEnd, label) => {
+        const el = h('input', { type: kind.type, class: 'input dt-input', value: toInputValue(isEnd ? p.end : p.start, kind, isEnd), 'aria-label': label, ...limit });
+        if (kind.step) el.step = kind.step;
+        el.addEventListener('change', () => {
+          const x = fromInputValue(el.value, kind);
+          if (isEnd) p.end = x; else p.start = x;
+          changed();
+        });
+        return el;
+      };
+      body.append(h('div', { class: 'fields more-period' },
+        h('label', { class: 'field grow' }, h('span', { class: 'field-label', text: `開始（${i + 2} つ目の期間）` }), mkMore(false, `${i + 2} つ目の期間の開始`)),
+        h('label', { class: 'field grow' }, h('span', { class: 'field-label', text: '終了（この日時を含む）' }), mkMore(true, `${i + 2} つ目の期間の終了`)),
+        h('div', { class: 'field' }, h('span', { class: 'field-label', text: ' ' }),
+          linkButton('この期間を削除', () => { more.splice(i, 1); if (more.length) v.more = more; else delete v.more; changed(); }))));
+    });
+    if (more.length < 19) {
+      body.append(h('div', { class: 'line' }, linkButton('期間を追加', () => { v.more = [...more, { start: '', end: '' }]; changed(); }),
+        more.length ? h('span', { class: 'muted', text: 'どれかの期間に入る Blob を検索します。' }) : null));
+    }
+    if (found) {
+      const sels = [[v.start, v.end], ...more.map((p) => [p.start, p.end])].filter(([a, b]) => a && b).map(([a, b]) => [normPoint(a, false), normPoint(b, true)]);
+      body.append(rangeBar(found, sels.length ? sels : null, tz));
+    }
   }
 
   function drawRelative(v) {
@@ -552,9 +585,9 @@ export function variableRow(ctx) {
     const f1 = toMs(normPoint(found.end, true));
     let lo = f0;
     let hi = f1;
-    let s0 = null;
-    let s1 = null;
-    if (sel) { s0 = toMs(sel[0]); s1 = toMs(sel[1]); lo = Math.min(lo, s0); hi = Math.max(hi, s1); }
+    // sel は検索する期間の並び（[[開始, 終了], …]。複数の期間は v1.5.0）
+    const sels = (sel || []).map(([a, b]) => [toMs(a), toMs(b)]).filter(([a, b]) => b >= a);
+    for (const [a, b] of sels) { lo = Math.min(lo, a); hi = Math.max(hi, b); }
     const span = Math.max(hi - lo, 3600e3);
     lo -= span * 0.03;
     hi += span * 0.03;
@@ -564,7 +597,7 @@ export function variableRow(ctx) {
     const bar = h('div', { class: 'rangebar', 'aria-hidden': 'true' },
       h('div', { class: 'rb-track' }),
       h('div', { class: 'rb-found', style: { left: pct(f0), width: wid(f0, f1) } }),
-      sel && s1 >= s0 ? h('div', { class: 'rb-sel', style: { left: pct(s0), width: wid(s0, s1) } }) : null,
+      ...sels.map(([a, b]) => h('div', { class: 'rb-sel', style: { left: pct(a), width: wid(a, b) } })),
       h('span', { class: 'rb-tick l', style: { left: pct(f0) }, text: md(found.start) }),
       h('span', { class: 'rb-tick r', style: { left: pct(f1) }, text: md(found.end) }));
     const legend = h('div', { class: 'rb-legend' },

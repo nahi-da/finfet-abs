@@ -54,6 +54,8 @@ SCHEMA: list[Field] = [
     # 画面
     _c("ui.start_page", "jobs", "jobs", "search"),
     _b("ui.browser_notifications", False),
+    # ジョブの開始・完了・エラーなどのポップアップ（依頼者の依頼。v1.5.0）
+    _b("ui.activity_popups", True),
     _c("ui.blob_name_display", "full", "full", "common", "tail"),
     # v1.4.0: テーマ（dark・light・system）と文字の大きさ
     _c("ui.theme", "dark", "dark", "light", "system"),
@@ -129,6 +131,9 @@ SCHEMA: list[Field] = [
     _i("history.max_entries", 200, 10, 2000),
     _c("log.level", "INFO", "DEBUG", "INFO", "WARNING", "ERROR"),
     _i("log.max_files", 30, 1, 365),
+    # コンソール（本ツールを起動したウィンドウ）へのログの表示（依頼者の依頼。v1.5.0）
+    _b("log.console", True),
+    _c("log.console_level", "INFO", "DEBUG", "INFO", "WARNING", "ERROR"),
     # デモモード（8.3.3。デモモードのときだけ画面に出します）
     _i("demo.blob_count", 30000, 1000, 300000),
     _i("demo.time_scale", 60, 1, 3600),

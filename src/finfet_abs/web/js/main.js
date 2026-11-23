@@ -5,7 +5,7 @@ import { button, clear, h } from './dom.js';
 import * as events from './events.js';
 import { confirmDialog, infoDialog } from './parts/dialog.js';
 import { openMenu } from './parts/menu.js';
-import { addNotice, lastSeq, markAllRead, notices, setNoticeHandler, toast, toastError, unreadCount } from './parts/toast.js';
+import { activityPopup, addNotice, lastSeq, markAllRead, notices, setNoticeHandler, toast, toastError, unreadCount } from './parts/toast.js';
 import { dateShort } from './format.js';
 
 /** URL → ページ（4.2.2）。[正規表現, ページのモジュール, ナビゲーションの項目, ページ名] */
@@ -328,7 +328,11 @@ async function boot() {
   document.getElementById('account-btn').addEventListener('click', (e) => accountMenu(e.currentTarget));
   events.setConnectionHandler((ok) => { document.getElementById('conn-lost').hidden = ok; });
   events.on('notify', (d, ev) => {
-    addNotice(d.level || 'info', d.text, d.url, { seq: ev?.seq, at: ev?.at });
+    const added = addNotice(d.level || 'info', d.text, d.url, { seq: ev?.seq, at: ev?.at });
+    // ポップアップ（v1.5.0）: 新しく届いたものだけ（つなぎ直しで再送された古いものは出しません）。見ているページのものは出しません
+    const fresh = !ev?.at || Date.now() / 1000 - ev.at < 60;
+    const here = d.url && new URL(d.url, location.href).pathname === location.pathname;
+    if (added !== false && fresh && !here && app.settings?.['ui.activity_popups'] !== false) activityPopup(d.level || 'info', d.text, d.url);
     if (app.session?.notifications && 'Notification' in window && Notification.permission === 'granted' && document.hidden) {
       try { new Notification('FinFeT', { body: d.text }); } catch { /* 通知できない環境 */ }
     }

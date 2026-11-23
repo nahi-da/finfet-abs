@@ -25,17 +25,25 @@ from ..server.http import Request, Response, download_response, json_response
 log = logging.getLogger(__name__)
 
 
-def _fmt_ranges(ranges, gran: int) -> str:
-    """区間の並びの表示（「11/20 00:00〜23:59」「11/19 15:00〜11/20 14:59」）。"""
-    if not ranges:
-        return ""
-    s, e = ranges[0][0], ranges[-1][1]
+def _fmt_range(s, e, year: bool) -> str:
     last = e - timedelta(seconds=1)
-    year = s.year != last.year
     fmt = "%Y/%m/%d %H:%M" if year else "%m/%d %H:%M"
     a = s.strftime(fmt)
     b = last.strftime("%H:%M" if last.date() == s.date() else fmt)
-    text = f"{a}〜{b}"
+    return f"{a}〜{b}"
+
+
+def _fmt_ranges(ranges, gran: int) -> str:
+    """区間の並びの表示（「11/20 00:00〜23:59」「11/19 15:00〜11/20 14:59」）。
+    区間が 2〜3 個（複数の期間。v1.5.0）なら、それぞれを「、」で並べます。それより多い（間隔の指定など）ときは、
+    全体の範囲と「ほか n 件」にします。"""
+    if not ranges:
+        return ""
+    s, e = ranges[0][0], ranges[-1][1]
+    year = s.year != (e - timedelta(seconds=1)).year
+    if 1 < len(ranges) <= 3:
+        return "、".join(_fmt_range(a, b, year) for a, b in ranges)
+    text = _fmt_range(s, e, year)
     if len(ranges) > 1:
         text += f" ほか {len(ranges) - 1} 件"
     return text
