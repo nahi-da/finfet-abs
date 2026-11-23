@@ -207,9 +207,17 @@ class FakeArm:
                         "allowSharedKeyAccess": name != "stexample03", "isHnsEnabled": False})
         return out
 
-    def list_storage_accounts(self, refresh: bool = False) -> dict:
+    def list_storage_accounts(self, refresh: bool = False, progress=None) -> dict:
         if not self.auth.signed_in:
             raise NotSignedIn()
+        # 取得中の表示を確かめられるよう、実際の Azure と同じ段階の進み具合を、少し時間をかけて知らせます（v1.5.3）
+        report = progress or (lambda info: None)
+        report({"step": "tenants"})
+        time.sleep(0.4)
+        report({"step": "tenant", "tenant": "Contoso", "index": 1, "total": 2, "found": 0})
+        time.sleep(0.6)
+        report({"step": "tenant", "tenant": "Fabrikam", "index": 2, "total": 2, "found": len(self._rows())})
+        time.sleep(0.3)
         unavailable = []
         if self._status().get(TENANT2, {}).get("status") != "ok":
             unavailable.append({"tenant_id": TENANT2, "tenant_name": "Fabrikam",
