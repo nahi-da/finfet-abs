@@ -129,6 +129,21 @@ class SearchRunTest(SearchTestBase):
         h = self.history.list()["items"][0]
         self.assertEqual(h["last_result_count"], 60)
 
+    def test_page_size_setting(self) -> None:
+        """1 回の要求で取得する件数（設定 search.page_size。v1.5.0）: 小さくすると要求の回数が増え、結果は同じ。"""
+        self.settings.update({"search.page_size": 7})
+        sid = self.svc.start(cond(target("c1")))
+        row = self.wait_done(sid)
+        self.assertEqual(row["matched_count"], 30)
+        self.assertGreaterEqual(self.targets(sid)[0]["request_count"], 5)  # 30 件 ÷ 7 件
+        # 自動生成の名前の取得も、同じ件数で要求します
+        from finfet_abs.azure.backend import AccountRef, AuthRef, ContainerRef
+        from finfet_abs.search import infer
+        ct = ContainerRef(AccountRef("stexample01", "core.windows.net", AuthRef("entra_user")), "c1")
+        items, info = infer.collect(self.be, ct, mode="all", page_size=10)
+        self.assertEqual(len(items), 35)
+        self.assertEqual(info["requests"], 4)
+
     def test_error_then_other_targets_continue(self) -> None:
         self.be.denied[("stexample01", "c2", "list")] = "AuthorizationPermissionMismatch"
         sid = self.svc.start(cond(target("c1"), target("c2"), target("c3", "stexample02")))

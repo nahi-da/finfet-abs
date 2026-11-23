@@ -341,7 +341,8 @@ class SearchService:
                         trial_pages=int(cond.get("options", {}).get("merge_trial_pages") or
                                         self.settings.get("search.merge_trial_pages")),
                         concurrency=int(self.settings.get("search.list_concurrency")), cache=self._cache(run),
-                        stats=stats, include_metadata=hns, connection=self.connection)
+                        stats=stats, include_metadata=hns, connection=self.connection,
+                        page_size=int(self.settings.get("search.page_size")))
         except LimitReached:
             status = "completed"
         except Cancelled:

@@ -254,6 +254,7 @@ def register(router, app) -> None:
                     info = dict(info, requests=0)
                 else:
                     items, info = infer.collect(s["backend"], ct, mode=mode, prefix=prefix, limit=limit, per_level=per_level,
+                                                page_size=int(app.settings.get("search.page_size")),
                                                 cancel=cancel, progress=progress, connection=s["limits"].request
                                                 if "limits" in s else None)
                     fetched = name_cache.put(tkey, mode, prefix, limit, items, info)
