@@ -1,7 +1,7 @@
 // 接続のページ（4.8）。
 
 import * as api from '../api.js';
-import { button, clear, debounce, h, iconButton, linkButton } from '../dom.js';
+import { addButton, button, clear, debounce, h, iconButton, linkButton, navButton, removeButton } from '../dom.js';
 import { on } from '../events.js';
 import { dateFull, dateShort } from '../format.js';
 import { confirmDialog, infoDialog } from '../parts/dialog.js';
@@ -45,10 +45,10 @@ function signInSection(st) {
     const row = h('div', { class: 'line account-row' }, who);
     if (multi && a.default) row.append(h('span', { class: 'tag', text: '既定', title: 'アカウントを指定していない接続先で使います' }));
     if (multi && !a.default) row.append(linkButton('既定にする', () => setDefault(a.id)));
-    row.append(linkButton('サインアウト', () => signOut(multi ? a.id : null)));
+    row.append(removeButton('サインアウト', () => signOut(multi ? a.id : null)));
     list.append(row);
   }
-  sec.append(list, h('div', { class: 'line' }, linkButton('アカウントを追加', () => startSignIn(null, { add: true }))));
+  sec.append(list, h('div', { class: 'line' }, addButton('アカウントを追加', () => startSignIn(null, { add: true }))));
   if (multi) sec.append(h('p', { class: 'muted', text: '接続先を追加するときに、使うアカウントを選べます。アカウントを指定していない接続先は、既定のアカウントを使います。' }));
   const bad = (st.tenants || []).filter((t) => t.status !== 'ok' && t.status !== 'unknown');
   for (const t of bad) {
@@ -85,7 +85,7 @@ export async function render(ctx) {
   let items = [];
   const filter = h('input', { class: 'input w-mid', type: 'search', placeholder: 'キーワード', value: q, 'aria-label': 'キーワード', dataset: { filter: '1' } });
   const delBtn = button('削除', () => remove([...selected]));
-  const delAll = linkButton('すべて削除', () => remove(null));
+  const delAll = removeButton('すべて削除', () => remove(null));
   const testResults = new Map();
 
   const removeConfirm = async (ids, all) => {
@@ -170,7 +170,7 @@ export async function render(ctx) {
     ],
     fetch: async (offset, limit) => ({ total: items.length, items: items.slice(offset, offset + limit) }),
     onRowClick: (r) => { if (!r.usable) showReason(r); },
-    empty: h('span', null, '保存した認証情報はありません。', h('a', { href: '/search', text: '検索のページで接続先を追加' })),
+    empty: h('span', null, '保存した認証情報はありません。', navButton('検索ページで接続先を追加', '/search')),
   });
 
   async function load() {

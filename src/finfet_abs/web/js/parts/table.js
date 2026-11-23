@@ -133,10 +133,19 @@ export class VirtualTable {
   }
 
   template() {
-    return this.columns.map((c) => {
+    // 伸びる列（flex）も、利用者が幅を変えたら、その幅に固定します（v1.5.2: 依頼者の指摘。以前は minmax(幅, 1fr)
+    // のため、狭めても見た目が変わりませんでした）。伸びる列がなくなったら、余りは右端の空きの列にします
+    let grows = false;
+    const t = this.columns.map((c) => {
       const w = this.widths[c.key] || c.width || 120;
-      return c.flex ? `minmax(${w}px, 1fr)` : `${w}px`;
-    }).join(' ');
+      if (c.flex && !this.widths[c.key]) {
+        grows = true;
+        return `minmax(${w}px, 1fr)`;
+      }
+      return `${w}px`;
+    });
+    if (!grows) t.push('minmax(0, 1fr)');
+    return t.join(' ');
   }
 
   minWidth() {
@@ -185,46 +194,67 @@ export class VirtualTable {
       const sk = c.sortKey || c.key;
       const cell = h('div', { class: cls.join(' '), role: 'columnheader', title: typeof c.label === 'string' ? c.label : null });
       if (c.header) append(cell, [c.header]);
-      else cell.appendChild(h('span', { class: 'ellipsis', text: c.label }));
+      else if (c.sortable) {
+        // 並べ替えは、見出しの名前のボタンだけで行います（v1.5.2: 依頼者の指摘。見出し全体をクリックの対象にすると、
+        // 列の幅を変える操作で並び順まで変わることがありました）
+        const dir = this.sort === sk ? 'asc' : this.sort === `-${sk}` ? 'desc' : '';
+        const btn = h('button', { type: 'button', class: `sort-btn${dir ? ' on' : ''}`,
+          title: `${c.label}で並べ替え${dir === 'asc' ? '（昇順）' : dir === 'desc' ? '（降順）' : ''}` },
+        h('span', { class: 'ellipsis', text: c.label }), icon(dir === 'desc' ? 'sort-desc' : 'sort-asc'));
+        btn.addEventListener('click', () => this.setSort(this.sort === sk ? `-${sk}` : sk));
+        cell.appendChild(btn);
+      } else cell.appendChild(h('span', { class: 'ellipsis', text: c.label }));
       if (c.sortable) {
-        if (this.sort === sk) cell.appendChild(icon('sort-asc'));
-        else if (this.sort === `-${sk}`) cell.appendChild(icon('sort-desc'));
         cell.setAttribute('aria-sort', this.sort === sk ? 'ascending' : this.sort === `-${sk}` ? 'descending' : 'none');
-        cell.addEventListener('click', (e) => {
-          if (e.target.closest('.resizer')) return;
-          this.setSort(this.sort === sk ? `-${sk}` : sk);
-        });
       }
       if (!c.noResize) {
-        const rz = h('span', { class: 'resizer', 'aria-hidden': 'true' });
-        rz.addEventListener('mousedown', (e) => this.startResize(e, c));
+        const rz = h('span', { class: 'resizer', title: 'ドラッグで列の幅を変更（ダブルクリックで元の幅）' });
+        rz.addEventListener('pointerdown', (e) => this.startResize(e, c, cell));
+        rz.addEventListener('dblclick', (e) => {
+          e.stopPropagation();
+          delete this.widths[c.key];
+          this.applyTemplate();
+          this.saveLayout();
+        });
+        rz.addEventListener('click', (e) => e.stopPropagation());
         cell.appendChild(rz);
       }
       this.head.appendChild(cell);
     }
   }
 
-  startResize(e, col) {
+  startResize(e, col, cell) {
+    if (e.button !== 0) return;
     e.preventDefault();
     e.stopPropagation();
     const startX = e.clientX;
-    const startW = this.widths[col.key] || col.width || 120;
+    // 始めの幅は、表示中の実際の幅です（伸びる列は、指定の幅より広く表示されていることがあるため）
+    const startW = Math.round(cell.getBoundingClientRect().width) || this.widths[col.key] || col.width || 120;
     const rz = e.currentTarget;
+    try { rz.setPointerCapture(e.pointerId); } catch { /* 古いブラウザ */ }
     rz.classList.add('active');
     document.body.style.cursor = 'col-resize';
+    let moved = false;
     const move = (ev) => {
-      this.widths[col.key] = Math.max(40, Math.round(startW + ev.clientX - startX));
+      if (!moved && Math.abs(ev.clientX - startX) < 2) return;
+      moved = true;
+      // 表の幅を超えては広げません（ほかの列の幅の合計を除いた分まで。v1.5.2）
+      const others = this.minWidth() - (this.widths[col.key] || col.width || 120);
+      const max = Math.max(40, this.el.clientWidth - others);
+      this.widths[col.key] = Math.min(max, Math.max(40, Math.round(startW + ev.clientX - startX)));
       this.applyTemplate();
     };
     const up = () => {
       rz.classList.remove('active');
       document.body.style.cursor = '';
-      document.removeEventListener('mousemove', move);
-      document.removeEventListener('mouseup', up);
-      this.saveLayout();
+      rz.removeEventListener('pointermove', move);
+      rz.removeEventListener('pointerup', up);
+      rz.removeEventListener('pointercancel', up);
+      if (moved) this.saveLayout();
     };
-    document.addEventListener('mousemove', move);
-    document.addEventListener('mouseup', up);
+    rz.addEventListener('pointermove', move);
+    rz.addEventListener('pointerup', up);
+    rz.addEventListener('pointercancel', up);
   }
 
   applyTemplate() {

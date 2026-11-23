@@ -1,7 +1,7 @@
 // 検索結果のページ（4.4.4、3.2.10）。検索の途中でも、見つかった Blob を表示し、選べます。
 
 import * as api from '../api.js';
-import { button, clear, debounce, h, linkButton } from '../dom.js';
+import { button, clear, debounce, h, linkButton, menuButton, navButton, removeButton } from '../dom.js';
 import { on } from '../events.js';
 import { dateFull, dateShort, duration, num, size, statusClass } from '../format.js';
 import { confirmDialog } from '../parts/dialog.js';
@@ -47,7 +47,7 @@ export async function render(ctx) {
   try {
     info = await api.get(`/api/v1/searches/${encodeURIComponent(sid)}`);
   } catch (e) {
-    root.append(h('h1', { text: '検索結果' }), h('p', null, e.message, ' ', h('a', { href: '/search', text: '検索を開く' })));
+    root.append(h('h1', { text: '検索結果' }), h('p', null, e.message, ' ', navButton('検索を開く', '/search')));
     return;
   }
   ctx.setTitle(`検索結果（${dateShort(info.started_at)}）`);
@@ -62,14 +62,14 @@ export async function render(ctx) {
   const qs = (extra = {}) => api.qs({ q: f.q, tier: f.tier, type: f.type, from: iso(f.from, '00:00:00'), to: iso(f.to, '23:59:59'), notes: f.notes, ...extra });
 
   // ---------------------------------------------------------------- 上の部分
-  const csvMenu = linkButton('CSV', (e) => openMenu(e.currentTarget, [
+  const csvMenu = menuButton('CSV', (e) => openMenu(e.currentTarget, [
     { text: '表示中の行', onClick: () => api.downloadGet(`/api/v1/searches/${sid}/results.csv${qs({ sort: f.sort })}`, 'search.csv') },
     { text: 'チェックした行', onClick: () => api.downloadGet(`/api/v1/searches/${sid}/results.csv${qs({ sort: f.sort, selected: '1' })}`, 'search.csv') },
   ]));
   root.append(
     h('div', { class: 'breadcrumb' }, h('a', { href: '/search', text: '検索' }), ' › ', `検索結果（${dateShort(info.started_at)}）`),
     h('div', { class: 'page-head' }, h('h1', { text: '検索結果' }),
-      h('div', { class: 'actions' }, h('a', { href: `/search?search=${sid}`, class: 'link-btn', text: '条件を変えて検索' }), csvMenu)),
+      h('div', { class: 'actions' }, navButton('条件を変えて検索', `/search?search=${sid}`), csvMenu)),
     h('div', { class: 'summary-line cond-line' }, h('span', { text: info.targets_summary }), h('span', { class: 'mono ellipsis', title: info.condition.path_pattern, text: info.condition.path_pattern }), h('span', { class: 'muted', text: info.variables_summary })),
   );
   const progress = h('section', { class: 'part progress-sec' });
@@ -128,7 +128,7 @@ export async function render(ctx) {
           if (t.status === 'error' && !running) {
             line.append(linkButton('再試行', async () => {
               try { await api.post(`/api/v1/searches/${sid}/targets/${t.no}/retry`, {}); poll(); } catch (e) { toastError(e); }
-            }), linkButton('この接続先を除く', async () => {
+            }), removeButton('この接続先を除く', async () => {
               await api.post(`/api/v1/searches/${sid}/targets/${t.no}/skip`, {});
               poll();
             }));
@@ -150,7 +150,7 @@ export async function render(ctx) {
   const fromIn = h('input', { type: 'date', class: 'input', value: f.from, 'aria-label': '最終更新の開始' });
   const toIn = h('input', { type: 'date', class: 'input', value: f.to, 'aria-label': '最終更新の終了' });
   const notesSel = select([['', 'すべて'], ['with', 'あり'], ['without', 'なし']], f.notes, { 'aria-label': '注意' });
-  const colBtn = linkButton('列', (e) => table.columnMenu(e.currentTarget));
+  const colBtn = menuButton('列', (e) => table.columnMenu(e.currentTarget));
   const dispSel = select([['full', '全体'], ['common', '共通する階層を省略'], ['tail', '末尾のみ']], display, { 'aria-label': 'Blob 名の表示', onchange: (e) => { display = e.target.value; table.reload(); } });
   // 名前と入力欄をまとまりにして、まとまりごとに折り返します。狭い幅では、キーワードのほかは［絞り込み］で開閉します
   const field = (label, cls, ...ctl) => h('div', { class: `field ${cls}` }, h('span', { class: 'field-label', text: label }), ...ctl);

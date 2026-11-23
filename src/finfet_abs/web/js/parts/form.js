@@ -93,6 +93,34 @@ export function radios(name, options, value, onChange) {
   return wrap;
 }
 
+/**
+ * 説明付きの選択肢（カードの形のラジオボタン。v1.5.2: 依頼者の意見で、選択肢の違いが分かるようにした）。
+ * @param {string} name
+ * @param {Array<{value: string, label: string, desc: string, tag?: string, extra?: Node}>} options extra は、選んだときだけ使える入力欄など
+ * @param {string} value
+ * @param {(v: string) => void} [onChange]
+ */
+export function choiceCards(name, options, value, onChange) {
+  const wrap = h('div', { class: 'radios choice-cards', role: 'radiogroup' });
+  const sync = () => {
+    for (const o of options) {
+      if (!o.extra) continue;
+      const on = wrap.querySelector(`input[value="${o.value}"]`).checked;
+      o.extra.querySelectorAll('input, select, button').forEach((el) => { el.disabled = !on; });
+    }
+  };
+  for (const o of options) {
+    const input = h('input', { type: 'radio', name, value: o.value, checked: o.value === value, onchange: () => { sync(); if (onChange) onChange(o.value); } });
+    wrap.appendChild(h('label', { class: 'choice-card' }, input,
+      h('span', { class: 'choice-body' },
+        h('span', { class: 'choice-title' }, o.label, o.tag ? h('span', { class: 'choice-tag', text: o.tag }) : null),
+        h('span', { class: 'choice-desc', text: o.desc }),
+        o.extra || null)));
+  }
+  sync();
+  return wrap;
+}
+
 /** ラジオボタンの選んだ値。 */
 export function radioValue(wrap) {
   const el = wrap.querySelector('input[type=radio]:checked');

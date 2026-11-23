@@ -8,6 +8,7 @@ import { pickFolder } from './folder.js';
 import { checkbox, checkInput, focusFirstError, formGrid, radios, radioValue, row, select, setError, showRow, textInput } from './form.js';
 import { toast } from './toast.js';
 import { VirtualTable } from './table.js';
+import { pathBlocks } from './path-blocks.js';
 
 const TIER_ORDER = ['Archive', 'rehydrating', 'Hot', 'Cool', 'Cold', ''];
 
@@ -77,7 +78,8 @@ export async function openCreateJobDialog(opt) {
     const tierRows = row('復元先の層', h('div', { class: 'line' }, tierSel, h('span', { class: 'labeled' }, h('span', { text: '優先度' }), prioSel)));
     const dirRows = row('保存先', h('div', null, h('div', { class: 'line grow-first' }, dirIn, dirBtn),
       h('div', { class: 'line' }, folderChk, h('span', { class: 'labeled' }, h('span', { text: 'パス構造' }), structSel), h('span', { class: 'labeled' }, h('span', { text: '同名のファイル' }), conflictSel))));
-    const tmplRows = row('保存するパス', h('div', null, tmplIn, tmplList, examples));
+    const blocks = pathBlocks({ input: tmplIn, variables: pv.variable_info || {}, urlMode: pv.url_mode });
+    const tmplRows = row('保存するパス', h('div', { class: 'tmpl-field' }, blocks, tmplIn, tmplList, examples));
     const checkRows = row('', h('div', null, dupLine, existLine, h('div', { class: 'line' }, mtimeChk, md5Chk), h('div', { class: 'line' }, extractChk)));
     const sasRows = row('認証', h('div', { class: 'status-warn' }, (pv.sas_warnings || []).map((w) => h('div', {
       text: `${w.storage_account} の SAS は ${dateShort(w.expires_at)} に期限が切れます。` + (w.before_rehydrate ? 'リハイドレートの完了の前に切れるおそれがあります。' : ''),
@@ -172,7 +174,7 @@ export async function openCreateJobDialog(opt) {
       if (choice.action === 'edit') { tmplIn.focus(); return; }
       if (choice.action === 'suggest') {
         structSel.value = 'template';
-        tmplIn.value = lastCheck.suggestion;
+        tmplIn.value = lastCheck.suggestion; tmplIn.dispatchEvent(new Event('input'));
         update();
         await recheckNow();
         dupChoice = lastCheck && lastCheck.duplicates ? null : 'suggest';

@@ -1,7 +1,7 @@
 // 検索のページの「URL で指定」のタブ（4.4.6、3.2.9）。
 
 import * as api from '../api.js';
-import { button, clear, debounce, h, linkButton } from '../dom.js';
+import { addButton, button, clear, debounce, h } from '../dom.js';
 import { dateShort, num } from '../format.js';
 import { select } from '../parts/form.js';
 import { openAddTargetDialog } from '../parts/target-dialog.js';
@@ -73,7 +73,7 @@ export async function renderUrlsTab(ctx) {
         if (!saved.auth[key]) saved.auth[key] = opts.find((o) => o[0].startsWith('cred:'))?.[0] || opts[0][0];
         line.append(select(opts, saved.auth[key], { 'aria-label': `${a.storage_account} の認証`, onchange: (e) => { saved.auth[key] = e.target.value; } }));
       } else {
-        line.append(h('span', { class: 'warn', text: '使える認証がありません。' }), linkButton('接続先を追加', async () => { await openAddTargetDialog(); parse(); }));
+        line.append(h('span', { class: 'warn', text: '使える認証がありません。' }), addButton('接続先を追加', async () => { await openAddTargetDialog(); parse(); }));
       }
       authSec.append(line);
     }

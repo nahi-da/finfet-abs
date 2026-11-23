@@ -32,6 +32,10 @@ class TemplateTest(unittest.TestCase):
     def test_variables_of(self) -> None:
         self.assertEqual(VARS["dt"].units, {0, 1, 2})
         self.assertEqual(VARS["app"].kind, "string")
+        # ジョブの作成の画面に渡す形（v1.5.2: 保存するパスのブロックで、日時の単位に合う書式だけを出します）
+        info = {k: {"kind": v.kind, "units": sorted(v.units)} for k, v in sorted(VARS.items())}
+        self.assertEqual(info["dt"], {"kind": "datetime", "units": [0, 1, 2]})
+        self.assertEqual(info["n"], {"kind": "number", "units": []})
 
     def test_render(self) -> None:
         t = Template.parse("{{dt=YYYYMM}}/{{dt=YYYYMMDD}}.log", VARS)

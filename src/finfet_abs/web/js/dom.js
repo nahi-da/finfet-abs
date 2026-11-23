@@ -85,9 +85,32 @@ export function iconButton(name, label, onClick, attrs = {}) {
   return h('button', { type: 'button', class: 'icon-btn', 'aria-label': label, title: label, onclick: onClick, ...attrs }, icon(name));
 }
 
-/** 文字のリンクの形のボタン。 */
+/**
+ * 補助の操作の小さいボタン（v1.5.0 で文字のリンクの形をやめ、v1.5.2 で目的ごとに見た目を分けました。依頼者の意見）。
+ * attrs.kind: 'add'（追加。+ と破線の枠）、'remove'（削除・除外。赤）、'menu'（メニューを開く。▾）
+ */
 export function linkButton(text, onClick, attrs = {}) {
-  return h('button', { type: 'button', class: 'link-btn', onclick: onClick, ...attrs }, text);
+  const { kind, ...rest } = attrs;
+  const lead = kind === 'add' ? icon('plus') : null;
+  const tail = kind === 'menu' ? icon('caret') : null;
+  return h('button', { type: 'button', class: kind ? `link-btn lb-${kind}` : 'link-btn', onclick: onClick, ...rest }, lead, text, tail);
+}
+
+/** 追加のボタン。 */
+export const addButton = (text, onClick, attrs = {}) => linkButton(text, onClick, { ...attrs, kind: 'add' });
+/** 削除・除外のボタン。 */
+export const removeButton = (text, onClick, attrs = {}) => linkButton(text, onClick, { ...attrs, kind: 'remove' });
+/** メニューを開くボタン。 */
+export const menuButton = (text, onClick, attrs = {}) => linkButton(text, onClick, { ...attrs, kind: 'menu' });
+
+/**
+ * ほかのページへ移るボタン（見た目はボタン、要素はリンク。→ を付けます。v1.5.2）。
+ * @param {string} text
+ * @param {string} href
+ */
+export function navButton(text, href, attrs = {}) {
+  const { large, ...rest } = attrs;
+  return h('a', { href, class: large ? 'btn go' : 'link-btn go', ...rest }, text, icon('arrow'));
 }
 
 /** 枠線のボタン（primary: 塗りつぶし）。 */
@@ -95,6 +118,7 @@ export function button(text, onClick, opt = {}) {
   const cls = ['btn'];
   if (opt.primary) cls.push('primary');
   if (opt.danger) cls.push('danger');
+  if (opt.caution) cls.push('caution'); // 中止など、取り消しにくい操作（赤い枠。v1.5.2）
   if (opt.small) cls.push('small');
   return h('button', { type: 'button', class: cls.join(' '), onclick: onClick, disabled: opt.disabled, title: opt.title }, text);
 }

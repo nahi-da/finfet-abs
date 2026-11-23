@@ -111,6 +111,7 @@ class JobCreateTest(JobTestBase):
         self.assertEqual(prev["count"], 3)
         self.assertEqual(prev["archive_count"], 1)
         self.assertEqual(prev["early_delete_count"], 0)  # Archive に置いてから 200 日
+        self.assertEqual(prev["variable_info"], {})  # 保存するパスのブロック（v1.5.2）: 変数のない検索条件
         jid = self.create(sid, method="rehydrate_download", start=False)
         j = self.job(jid)
         self.assertEqual((j["status"], j["counts"]["total"]), ("held", 3))

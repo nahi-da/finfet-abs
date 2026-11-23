@@ -1,7 +1,7 @@
 // ジョブの詳細のページ（4.6）: /jobs/<ID>（Blob）、/condition、/options、/log。
 
 import * as api from '../api.js';
-import { button, clear, copyText, debounce, h, iconButton, linkButton } from '../dom.js';
+import { button, clear, copyText, debounce, h, iconButton, linkButton, navButton } from '../dom.js';
 import { on } from '../events.js';
 import { dateFull, dateShort, mbps, num, size, speed, statusClass, timeShort } from '../format.js';
 import { confirmDialog, infoDialog, openDialog } from '../parts/dialog.js';
@@ -28,7 +28,7 @@ export async function render(ctx) {
   try {
     job = await api.get(`/api/v1/jobs/${encodeURIComponent(id)}`);
   } catch (e) {
-    root.append(h('h1', { text: 'ジョブ' }), h('p', null, e.message, ' ', h('a', { href: '/jobs', text: 'ジョブを開く' })));
+    root.append(h('h1', { text: 'ジョブ' }), h('p', null, e.message, ' ', navButton('ジョブを開く', '/jobs')));
     return;
   }
   ctx.setTitle(job.name);
@@ -54,14 +54,14 @@ export async function render(ctx) {
     clear(head);
     const btns = [];
     const st = job.status;
-    if (st === 'held' || st === 'paused') btns.push(button('開始', () => action('start'), { primary: true }), button('中止', () => action('cancel')));
-    else if (['queued', 'running', 'waiting_rehydrate'].includes(st)) btns.push(button('一時停止', () => action('pause')), button('中止', () => action('cancel')));
-    else if (st === 'waiting_download') btns.push(button('ダウンロードを開始', () => startDownload(), { primary: true }), button('中止', () => action('cancel')));
+    if (st === 'held' || st === 'paused') btns.push(button('開始', () => action('start'), { primary: true }), button('中止', () => action('cancel'), { caution: true }));
+    else if (['queued', 'running', 'waiting_rehydrate'].includes(st)) btns.push(button('一時停止', () => action('pause')), button('中止', () => action('cancel'), { caution: true }));
+    else if (st === 'waiting_download') btns.push(button('ダウンロードを開始', () => startDownload(), { primary: true }), button('中止', () => action('cancel'), { caution: true }));
     else if (ENDED.has(st)) {
       const resume = button(`再開（未完了 ${num(job.unfinished)} 件）`, () => action('resume'));
       resume.disabled = !job.unfinished;
       btns.push(resume, button('すべて再実行', () => rerun(null)));
-      if (job.condition) btns.push(h('a', { href: `/search?from-job=${id}`, text: '同じ条件で検索' }));
+      if (job.condition) btns.push(navButton('同じ条件で検索', `/search?from-job=${id}`, { large: true }));
     }
     const menu = iconButton('more', '操作', (e) => openMenu(e.currentTarget, [
       { text: '名前を変更', onClick: async () => { if (await renameJob(job)) refresh(); } },
@@ -73,7 +73,7 @@ export async function render(ctx) {
     // 認証が使えないときは、サインインか接続先の追加を求めます（3.1.9・3.3.9）
     const fix = code === 'NOT_SIGNED_IN' || code === 'INTERACTION_REQUIRED'
       ? linkButton('サインイン', () => import('../parts/signin.js').then((m) => m.startSignIn(null, { account: job.last_error.account || undefined })))
-      : code === 'NO_CREDENTIAL' ? h('a', { href: '/connections', text: '接続のページを開く' }) : null;
+      : code === 'NO_CREDENTIAL' ? navButton('接続ページを開く', '/connections') : null;
     const warn = job.last_error ? h('div', { class: 'line status-warn' }, h('span', { text: job.last_error.message }), fix) : null;
     head.append(...[h('div', { class: 'page-head' }, h('h1', { class: 'ellipsis', text: job.name, title: job.name }),
       h('span', { class: statusClass(st, !!job.last_error && !ENDED.has(st)), text: job.status_label }),
@@ -253,7 +253,7 @@ export async function render(ctx) {
       kv.append(h('dt', { class: 'muted', text: '接続先' }), h('dd', null, ...(c.targets || []).map((t) => h('div', { class: 'mono', text: `${t.storage_account}/${t.container}（${t.auth_kind || ''}）` }))),
         h('dt', { class: 'muted', text: 'パスパターン' }), h('dd', { class: 'mono', text: c.path_pattern }),
         h('dt', { class: 'muted', text: '変数' }), h('dd', { class: 'mono', text: JSON.stringify(c.variables || {}) }));
-      body.append(kv, h('p', null, h('a', { href: `/search?from-job=${id}`, text: 'この条件で検索のページを開く' })));
+      body.append(kv, h('p', null, navButton('この条件で検索ページを開く', `/search?from-job=${id}`)));
     } else if (job.urls_summary) {
       body.append(h('p', { text: `URL で指定: ${num(job.urls_summary.count)} 件（${(job.urls_summary.accounts || []).join('、')}）` }));
     }

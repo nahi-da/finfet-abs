@@ -250,7 +250,11 @@ class JobService:
                 "default_name": self.default_name(items, ctx), "sas_warnings": sas,
                 "recent_templates": [r[0] for r in self.db.query(
                     "SELECT value FROM recent_values WHERE kind='path_template' ORDER BY last_used_at DESC LIMIT 20")],
-                "variables": sorted(paths.variables_of(ctx.get("condition")).keys()), "url_mode": ctx["source"] == "urls"
+                "variables": sorted(paths.variables_of(ctx.get("condition")).keys()),
+                # 保存するパスをブロックで組み立てる画面に使う、変数の種類と日時の単位（v1.5.2）
+                "variable_info": {k: {"kind": v.kind, "units": sorted(v.units)}
+                                  for k, v in sorted(paths.variables_of(ctx.get("condition")).items())},
+                "url_mode": ctx["source"] == "urls"
                 or (ctx["source"] == "rerun" and ctx.get("condition") is None)}
 
     def _sas_warnings(self, items: list[dict]) -> list[dict]:

@@ -1,7 +1,7 @@
 // ジョブのページ（4.5）: キュー（/jobs）と終了（/jobs/ended）。
 
 import * as api from '../api.js';
-import { button, debounce, h, icon, iconButton, linkButton } from '../dom.js';
+import { button, debounce, h, icon, iconButton, linkButton, navButton } from '../dom.js';
 import { on } from '../events.js';
 import { dateFull, dateShort, num, size, statusClass } from '../format.js';
 import { confirmDialog, openDialog } from '../parts/dialog.js';
@@ -103,7 +103,7 @@ export async function render(ctx) {
       'aria-label': '同時に実行するジョブの数',
       onchange: async (e) => { await api.put('/api/v1/settings', { changes: { 'queue.concurrent_jobs': Number(e.target.value) } }); load(); },
     });
-    root.append(h('div', { class: 'toolbar' }, button('開始', () => act('start')), button('一時停止', () => act('pause')), button('中止', () => act('cancel')),
+    root.append(h('div', { class: 'toolbar' }, button('開始', () => act('start')), button('一時停止', () => act('pause')), button('中止', () => act('cancel'), { caution: true }),
       linkButton('すべて開始', async () => { await api.post('/api/v1/jobs/actions/start-all', {}); load(); }),
       h('div', { class: 'push' }, h('span', { text: '同時に実行するジョブの数' }), conc)));
   } else {
@@ -172,7 +172,7 @@ export async function render(ctx) {
     columns: ended ? endedCols : queueCols,
     rowId: (r) => r.id,
     fetch: async (offset, limit) => ({ total: items.length, items: items.slice(offset, offset + limit) }),
-    empty: ended ? '終了したジョブはありません。' : h('span', null, 'キューにジョブはありません。', h('a', { href: '/search', text: '検索を開く' })),
+    empty: ended ? '終了したジョブはありません。' : h('span', null, 'キューにジョブはありません。', navButton('検索を開く', '/search')),
   });
   root.append(table.el);
   ctx.onLeave(() => table.destroy());
