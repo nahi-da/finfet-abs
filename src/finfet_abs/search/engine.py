@@ -434,6 +434,17 @@ class SearchService:
         self.events.publish("search.done", {"id": run.id, "status": status, "matched": count, "truncated": run.limit_hit,
                                             "elapsed_ms": elapsed})
         log.info("検索が終わりました（%s・一致 %s 件・%.1f 秒）", status, count, elapsed / 1000)
+        # お知らせ（v1.5.0。画面はポップアップでも表示します。見ている検索結果のページでは出しません）
+        n_err = sum(1 for t in targets if t["status"] == "error")
+        if status == "completed" and n_err:
+            self.events.publish("notify", {"level": "warn", "text": f"検索が終わりました（一致 {count:,} 件）。{n_err} 個の接続先でエラーがありました",
+                                           "url": f"/searches/{run.id}"})
+        elif status == "completed":
+            self.events.publish("notify", {"level": "ok", "text": f"検索が終わりました（一致 {count:,} 件）",
+                                           "url": f"/searches/{run.id}"})
+        elif status == "failed":
+            self.events.publish("notify", {"level": "error", "text": "検索に失敗しました。検索結果のページで、接続先ごとのエラーを確かめてください",
+                                           "url": f"/searches/{run.id}"})
         with self._lock:
             self._runs.pop(run.id, None)
 

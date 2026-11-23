@@ -54,6 +54,8 @@ SCHEMA: list[Field] = [
     # 画面
     _c("ui.start_page", "jobs", "jobs", "search"),
     _b("ui.browser_notifications", False),
+    # ジョブの開始・完了・エラーなどのポップアップ（依頼者の依頼。v1.5.0）
+    _b("ui.activity_popups", True),
     _c("ui.blob_name_display", "full", "full", "common", "tail"),
     # v1.4.0: テーマ（dark・light・system）と文字の大きさ
     _c("ui.theme", "dark", "dark", "light", "system"),

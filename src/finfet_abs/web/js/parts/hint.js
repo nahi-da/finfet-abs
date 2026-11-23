@@ -56,7 +56,14 @@ document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && current)
 document.addEventListener('pointerdown', (e) => {
   if (current && !current.pop.contains(e.target) && !current.btn.contains(e.target)) close();
 }, true);
-window.addEventListener('scroll', () => { if (current) close(); }, true);
+// スクロールでは、位置を合わせ直します（フォーカスでボタンが見える位置までスクロールした直後に閉じないように）。
+// ボタンが画面の外に出たら閉じます。吹き出しの中のスクロールは無視します
+window.addEventListener('scroll', (e) => {
+  if (!current || current.pop.contains(e.target)) return;
+  const r = current.btn.getBoundingClientRect();
+  if (r.bottom < 0 || r.top > document.documentElement.clientHeight || !current.btn.isConnected) close();
+  else place(current.btn, current.pop);
+}, true);
 window.addEventListener('resize', () => { if (current) close(); });
 
 /**
