@@ -105,10 +105,16 @@ def register(router, app) -> None:
         refresh = req.arg("refresh") == "1"
         account = req.arg("account") or None
 
+        holder: dict = {}
+
+        def progress(info: dict) -> None:
+            # 取得中の表示（v1.5.3）。処理の ID は、始めた直後に決まります
+            app.events.publish("accounts.progress", {"id": holder.get("id"), **info})
+
         def run():
             from ..azure.storage import arm_for
             try:
-                data = arm_for(s["arm"], account).list_storage_accounts(refresh=refresh)
+                data = arm_for(s["arm"], account).list_storage_accounts(refresh=refresh, progress=progress)
             except InteractionRequired as exc:
                 raise AppError(exc.info.code, exc.info.message) from None
             rows = data["accounts"]
@@ -121,7 +127,9 @@ def register(router, app) -> None:
                                   "allow_shared_key": r.get("allowSharedKeyAccess") is not False,
                                   "is_hns": bool(r.get("isHnsEnabled"))} for r in rows],
                     "unavailable": data["unavailable"], "multi_tenant": data.get("multi_tenant", False)}
-        return task(run, "storage-accounts")
+        tid = s["tasks"].submit(run, "storage-accounts")
+        holder["id"] = tid
+        return json_response({"task_id": tid}, 202)
 
     @router.post("/api/v1/containers/list")
     def containers_list(req: Request):

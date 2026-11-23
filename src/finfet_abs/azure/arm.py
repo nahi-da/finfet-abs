@@ -111,15 +111,23 @@ class ArmClient:
             if not skip or len(rows) >= MAX_ACCOUNTS:
                 return rows[:MAX_ACCOUNTS]
 
-    def list_storage_accounts(self, refresh: bool = False) -> dict:
-        """サインインしたアカウントで使えるテナントごとに、ストレージアカウントを取得します（3.1.3.2）。"""
+    def list_storage_accounts(self, refresh: bool = False, progress=None) -> dict:
+        """サインインしたアカウントで使えるテナントごとに、ストレージアカウントを取得します（3.1.3.2）。
+
+        progress（任意）: 進み具合の関数。{"step": "tenants"} と、テナントごとに {"step": "tenant", "tenant": 名前,
+        "index": 何番目, "total": 数, "found": それまでに見つかった数} を渡します（v1.5.3: 取得中の表示）。
+        """
+        report = progress or (lambda info: None)
         with self._lock:
             if not refresh and self._list_cache and time.monotonic() - self._list_cache[0] < LIST_CACHE_SECONDS:
                 return self._list_cache[1]
         accounts: list[dict] = []
         unavailable: list[dict] = []
-        for t in self.tenants():
+        report({"step": "tenants"})
+        tenants = self.tenants()
+        for i, t in enumerate(tenants):
             tid = t["id"]
+            report({"step": "tenant", "tenant": t["name"], "index": i + 1, "total": len(tenants), "found": len(accounts)})
             try:
                 rows = self._graph(tid, "resources | where type =~ 'microsoft.storage/storageaccounts' | project id, "
                                         "name, subscriptionId, resourceGroup, tenantId, location, "

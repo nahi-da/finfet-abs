@@ -1,7 +1,8 @@
 // 接続先の追加のダイアログ（4.4.2.2）と、接続先の行の認証方式の選択（4.4.2.1）。
 
 import * as api from '../api.js';
-import { addButton, button, clear, debounce, h, iconButton, linkButton } from '../dom.js';
+import { addButton, button, clear, debounce, h, icon, iconButton, linkButton } from '../dom.js';
+import { on } from '../events.js';
 import { dateShort } from '../format.js';
 import { runTask } from '../task.js';
 import { confirmDialog, openDialog } from './dialog.js';
@@ -9,11 +10,26 @@ import { checkbox, formGrid, row, select, setError, textInput } from './form.js'
 import { startSignIn } from './signin.js';
 
 const METHODS = [
-  ['azure', 'Azure にサインイン（Entra ID）'],
+  ['azure', 'サインイン中のアカウントから選ぶ'],
   ['connection_string', '接続文字列'],
   ['sas_url', 'SAS URL'],
   ['account_key', 'アカウント名とキー'],
 ];
+// 追加の方法の説明（v1.5.3: 依頼者の意見。最初の画面が簡素で、違いが分かりにくかったため）
+const METHOD_DESC = {
+  connection_string: 'Azure Portal の［アクセスキー］などで確認できる接続文字列を貼り付けます。',
+  sas_url: 'ストレージアカウントまたはコンテナーの SAS URL を貼り付けます。操作できる範囲と期限は、SAS のとおりです。',
+  account_key: 'ストレージアカウント名と、アクセスキーを入力します。',
+};
+
+/** 待っている間の表示（回る印と文）。 */
+function loadingPanel(text, sub) {
+  const t = h('div', { class: 'loading-text', text });
+  const s = h('div', { class: 'loading-sub muted', text: sub || '' });
+  const el = h('div', { class: 'loading-panel', role: 'status', 'aria-live': 'polite' },
+    h('span', { class: 'spinner', 'aria-hidden': 'true' }), h('div', { class: 'loading-body' }, t, s));
+  return { el, set: (text2, sub2) => { t.textContent = text2; if (sub2 !== undefined) s.textContent = sub2; } };
+}
 const AZURE = 'core.windows.net';
 const RENDER_LIMIT = 500;
 
@@ -53,20 +69,39 @@ export function openAddTargetDialog(opt = {}) {
       screenCleanup = () => {};
       picks.clear();
       d.setTitle(choose ? `認証方式を選択（${opt.row.storage_account} / ${opt.row.container}）` : '接続先を追加');
-      const methods = h('section', null, h('h2', { text: '追加の方法' }),
-        h('ul', { class: 'list-plain' }, METHODS.map(([id, label]) => h('li', null, linkButton(label, () => screens[id]())))));
+      d.setBody(loadingPanel('読み込んでいます…').el);
+      d.setFoot(h('span.push'), button('キャンセル', () => d.close()));
+      let st = null;
+      try { st = await api.get('/api/v1/auth/status'); } catch { /* サインインの状態が分からなくても選べます */ }
+      const signedIn = !!(st && st.signed_in);
+      const accts = st && st.accounts && st.accounts.length ? st.accounts : (st && st.account ? [st.account] : []);
+      const who = accts.map((x) => x.username).filter(Boolean);
+      const card = (id, title, desc, extra = {}) => h('button', { type: 'button', class: `method-card${extra.main ? ' main' : ''}`, onclick: () => screens[id]() },
+        h('span', { class: 'method-title' }, title, extra.tag ? h('span', { class: 'choice-tag', text: extra.tag }) : null),
+        h('span', { class: 'method-desc', text: desc }),
+        extra.sub ? h('span', { class: 'method-sub', text: extra.sub }) : null,
+        h('span', { class: 'method-go' }, icon('arrow')));
+      const azureCard = signedIn
+        ? card('azure', 'サインイン中のアカウントから選ぶ', 'サインインしているアカウントで使えるストレージアカウントの一覧から、コンテナーを選びます。キーや SAS を入力する必要はありません。',
+          { main: true, tag: 'おすすめ', sub: `サインイン中: ${who.join('、') || '（アカウント）'}` })
+        : card('azure', 'Microsoft Entra ID でサインインして選ぶ', 'サインインすると、そのアカウントで使えるストレージアカウントの一覧から、コンテナーを選べます。',
+          { main: true, tag: 'おすすめ', sub: 'まだサインインしていません' });
+      const methods = h('section', { class: 'method-section' }, h('h2', { text: '追加の方法' }),
+        h('div', { class: 'method-grid' }, azureCard),
+        h('h3', { class: 'method-subhead', text: 'キー・SAS・接続文字列を使う' }),
+        h('div', { class: 'method-grid three' }, METHODS.filter(([id]) => id !== 'azure').map(([id, label]) => card(id, label, METHOD_DESC[id]))));
       d.setBody(methods);
-      d.setFoot();
       try {
         const res = choose
           ? await api.get(`/api/v1/credentials${api.qs({ account: opt.row.storage_account, suffix: opt.row.endpoint_suffix, container: opt.row.container })}`)
           : await api.get('/api/v1/credentials');
         const usable = res.items.filter((c) => c.usable);
         if (usable.length) {
-          d.body.append(h('section', null, h('h2', { text: '保存した認証情報' }),
-            h('ul', { class: 'list-plain' }, usable.map((c) => h('li', null, linkButton(
-              `${c.storage_account}${c.scope_container ? ` / ${c.scope_container}` : ''}${c.endpoint_suffix !== AZURE ? `（${c.endpoint_suffix}）` : ''}　${c.scope_container ? 'コンテナー' : 'ストレージアカウント全体'}　${c.auth_label}${c.expires_at ? `・${dateShort(c.expires_at)} まで` : ''}`,
-              () => fromSaved(c)))))));
+          d.body.append(h('section', { class: 'method-section' }, h('h2', { text: '保存した認証情報から選ぶ' }),
+            h('div', { class: 'saved-list' }, usable.map((c) => h('button', { type: 'button', class: 'saved-item', onclick: () => fromSaved(c) },
+              h('span', { class: 'saved-name mono', text: `${c.storage_account}${c.scope_container ? ` / ${c.scope_container}` : ''}${c.endpoint_suffix !== AZURE ? `（${c.endpoint_suffix}）` : ''}` }),
+              h('span', { class: 'saved-meta muted', text: `${c.scope_container ? 'コンテナー' : 'ストレージアカウント全体'}・${c.auth_label}${c.expires_at ? `・${dateShort(c.expires_at)} まで` : ''}` }),
+              icon('arrow'))))));
         }
       } catch { /* 一覧を出せなくても追加はできます */ }
     }
@@ -186,8 +221,11 @@ export function openAddTargetDialog(opt = {}) {
 
     // ---------------------------------------------------------------- Azure にサインイン
     async function azureScreen(user) {
-      d.setTitle(titleWith('Azure にサインイン'));
+      d.setTitle(titleWith('サインイン中のアカウントから選ぶ'));
       picks.clear();
+      // 待っている間も、何をしているかを表示します（v1.5.3: 依頼者の意見）
+      d.setBody(loadingPanel('サインインの状態を確認しています…').el);
+      d.setFoot(h('span.push'), button('キャンセル', () => d.close()));
       const st = await api.get('/api/v1/auth/status');
       if (!st.signed_in) {
         d.setBody(h('div', { class: 'inline' }, h('span', { text: 'サインインしていません。' }),
@@ -302,9 +340,27 @@ export function openAddTargetDialog(opt = {}) {
         }
         finish(all);
       }, { primary: true }));
-      acctList.append(h('div', { class: 'empty', text: '読み込み中…' }));
+      // 取得中の表示: 段階（テナントごと）・見つかった数・経過した秒数（v1.5.3: 依頼者の意見）
+      const loading = loadingPanel('ストレージアカウントの一覧を取得しています…', 'サインイン中のアカウントで使えるテナント・サブスクリプションを調べています。');
+      const elapsed = h('div', { class: 'loading-elapsed muted' });
+      loading.el.querySelector('.loading-body').append(elapsed);
+      acctList.append(loading.el);
+      kw.disabled = true;
+      const t0 = Date.now();
+      const tick = setInterval(() => { elapsed.textContent = `経過 ${Math.floor((Date.now() - t0) / 1000)} 秒`; }, 1000);
+      let taskId = null;
+      const offProgress = on('accounts.progress', (p) => {
+        if (!p || (taskId && p.id && p.id !== taskId)) return;
+        if (p.step === 'tenants') loading.set('テナントの一覧を取得しています…');
+        else if (p.step === 'tenant') {
+          loading.set(`テナント「${p.tenant}」のストレージアカウントを取得しています（${p.index} / ${p.total}）…`,
+            p.found ? `これまでに ${p.found.toLocaleString('en-US')} 件見つかりました。` : 'サブスクリプションが多い場合は、数十秒かかることがあります。');
+        }
+      });
+      const prevCleanup = screenCleanup;
+      screenCleanup = () => { clearInterval(tick); offProgress(); prevCleanup(); };
       try {
-        const res = await runTask('GET', `/api/v1/azure/storage-accounts${acc ? `?account=${encodeURIComponent(acc)}` : ''}`);
+        const res = await runTask('GET', `/api/v1/azure/storage-accounts${acc ? `?account=${encodeURIComponent(acc)}` : ''}`, undefined, (id) => { taskId = id; });
         accounts = res.accounts;
         multi = res.multi_tenant;
         clear(unavailable);
@@ -316,6 +372,10 @@ export function openAddTargetDialog(opt = {}) {
       } catch (e) {
         accounts = [];
         unavailable.append(h('div', { class: 'danger', text: e.message }));
+      } finally {
+        clearInterval(tick);
+        offProgress();
+        kw.disabled = false;
       }
       drawAccounts();
     }

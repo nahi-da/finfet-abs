@@ -25,6 +25,53 @@
 .td-right { border-left: 1px solid var(--line); padding-left: var(--sp-4); min-width: 0; }
 .td-accounts { max-height: 320px; margin-top: var(--sp-2); }
 .td-accounts .vrow[aria-disabled="true"] { cursor: default; }
+/* 接続先の追加: 追加の方法のカードと、保存した認証情報（v1.5.3: 依頼者の意見で、簡素だった画面を見直した） */
+.method-section + .method-section { margin-top: var(--sp-6); }
+.method-section h2 { margin-bottom: var(--sp-3); }
+.method-subhead { font-size: var(--fs-body); font-weight: 600; color: var(--text-muted); margin: var(--sp-4) 0 var(--sp-2); }
+.method-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--sp-2); }
+.method-grid.three { grid-template-columns: repeat(auto-fit, minmax(15em, 1fr)); }
+.method-card {
+  position: relative; display: flex; flex-direction: column; align-items: flex-start; gap: var(--sp-1); text-align: left;
+  padding: var(--sp-3) calc(var(--sp-4) + 24px) var(--sp-3) var(--sp-4); min-height: 88px;
+  border: 1px solid var(--line-strong); border-radius: var(--radius); background: var(--bg-raised); color: var(--text); font: inherit; cursor: pointer;
+}
+.method-card:hover { background: var(--bg-hover); border-color: var(--link); }
+.method-card.main { border-color: var(--accent); background: var(--accent-soft); }
+.method-card.main:hover { box-shadow: inset 0 0 0 1px var(--accent); }
+.method-title { font-weight: 600; font-size: var(--fs-h2); display: flex; align-items: center; gap: var(--sp-2); flex-wrap: wrap; }
+.method-grid.three .method-title { font-size: var(--fs-body); }
+.method-desc { font-size: var(--fs-small); color: var(--text-muted); line-height: 1.5; }
+.method-sub { font-size: var(--fs-small); color: var(--link); }
+.method-go { position: absolute; right: var(--sp-3); top: 50%; transform: translateY(-50%); color: var(--link); }
+.saved-list { display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; }
+.saved-item {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto 16px; align-items: center; gap: var(--sp-3);
+  min-height: var(--tap); padding: var(--sp-1) var(--sp-3); border: 0; border-top: 1px solid var(--line);
+  background: var(--bg-raised); color: var(--text); font: inherit; text-align: left; cursor: pointer;
+}
+.saved-item:first-child { border-top: 0; }
+.saved-item:hover { background: var(--bg-hover); }
+.saved-item .icon { color: var(--link); }
+.saved-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.saved-meta { font-size: var(--fs-small); white-space: nowrap; }
+@media (max-width: 639px) {
+  .saved-item { grid-template-columns: minmax(0, 1fr) 16px; }
+  .saved-meta { grid-column: 1; grid-row: 2; white-space: normal; }
+  .saved-item .icon { grid-column: 2; grid-row: 1 / span 2; }
+}
+
+/* 待っている間の表示（v1.5.3） */
+.loading-panel { display: flex; align-items: center; gap: var(--sp-3); padding: var(--sp-6) var(--sp-4); }
+.loading-body { display: flex; flex-direction: column; gap: var(--sp-1); min-width: 0; }
+.loading-text { font-weight: 600; }
+.loading-sub, .loading-elapsed { font-size: var(--fs-small); }
+.spinner {
+  flex: none; width: 28px; height: 28px; border-radius: 50%;
+  border: 3px solid var(--line-strong); border-top-color: var(--accent); animation: spin 0.9s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .spinner { animation-duration: 2.4s; } }
 .folder-check { display: flex; padding: var(--sp-1) var(--sp-3); }
 .folder-check:hover { background: var(--bg-hover); }
 

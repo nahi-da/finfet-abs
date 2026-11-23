@@ -49,7 +49,7 @@ const HELP = {
   'transfer.connect_timeout': '接続と読み取りを待つ時間です。この時間を過ぎると、失敗としてやり直します。',
   'load.process_priority': '本ツールの処理の優先度（Windows のプロセスの優先度）です。低くすると、ほかの作業の邪魔をしにくくなります。',
   'load.prevent_sleep_downloading': 'ジョブの実行中に、PC がスリープしないようにします。',
-  'auth.default_entra_mode': '接続先の追加で、Azure にサインインして選ぶときの既定の認証の方式です。',
+  'auth.default_entra_mode': '接続先の追加で、サインイン中のアカウントから選ぶときの既定の認証の方式です。',
   'auth.default_tenant': 'サインインするテナントの既定です。organizations は、サインインしたアカウントの所属するテナントです。',
   'auth.client_id': 'サインインに使うアプリケーション（クライアント）の ID です。組織で指定されている場合だけ変えます。',
   'auth.sas_expiry_warn_hours': 'SAS の有効期限がこの時間以内になったら、警告を表示します。',
