@@ -76,7 +76,7 @@
 .var-side { display: flex; align-items: center; gap: var(--sp-2); padding-top: 2px; }
 .unit-label { width: 2em; }
 .merge-hint { display: inline-flex; gap: var(--sp-2); align-items: center; margin-left: auto; color: var(--text-muted); }
-.search-actions { margin-top: var(--sp-4); }
+.search-cols { margin-bottom: var(--sp-4); }
 
 /* ---- 既知の形式（4.4.5） */
 .kf { display: grid; grid-template-columns: 280px minmax(0, 1fr); gap: var(--sp-4); min-height: 420px; }
@@ -108,10 +108,12 @@
 .log-view { height: 60vh; overflow: auto; border: 1px solid var(--line); padding: var(--sp-2); background: var(--bg-sunken, var(--bg)); }
 
 /* 選択肢の変数（依頼者の依頼）: チェックボックスの一覧。多いときは枠の中でスクロールします */
-.choice-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(12em, 1fr)); gap: 0 var(--sp-3); max-height: 168px; overflow: auto; border: 1px solid var(--line); padding: var(--sp-1) var(--sp-2); }
-.choice-item { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: block; }
-.choice-item input { margin-right: var(--sp-1); }
-.choice-empty { grid-column: 1 / -1; padding: var(--sp-1) 0; }
+/* 選択肢の一覧（v1.5.0: 依頼者の意見で、横に並ぶ格子をやめて 1 列の縦の一覧にした） */
+.choice-list { display: flex; flex-direction: column; max-width: 44em; max-height: 264px; overflow: auto; border: 1px solid var(--line); border-radius: var(--radius); padding: var(--sp-1) 0; }
+.choice-item { display: flex; align-items: center; flex: none; min-width: 0; min-height: 32px; padding: 0 var(--sp-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }
+.choice-item:hover { background: var(--bg-hover); }
+.choice-item input { margin-right: var(--sp-2); flex: none; }
+.choice-empty { padding: var(--sp-2) var(--sp-3); }
 
 /* 接続のページのアカウントの一覧（複数のアカウント） */
 .account-row { min-height: var(--row-h); }
@@ -220,3 +222,18 @@ details.more[open] summary { margin-bottom: var(--sp-2); }
   .filters .push.more-f .field { flex: 1 1 0; }
 }
 .settings-body .sticky-bottom { margin: var(--sp-4) 0 0; }
+
+/* ---- 広い画面（v1.5.0。依頼者の意見: 大きい画面で余白が多い） */
+/* 検索のページ: 1 列のときは、変数の節の上にも罫線を引きます */
+.search-cols .vars-col > section.part:first-child { border-top: 1px solid var(--line); }
+@media (min-width: 1500px) {
+  .search-cols { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 6fr); gap: 0 var(--sp-8); align-items: start; }
+  .search-cols .vars-col > section.part:first-child { border-top: 0; }
+  .search-cols .vars-col { border-left: 1px solid var(--line); padding-left: var(--sp-8); min-height: 100%; }
+}
+/* 設定のページ: 節を 2 列に並べます */
+@media (min-width: 1600px) {
+  .settings-body { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 var(--sp-8); align-items: start; }
+  .settings-body section:nth-child(2) { border-top: 0; padding-top: 0; }
+  .settings-body .form { --label-w: 13em; }
+}

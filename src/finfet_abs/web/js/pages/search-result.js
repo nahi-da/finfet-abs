@@ -284,7 +284,7 @@ export async function render(ctx) {
       foundLine.textContent = `見つかった ${num(s.all.count)} 件・${size(s.all.bytes)}${filtered}`;
       // 「すべて選択」は表示中（絞り込みに一致する）の行が対象。「すべての選択を解除」は、絞り込みで隠れた行の選択も外す
       const filteredOn = s.filtered.count !== s.all.count;
-      selAll.textContent = filteredOn ? `絞り込みに一致する ${num(s.filtered.count)} 件をすべて選択` : `すべて選択（${num(s.all.count)} 件）`;
+      selAll.textContent = filteredOn ? `すべて選択（絞り込みに一致する ${num(s.filtered.count)} 件）` : `すべて選択（${num(s.all.count)} 件）`;
       selAll.title = '見えていない行も含めて、絞り込みに一致するすべての行を選びます（見出しのチェックボックスと同じ）';
       clearSel.title = '絞り込みで隠れている行も含めて、すべての選択を外します';
       const inFilter = sel.count - (s.hidden_selected || 0);

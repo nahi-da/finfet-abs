@@ -277,7 +277,11 @@ export function variableRow(ctx) {
     const count = h('span', { class: 'muted' });
     const list = h('div', { class: 'choice-list', role: 'group', 'aria-label': `${ctx.name} の選択肢` });
     const filterIn = textInput(filter, { width: 'w-mid', placeholder: 'キーワードで絞り込み', 'aria-label': `${ctx.name} の選択肢の絞り込み`, type: 'search' });
-    const shown = () => v.options.filter((o) => !filter || o.toLowerCase().includes(filter.toLowerCase()));
+    let onlySelected = false;
+    const shown = () => {
+      const sel = new Set(v.selected);
+      return v.options.filter((o) => (!filter || o.toLowerCase().includes(filter.toLowerCase())) && (!onlySelected || sel.has(o)));
+    };
     const drawList = () => {
       clear(list);
       const sel = new Set(v.selected);
@@ -293,11 +297,11 @@ export function variableRow(ctx) {
         list.append(cb);
       }
       if (!v.options.length) list.append(h('div', { class: 'muted choice-empty', text: '選択肢がありません。値を入力して追加してください。' }));
-      else if (!items.length) list.append(h('div', { class: 'muted choice-empty', text: '絞り込みに一致する選択肢はありません。' }));
+      else if (!items.length) list.append(h('div', { class: 'muted choice-empty', text: onlySelected && !filter ? '選んだ選択肢はありません。' : '絞り込みに一致する選択肢はありません。' }));
       drawCount();
     };
     const drawCount = () => {
-      count.textContent = `${v.selected.length} / ${v.options.length} 件を選択` + (filter ? `（${shown().length} 件を表示）` : '');
+      count.textContent = `${v.selected.length} / ${v.options.length} 件を選択` + (filter || onlySelected ? `（${shown().length} 件を表示）` : '');
     };
     filterIn.addEventListener('input', () => { filter = filterIn.value.trim(); ctx.choiceFilter?.set?.(filter); drawList(); });
     const setShown = (on) => {
@@ -320,8 +324,9 @@ export function variableRow(ctx) {
       const t = e.clipboardData.getData('text');
       if (t.includes('\n')) { e.preventDefault(); addValues(t.split(/\r?\n/)); }
     });
-    body.append(h('div', { class: 'line' }, typeSel, filterIn, linkButton('すべて選ぶ', () => setShown(true)),
-      linkButton('選択を外す', () => setShown(false)), count));
+    const onlySel = checkbox('選んだものだけ表示', false, (on) => { onlySelected = on; drawList(); });
+    body.append(h('div', { class: 'line' }, typeSel, filterIn, linkButton('表示中をすべて選ぶ', () => setShown(true)),
+      linkButton('表示中の選択を外す', () => setShown(false)), onlySel, count));
     body.append(list);
     const foot = h('div', { class: 'line' }, addIn);
     if (ctx.fetchCandidates) foot.append(linkButton('Azure から候補を取得', () => candidates(addValues)));

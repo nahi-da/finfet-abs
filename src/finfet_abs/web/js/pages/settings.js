@@ -446,7 +446,12 @@ export async function render(ctx) {
     if (pinned) { setCurrent(pinned); return; }
     const top = (scroller === document.scrollingElement || scroller === document.documentElement) ? 0 : scroller.getBoundingClientRect().top;
     let cur = sectionEls[0]?.id;
-    for (const s of sectionEls) if (s.getBoundingClientRect().top - top <= 80) cur = s.id;
+    let curTop = -Infinity;
+    for (const s of sectionEls) {
+      const t = s.getBoundingClientRect().top - top;
+      // 広い画面の 2 列では、同じ行の節は上端が同じため、左（先）の節を優先します
+      if (t <= 80 && t > curTop + 1) { cur = s.id; curTop = t; }
+    }
     if (scroller.scrollTop + scroller.clientHeight >= scroller.scrollHeight - 4 && scroller.scrollTop > 0) cur = sectionEls[sectionEls.length - 1]?.id;
     setCurrent(cur);
   };

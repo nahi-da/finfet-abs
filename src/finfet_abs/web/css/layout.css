@@ -67,6 +67,9 @@ main.page {
   display: flex;
   flex-direction: column;
   padding: var(--sp-4) var(--sp-6) var(--sp-8);
+  /* 内容が短いときも、下の操作の帯を画面の下端に置くため、画面の高さいっぱいにします（v1.5.0） */
+  min-height: calc(100vh - var(--topbar-h));
+  min-height: calc(100dvh - var(--topbar-h));
 }
 main.page > * { flex: none; }
 
@@ -132,7 +135,11 @@ body.nav-compact .nav .nav-bottom a .icon-external { display: none; }
   .nav a { flex: 1 1 0; margin: 0; min-width: 0; min-height: 47px; }
   .nav .nav-bottom { display: none; }
   body { padding-bottom: calc(var(--bottomnav-h) + env(safe-area-inset-bottom, 0px)); }
-  main.page { padding: var(--sp-3) var(--sp-3) var(--sp-6); }
+  main.page {
+    padding: var(--sp-3) var(--sp-3) var(--sp-6);
+    min-height: calc(100vh - var(--topbar-h) - var(--bottomnav-h));
+    min-height: calc(100dvh - var(--topbar-h) - var(--bottomnav-h) - env(safe-area-inset-bottom, 0px));
+  }
 }
 
 .nav .nav-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
