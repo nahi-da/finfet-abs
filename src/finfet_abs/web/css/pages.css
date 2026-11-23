@@ -21,10 +21,6 @@
 .placeholder { color: var(--text-muted); }
 
 /* ---- 接続先の追加のダイアログ（4.4.2.2） */
-.td-split { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: var(--sp-4); margin-top: var(--sp-3); }
-.td-right { border-left: 1px solid var(--line); padding-left: var(--sp-4); min-width: 0; }
-.td-accounts { max-height: 320px; margin-top: var(--sp-2); }
-.td-accounts .vrow[aria-disabled="true"] { cursor: default; }
 /* 接続先の追加: 追加の方法のカードと、保存した認証情報（v1.5.3: 依頼者の意見で、簡素だった画面を見直した） */
 .method-section + .method-section { margin-top: var(--sp-6); }
 .method-section h2 { margin-bottom: var(--sp-3); }
@@ -59,6 +55,107 @@
   .saved-item { grid-template-columns: minmax(0, 1fr) 16px; }
   .saved-meta { grid-column: 1; grid-row: 2; white-space: normal; }
   .saved-item .icon { grid-column: 2; grid-row: 1 / span 2; }
+}
+
+/* 接続先の追加: 上の帯・区画・一覧（v1.5.4: 依頼者の意見で、ストレージアカウントとコンテナーの一覧の見た目を見直した） */
+.td-toolbar {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--sp-3) var(--sp-6);
+  padding: var(--sp-2) var(--sp-4); border: 1px solid var(--line); border-radius: var(--radius); background: var(--bg-raised);
+}
+.td-tool { display: flex; align-items: center; flex-wrap: wrap; gap: var(--sp-2); min-width: 0; }
+.td-tool-label { font-size: var(--fs-small); color: var(--text-muted); }
+.td-who { font-weight: 600; overflow-wrap: anywhere; }
+.segmented { display: inline-flex; flex-wrap: wrap; padding: 2px; border: 1px solid var(--line-strong); border-radius: 999px; background: var(--bg-input); }
+.segmented .seg {
+  position: relative; display: inline-flex; align-items: center; min-height: var(--tap-small); padding: 0 var(--sp-3);
+  border-radius: 999px; color: var(--text-muted); font-size: var(--fs-small); cursor: pointer;
+}
+.segmented .seg:hover { color: var(--text); }
+.segmented .seg input { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer; }
+.segmented .seg:has(input:checked) { background: var(--accent); color: var(--accent-text); font-weight: 600; }
+.segmented .seg:has(input:focus-visible) { outline: 2px solid var(--focus); outline-offset: 1px; }
+.td-notices { display: flex; flex-direction: column; gap: var(--sp-2); margin-top: var(--sp-3); }
+.td-notices:empty { display: none; }
+.td-notice {
+  display: flex; align-items: center; flex-wrap: wrap; gap: var(--sp-2); padding: var(--sp-2) var(--sp-3);
+  border: 1px solid color-mix(in srgb, var(--warn) 50%, transparent); border-radius: var(--radius);
+  background: color-mix(in srgb, var(--warn) 10%, transparent);
+}
+.td-notice > .icon { color: var(--warn); }
+.td-notice > span:not(.icon) { flex: 1 1 12em; min-width: 0; }
+.td-split {
+  display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: var(--sp-3); margin-top: var(--sp-3);
+  height: clamp(320px, calc(100vh - 385px), 680px);
+}
+/* ダイアログの「section + section」の区切り線と余白を、横に並べた区画には付けません */
+dialog.dlg .dlg-body .td-split > section.td-pane { margin-top: 0; padding-top: var(--sp-3); border-top: 1px solid var(--line); }
+.td-split > .td-pane { min-height: 0; }
+.td-split .pick-list { flex: 1 1 auto; height: auto; min-height: 140px; }
+.td-pane {
+  display: flex; flex-direction: column; gap: var(--sp-2); min-width: 0; padding: var(--sp-3);
+  border: 1px solid var(--line); border-radius: calc(var(--radius) + 2px); background: var(--bg-raised);
+}
+.td-pane-head { display: flex; align-items: center; gap: var(--sp-2); min-height: 28px; min-width: 0; }
+.td-pane-title { margin: 0; font-size: var(--fs-body); font-weight: 600; white-space: nowrap; }
+.td-step {
+  flex: none; display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 50%;
+  background: var(--accent); color: var(--accent-text); font-size: var(--fs-small); font-weight: 700; line-height: 1;
+}
+.td-for { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--link); font-size: var(--fs-small); }
+.td-for:not(:empty)::before { content: "— "; color: var(--text-muted); }
+.td-count { margin-left: auto; white-space: nowrap; color: var(--text-muted); font-size: var(--fs-small); }
+.td-pane-tools { display: flex; align-items: center; flex-wrap: wrap; gap: var(--sp-2) var(--sp-3); }
+.td-search { position: relative; display: flex; align-items: center; flex: 1 1 14em; min-width: 0; }
+.td-search > .icon { position: absolute; left: 10px; color: var(--text-muted); pointer-events: none; }
+.td-search > .input { width: 100%; padding-left: 32px; }
+.td-bulk { display: inline-flex; flex-wrap: wrap; gap: var(--sp-3); }
+.pick-list {
+  display: flex; flex-direction: column; gap: 2px; height: clamp(200px, 36vh, 420px); overflow: auto; padding: 4px;
+  border: 1px solid var(--line); border-radius: var(--radius); background: var(--bg-input);
+}
+.pick-item {
+  flex: none; display: flex; align-items: center; gap: var(--sp-2); min-height: var(--tap-small); padding: var(--sp-1) var(--sp-3);
+  border: 1px solid transparent; border-radius: calc(var(--radius) - 2px); cursor: pointer;
+}
+.pick-item:hover { background: var(--bg-hover); }
+.pick-item.selected { background: var(--bg-selected); border-color: var(--accent); }
+.pick-item:focus-visible, .pick-item:has(input:focus-visible) { outline: 2px solid var(--focus); outline-offset: -2px; }
+.acct-item { min-height: calc(var(--tap) + 6px); }
+.acct-main { display: flex; flex-direction: column; flex: 1; min-width: 0; }
+.acct-name, .acct-meta, .cont-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.acct-name { font-weight: 600; }
+.acct-meta { color: var(--text-muted); font-size: var(--fs-small); }
+.acct-item > .icon { color: var(--text-muted); }
+.acct-item.selected > .icon { color: var(--link); }
+.acct-item.disabled { cursor: default; opacity: 0.55; }
+.acct-item.disabled:hover { background: transparent; }
+.td-badge {
+  flex: none; padding: 0 var(--sp-2); border: 1px solid var(--line-strong); border-radius: 999px;
+  color: var(--text-muted); font-size: var(--fs-small); white-space: nowrap;
+}
+.td-badge.on { border-color: transparent; background: var(--accent); color: var(--accent-text); }
+.cont-item input { flex: none; width: 16px; height: 16px; margin: 0; accent-color: var(--accent); cursor: pointer; }
+.pick-empty { margin: auto; padding: var(--sp-6) var(--sp-4); max-width: 28em; text-align: center; color: var(--text-muted); font-size: var(--fs-small); }
+.pick-list > .loading-panel { margin: auto 0; }
+.td-pane-msg { color: var(--warn); font-size: var(--fs-small); }
+.td-pane-msg:empty { display: none; }
+.td-pane-foot { display: flex; align-items: center; flex-wrap: wrap; gap: var(--sp-2); padding-top: var(--sp-2); border-top: 1px dashed var(--line); }
+.td-pane-foot > .input { flex: 1 1 10em; min-width: 0; max-width: 18em; }
+.td-foot-label { color: var(--text-muted); font-size: var(--fs-small); }
+.td-cont-wrap { margin-top: var(--sp-3); }
+.td-selection {
+  display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2); margin-top: var(--sp-3); padding: var(--sp-2) var(--sp-3);
+  min-height: calc(var(--tap-small) + 18px); border: 1px solid var(--line); border-radius: var(--radius); background: var(--bg-raised);
+}
+.td-sel-label { white-space: nowrap; }
+.td-sel-label strong { color: var(--link); font-size: var(--fs-h2); }
+.td-selection .chip-acct { color: var(--text-muted); }
+.td-parsed { padding: var(--sp-2) var(--sp-3); border-left: 3px solid var(--ok); border-radius: var(--radius); background: var(--bg-input); font-size: var(--fs-small); }
+.td-parsed:empty { display: none; }
+@media (max-width: 639px) {
+  .td-toolbar { padding: var(--sp-2) var(--sp-3); }
+  .td-split { height: auto; }
+  .pick-list, .td-split .pick-list { flex: none; height: clamp(180px, 34vh, 320px); }
 }
 
 /* 待っている間の表示（v1.5.3） */
@@ -240,7 +337,6 @@ details.more[open] summary { margin-bottom: var(--sp-2); }
 
   /* 接続先の追加・既知の形式のダイアログ: 左右に分けず、上下に並べます */
   .td-split { grid-template-columns: minmax(0, 1fr); }
-  .td-right { border-left: 0; padding-left: 0; border-top: 1px solid var(--line); padding-top: var(--sp-3); }
   .kf { grid-template-columns: minmax(0, 1fr); min-height: 0; }
   .kf-list { max-height: 200px; border-right: 0; border-bottom: 1px solid var(--line); }
 
