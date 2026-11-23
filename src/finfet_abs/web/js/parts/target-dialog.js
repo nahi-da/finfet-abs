@@ -6,7 +6,7 @@ import { on } from '../events.js';
 import { dateShort } from '../format.js';
 import { runTask } from '../task.js';
 import { confirmDialog, openDialog } from './dialog.js';
-import { checkbox, formGrid, row, select, setError, textInput } from './form.js';
+import { formGrid, row, select, setError, textInput } from './form.js';
 import { startSignIn } from './signin.js';
 
 const METHODS = [
@@ -21,6 +21,29 @@ const METHOD_DESC = {
   sas_url: 'ストレージアカウントまたはコンテナーの SAS URL を貼り付けます。操作できる範囲と期限は、SAS のとおりです。',
   account_key: 'ストレージアカウント名と、アクセスキーを入力します。',
 };
+
+/**
+ * 区画（v1.5.4: 依頼者の意見。一覧の見た目を見直したときに加えた、枠と見出しの付いたまとまり）。
+ * @param {string|null} step 手順の番号（なければ付けません）
+ * @param {string} title 見出し
+ * @param {Array<Node|null>} extra 見出しの右に並べるもの
+ */
+function pane(step, title, extra, ...body) {
+  return h('section', { class: 'td-pane' },
+    h('div', { class: 'td-pane-head' }, step ? h('span', { class: 'td-step', 'aria-hidden': 'true', text: step }) : null,
+      h('h3', { class: 'td-pane-title', text: title }), ...extra),
+    ...body);
+}
+
+/** 虫眼鏡の付いた絞り込みの欄。 */
+function searchBox(placeholder, label) {
+  const input = textInput('', { placeholder, 'aria-label': label });
+  return { input, el: h('div', { class: 'td-search' }, icon('search'), input) };
+}
+
+const num = (n) => n.toLocaleString('en-US');
+/** 件数の表示（絞り込んでいるときは「表示 / 全体」）。 */
+const countText = (shown, all) => (all ? (shown === all ? `${num(all)} 件` : `${num(shown)} / ${num(all)} 件`) : '');
 
 /** 待っている間の表示（回る印と文）。 */
 function loadingPanel(text, sub) {
@@ -67,6 +90,8 @@ export function openAddTargetDialog(opt = {}) {
     async function first() {
       screenCleanup();
       screenCleanup = () => {};
+      onPicksChanged = () => {};
+      activeCs = null;
       picks.clear();
       d.setTitle(choose ? `認証方式を選択（${opt.row.storage_account} / ${opt.row.container}）` : '接続先を追加');
       d.setBody(loadingPanel('読み込んでいます…').el);
@@ -107,15 +132,24 @@ export function openAddTargetDialog(opt = {}) {
     }
 
     // ---------------------------------------------------------------- 共通: 選択の行と下のボタン
-    const selLine = h('div', { class: 'chips' });
+    const selLine = h('div', { class: 'td-selection', 'aria-live': 'polite' });
+    /** 今の画面のコンテナーの区画（選択を外したときに、チェックを描き直します）。 */
+    let activeCs = null;
     function drawPicks() {
       clear(selLine);
-      selLine.append(h('span', { text: `選択 ${picks.size} 件` }));
+      selLine.append(h('span', { class: 'td-sel-label' }, '選択 ', h('strong', { text: String(picks.size) }), ' 件'));
+      if (!picks.size) selLine.append(h('span', { class: 'muted small', text: '追加するコンテナーを選んでください。' }));
       for (const [k, p] of picks) {
-        selLine.append(h('span', { class: 'chip' }, `${p.account} / ${p.container}`,
-          iconButton('close', '選択から外す', () => { picks.delete(k); drawPicks(); onPicksChanged(); })));
+        selLine.append(h('span', { class: 'chip' }, h('span', { class: 'chip-acct', text: `${p.account} /` }), p.container,
+          iconButton('close', '選択から外す', () => {
+            picks.delete(k);
+            drawPicks();
+            onPicksChanged();
+            if (activeCs) activeCs.redraw();
+          })));
       }
     }
+    /** 選択が変わったときに呼びます（ストレージアカウントの一覧の「n 件選択」の表示）。 */
     let onPicksChanged = () => {};
 
     async function submit(account, suffix, auth, containers, errorEl, replaceExisting = false) {
@@ -144,50 +178,97 @@ export function openAddTargetDialog(opt = {}) {
 
     // ---------------------------------------------------------------- コンテナーの選択（共通）
     function containerSection(account, opts = {}) {
-      const list = h('div', { class: 'folder-list', role: 'group', 'aria-label': 'コンテナー' });
-      const kw = textInput('', { width: 'w-mid', placeholder: 'キーワード', 'aria-label': 'コンテナーのキーワード' });
-      const nameIn = textInput(opts.initial || '', { width: 'w-mid', 'aria-label': 'コンテナー名' });
-      const msg = h('div', { class: 'muted' });
+      const list = h('div', { class: 'pick-list', role: 'group', 'aria-label': 'コンテナー' });
+      const kwBox = searchBox('コンテナーを絞り込む', 'コンテナーのキーワード');
+      const kw = kwBox.input;
+      const nameIn = textInput(opts.initial || '', { placeholder: 'コンテナー名', 'aria-label': 'コンテナー名' });
+      const msgEl = h('div', { class: 'td-pane-msg' });
+      const forAcct = h('span', { class: 'td-for mono' });
+      const count = h('span', { class: 'td-count' });
       let names = [];
+      let message = '';
+      let loading = null;
+      const visible = () => {
+        const words = kw.value.toLowerCase().split(/\s+/).filter(Boolean);
+        return names.filter((n) => words.every((w) => n.toLowerCase().includes(w)));
+      };
+      const changed = () => {
+        dirty = true;
+        drawPicks();
+        onPicksChanged();
+      };
+      const allBtn = linkButton('表示中をすべて選ぶ', () => {
+        for (const n of visible()) picks.set(key(account(), n), { account: account(), container: n });
+        changed();
+        draw();
+      });
+      const noneBtn = linkButton('選択を外す', () => {
+        for (const n of names) picks.delete(key(account(), n));
+        changed();
+        draw();
+      });
       const draw = () => {
         clear(list);
-        const words = kw.value.toLowerCase().split(/\s+/).filter(Boolean);
-        const shown = names.filter((n) => words.every((w) => n.toLowerCase().includes(w)));
-        for (const n of shown.slice(0, 2000)) {
-          const cb = checkbox(n, picks.has(key(account(), n)), (on2) => {
-            const k = key(account(), n);
-            if (on2) picks.set(k, { account: account(), container: n });
-            else picks.delete(k);
-            dirty = true;
-            drawPicks();
-          });
-          cb.classList.add('folder-check');
-          list.append(cb);
+        const acct = account();
+        forAcct.textContent = acct || '';
+        msgEl.textContent = names.length ? message : '';
+        if (loading) {
+          count.textContent = '';
+          allBtn.disabled = true;
+          noneBtn.disabled = true;
+          list.append(loading.el);
+          return;
         }
-        if (!names.length) list.append(h('div', { class: 'group', text: opts.emptyText || 'コンテナーはありません。' }));
+        const shown = visible();
+        count.textContent = countText(shown.length, names.length);
+        allBtn.disabled = !shown.length;
+        noneBtn.disabled = !names.some((n) => picks.has(key(acct, n)));
+        for (const n of shown.slice(0, 2000)) {
+          const on0 = picks.has(key(acct, n));
+          const item = h('label', { class: `pick-item cont-item${on0 ? ' selected' : ''}` });
+          item.append(h('input', {
+            type: 'checkbox', checked: on0,
+            onchange: (e) => {
+              const k = key(account(), n);
+              if (e.target.checked) picks.set(k, { account: account(), container: n });
+              else picks.delete(k);
+              item.classList.toggle('selected', e.target.checked);
+              noneBtn.disabled = !names.some((x) => picks.has(key(account(), x)));
+              changed();
+            },
+          }), h('span', { class: 'cont-name mono', text: n }));
+          list.append(item);
+        }
+        if (shown.length > 2000) list.append(h('div', { class: 'pick-empty', text: `${num(shown.length)} 件のうち 2,000 件を表示しています。キーワードで絞り込んでください。` }));
+        if (!names.length) list.append(h('div', { class: 'pick-empty', text: message || opts.emptyText || 'コンテナーはありません。' }));
+        else if (!shown.length) list.append(h('div', { class: 'pick-empty', text: 'キーワードに合うコンテナーはありません。' }));
       };
       kw.addEventListener('input', draw);
       const addByName = () => {
         const n = nameIn.value.trim();
-        if (!n) return;
+        if (!n || !account()) return;
         if (!names.includes(n)) names = [n, ...names];
         picks.set(key(account(), n), { account: account(), container: n });
         nameIn.value = '';
-        dirty = true;
-        drawPicks();
+        changed();
         draw();
       };
       nameIn.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); addByName(); } });
-      const el = h('div', null,
-        h('div', { class: 'inline' }, opts.title || h('span', { text: 'コンテナー' }), kw),
-        msg, list,
-        h('div', { class: 'inline', style: { marginTop: '8px' } }, h('span', { text: 'コンテナー名' }), nameIn, addButton('加える', addByName)));
-      return {
+      const el = pane(opts.step || null, 'コンテナー', [forAcct, count],
+        h('div', { class: 'td-pane-tools' }, kwBox.el, h('span', { class: 'td-bulk' }, allBtn, noneBtn)),
+        msgEl, list,
+        h('div', { class: 'td-pane-foot' }, h('span', { class: 'td-foot-label', text: '一覧にないコンテナー' }), nameIn, addButton('加える', addByName)));
+      const cs = {
         el,
-        setNames(n, message) { names = n; msg.textContent = message || ''; draw(); },
-        setMessage(m) { msg.textContent = m || ''; },
+        setNames(n, m) { loading = null; names = n; message = m || ''; draw(); },
+        setMessage(m) { message = m || ''; draw(); },
+        /** 取得中の表示。 */
+        setLoading(text) { loading = loadingPanel(text || 'コンテナーの一覧を取得しています…'); draw(); },
         redraw: draw,
       };
+      activeCs = cs;
+      draw();
+      return cs;
     }
 
     // ---------------------------------------------------------------- 保存した認証情報から
@@ -204,12 +285,13 @@ export function openAddTargetDialog(opt = {}) {
         return finish(res.targets);
       }
       d.setTitle(titleWith(`${c.storage_account}（保存した認証情報）`));
+      onPicksChanged = () => {};
       const cs = containerSection(() => c.storage_account, { initial: opt.initialContainer });
       const err = h('div');
-      d.setBody(cs.el, h('section', null, selLine, err));
+      d.setBody(cs.el, selLine, err);
       picks.clear();
       drawPicks();
-      cs.setMessage('読み込み中…');
+      cs.setLoading();
       try {
         const r = await runTask('POST', '/api/v1/containers/list', { storage_account: c.storage_account, endpoint_suffix: c.endpoint_suffix, auth: { credential_id: c.id } });
         cs.setNames(r.containers, r.list_error ? `コンテナーの一覧を取得できません（${r.list_error}）。コンテナー名を入力してください。` : '');
@@ -240,18 +322,18 @@ export function openAddTargetDialog(opt = {}) {
       const a = accts.find((x) => x.id === user) || st.account || accts[0] || {};
       const acc = accts.length > 1 ? a.id : null;
       const who = accts.length > 1
-        ? h('span', { class: 'inline' }, h('span', { text: 'アカウント' }), select(accts.map((x) => [x.id, x.tenant_name ? `${x.username}（${x.tenant_name}）` : x.username]), a.id, {
+        ? select(accts.map((x) => [x.id, x.tenant_name ? `${x.username}（${x.tenant_name}）` : x.username]), a.id, {
           'aria-label': '使うアカウント', onchange: (e) => azureScreen(e.target.value),
-        }))
-        : h('span', { text: a.tenant_name ? `${a.username}（${a.tenant_name}）` : a.username });
+        })
+        : h('span', { class: 'td-who', text: a.tenant_name ? `${a.username}（${a.tenant_name}）` : a.username });
       const addAcct = addButton('アカウントを追加', async () => { if (await startSignIn(null, { add: true })) azureScreen(a.id); });
-      const modeRadios = h('div', { class: 'radios', role: 'radiogroup', 'aria-label': '認証方式' },
-        ...[['entra_user', 'Entra ID ユーザーアカウント'], ['entra_key', 'アクセスキー']].map(([v, label]) => h('label.check', null,
-          h('input', { type: 'radio', name: 'td-mode', value: v, checked: v === mode, onchange: () => { mode = v; drawAccounts(); } }), label)));
-      const top = h('div', { class: 'inline', style: { justifyContent: 'space-between', width: '100%' } },
-        h('span', { class: 'inline' }, who, addAcct),
-        h('span', { class: 'inline' }, h('span', { text: '認証方式' }), modeRadios));
-      const unavailable = h('div');
+      const modeRadios = h('div', { class: 'segmented', role: 'radiogroup', 'aria-label': '認証方式' },
+        ...[['entra_user', 'Entra ID ユーザーアカウント'], ['entra_key', 'アクセスキー']].map(([v, label]) => h('label', { class: 'seg' },
+          h('input', { type: 'radio', name: 'td-mode', value: v, checked: v === mode, onchange: () => { mode = v; drawAccounts(); } }), h('span', { text: label }))));
+      const top = h('div', { class: 'td-toolbar' },
+        h('div', { class: 'td-tool' }, h('span', { class: 'td-tool-label', text: 'アカウント' }), who, addAcct),
+        h('div', { class: 'td-tool' }, h('span', { class: 'td-tool-label', text: '認証方式' }), modeRadios));
+      const unavailable = h('div', { class: 'td-notices' });
       const err = h('div');
       if (choose) {
         d.setBody(top, err);
@@ -261,20 +343,24 @@ export function openAddTargetDialog(opt = {}) {
         }, { primary: true }));
         return;
       }
-      const kw = textInput('', { width: 'w-mid', placeholder: 'キーワード', 'aria-label': 'ストレージアカウントのキーワード' });
-      const acctList = h('div', { class: 'vtable td-accounts', role: 'table' });
-      const manual = textInput('', { width: 'w-short', 'aria-label': '一覧にないストレージアカウント' });
+      const kwBox = searchBox('名前・サブスクリプション・リソースグループ・リージョン', 'ストレージアカウントのキーワード');
+      const kw = kwBox.input;
+      const acctCount = h('span', { class: 'td-count' });
+      const acctList = h('div', { class: 'pick-list td-accounts', role: 'listbox', 'aria-label': 'ストレージアカウント' });
+      const manual = textInput('', { placeholder: 'ストレージアカウント名', 'aria-label': '一覧にないストレージアカウント' });
       let accounts = [];
       let multi = false;
       let current = null;
+      let listing = true; // 一覧を取得している間は、取得中の表示のままにします
       const cs = containerSection(() => current, {
-        title: h('span', { text: 'コンテナー' }),
+        step: '2',
         initial: opt.initialContainer,
-        emptyText: 'ストレージアカウントを選んでください。',
+        emptyText: 'ストレージアカウントを選ぶと、ここにコンテナーが表示されます。',
       });
       const loadContainers = async (name) => {
         current = name;
-        cs.setNames([], '読み込み中…');
+        drawAccounts();
+        cs.setLoading(`${name} のコンテナーを取得しています…`);
         try {
           const r = await runTask('POST', '/api/v1/containers/list', { storage_account: name, endpoint_suffix: AZURE, auth: { kind: mode, account: acc } });
           if (current !== name) return;
@@ -282,30 +368,39 @@ export function openAddTargetDialog(opt = {}) {
         } catch (e) {
           if (current === name) cs.setNames([], e.message);
         }
-        drawAccounts();
       };
       function drawAccounts() {
+        if (listing) return;
+        const refocus = acctList.contains(document.activeElement);
+        const top0 = acctList.scrollTop;
         clear(acctList);
-        const cols = multi ? '1.2fr 1fr 1fr 0.8fr 0.8fr' : '1.2fr 1fr 1fr 0.8fr';
-        const headRow = h('div', { class: 'vrow vhead', role: 'row', style: { gridTemplateColumns: cols, position: 'static' } },
-          ...['ストレージアカウント', 'サブスクリプション', 'リソースグループ', 'リージョン', multi ? 'テナント' : null].filter(Boolean).map((t) => h('div', { class: 'vcell', role: 'columnheader', text: t })));
-        acctList.append(headRow);
         const words = kw.value.toLowerCase().split(/\s+/).filter(Boolean);
-        const shown = accounts.filter((x) => words.every((w) => `${x.name} ${x.subscription} ${x.resource_group} ${x.location}`.toLowerCase().includes(w)));
+        const shown = accounts.filter((x) => words.every((w) => `${x.name} ${x.subscription} ${x.resource_group} ${x.location} ${x.tenant_name || ''}`.toLowerCase().includes(w)));
+        acctCount.textContent = countText(shown.length, accounts.length);
+        const selCount = new Map();
+        for (const p of picks.values()) selCount.set(p.account, (selCount.get(p.account) || 0) + 1);
         for (const x of shown.slice(0, RENDER_LIMIT)) {
           const disabled = mode === 'entra_key' && !x.allow_shared_key;
-          const r = h('div', {
-            class: `vrow clickable${x.name === current ? ' selected' : ''}`, role: 'row', tabindex: '0',
-            style: { gridTemplateColumns: cols, position: 'static' },
+          const isCur = x.name === current;
+          const n = selCount.get(x.name) || 0;
+          const meta = [x.subscription, x.resource_group, x.location, multi ? x.tenant_name : null].filter(Boolean).join(' · ');
+          acctList.append(h('div', {
+            class: `pick-item acct-item${isCur ? ' selected' : ''}${disabled ? ' disabled' : ''}`, role: 'option', tabindex: disabled ? '-1' : '0',
+            'aria-selected': isCur ? 'true' : 'false', 'aria-disabled': disabled ? 'true' : null,
             title: disabled ? 'このストレージアカウントでは、アクセスキーによる認証が無効にされています。Entra ID（ユーザーアカウント）を使用してください。' : null,
-            'aria-disabled': disabled ? 'true' : null,
             onclick: () => { if (!disabled) loadContainers(x.name); },
-            onkeydown: (e) => { if (e.key === 'Enter' && !disabled) loadContainers(x.name); },
-          }, ...[x.name, x.subscription, x.resource_group, x.location, multi ? x.tenant_name : null].filter((v) => v !== null).map((t) => h('div', { class: `vcell${disabled ? ' muted' : ''}`, role: 'cell', text: t || '' })));
-          acctList.append(r);
+            onkeydown: (e) => { if ((e.key === 'Enter' || e.key === ' ') && !disabled) { e.preventDefault(); loadContainers(x.name); } },
+          },
+          h('span', { class: 'acct-main' }, h('span', { class: 'acct-name mono', text: x.name }), h('span', { class: 'acct-meta', text: meta || '名前で指定したストレージアカウント' })),
+          disabled ? h('span', { class: 'td-badge', text: 'アクセスキーは無効' }) : null,
+          n ? h('span', { class: 'td-badge on', text: `${n} 件選択` }) : null,
+          icon('chevron')));
         }
-        if (shown.length > RENDER_LIMIT) acctList.append(h('div', { class: 'empty', text: `${shown.length.toLocaleString('en-US')} 件のうち ${RENDER_LIMIT} 件を表示しています。キーワードで絞り込んでください。` }));
-        if (!accounts.length) acctList.append(h('div', { class: 'empty', text: 'ストレージアカウントはありません。' }));
+        if (shown.length > RENDER_LIMIT) acctList.append(h('div', { class: 'pick-empty', text: `${num(shown.length)} 件のうち ${RENDER_LIMIT} 件を表示しています。キーワードで絞り込んでください。` }));
+        if (!accounts.length) acctList.append(h('div', { class: 'pick-empty', text: 'ストレージアカウントはありません。一覧にない場合は、下の欄に名前を入力してください。' }));
+        else if (!shown.length) acctList.append(h('div', { class: 'pick-empty', text: 'キーワードに合うストレージアカウントはありません。' }));
+        acctList.scrollTop = top0;
+        if (refocus) acctList.querySelector('.acct-item.selected')?.focus();
       }
       kw.addEventListener('input', debounce(drawAccounts, 200));
       const addManual = () => {
@@ -320,9 +415,11 @@ export function openAddTargetDialog(opt = {}) {
         loadContainers(n);
       };
       manual.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); addManual(); } });
-      const left = h('div', null, kw, acctList, h('div', { class: 'inline', style: { marginTop: '8px' } }, h('span', { text: '一覧にないストレージアカウント' }), manual, addButton('加える', addManual)));
-      const right = h('div', { class: 'td-right' }, cs.el);
-      d.setBody(top, unavailable, h('div', { class: 'td-split' }, left, right), h('section', null, selLine, err));
+      const left = pane('1', 'ストレージアカウント', [acctCount],
+        h('div', { class: 'td-pane-tools' }, kwBox.el), acctList,
+        h('div', { class: 'td-pane-foot' }, h('span', { class: 'td-foot-label', text: '一覧にないストレージアカウント' }), manual, addButton('加える', addManual)));
+      onPicksChanged = () => drawAccounts();
+      d.setBody(top, unavailable, h('div', { class: 'td-split' }, left, cs.el), selLine, err);
       drawPicks();
       d.setFoot(h('span.push'), button('キャンセル', () => d.close()), button('追加', async () => {
         const groups = new Map();
@@ -365,7 +462,7 @@ export function openAddTargetDialog(opt = {}) {
         multi = res.multi_tenant;
         clear(unavailable);
         for (const u of res.unavailable) {
-          unavailable.append(h('div', { class: 'inline warn', style: { margin: '8px 0' } },
+          unavailable.append(h('div', { class: 'td-notice' }, icon('warn'),
             h('span', { text: `テナント「${u.tenant_name}」のストレージアカウントは表示されていません（${u.reason.replace(/。$/, '')}）` }),
             linkButton('このテナントにサインイン', async () => { if (await startSignIn(u.tenant_id, { account: a.id })) azureScreen(a.id); })));
         }
@@ -376,6 +473,7 @@ export function openAddTargetDialog(opt = {}) {
         clearInterval(tick);
         offProgress();
         kw.disabled = false;
+        listing = false;
       }
       drawAccounts();
     }
@@ -389,9 +487,10 @@ export function openAddTargetDialog(opt = {}) {
       let parsed = null;
       let fixedContainer = null;
       const err = h('div');
-      const parsedLine = h('div', { class: 'muted' });
-      const cs = containerSection(() => parsed && parsed.account, { initial: opt.initialContainer || (choose ? opt.row.container : '') });
-      const contSec = h('section', null, cs.el);
+      const parsedLine = h('div', { class: 'td-parsed' });
+      onPicksChanged = () => {};
+      const cs = containerSection(() => parsed && parsed.account, { step: '2', initial: opt.initialContainer || (choose ? opt.row.container : ''), emptyText: '認証情報を入力すると、ここにコンテナーが表示されます。' });
+      const contSec = h('div', { class: 'td-cont-wrap' }, cs.el);
       const inputs = {};
       let formRows;
       const authBody = () => {
@@ -421,7 +520,7 @@ export function openAddTargetDialog(opt = {}) {
         } else {
           contSec.hidden = choose;
         }
-        cs.setNames([], '読み込み中…');
+        cs.setLoading(`${parsed.account} のコンテナーを取得しています…`);
         try {
           const r = await runTask('POST', '/api/v1/containers/list', { storage_account: parsed.account, endpoint_suffix: parsed.endpoint_suffix, auth: authBody() });
           if (parsed.level !== 'container') cs.setNames(r.containers, r.list_error ? `コンテナーの一覧を取得できません（${r.list_error}）。コンテナー名を入力してください。` : '');
@@ -501,7 +600,7 @@ export function openAddTargetDialog(opt = {}) {
         inputs.value.addEventListener('input', debounce(() => { dirty = true; parse(); }, 400));
         formRows = formGrid(...row(method === 'connection_string' ? '接続文字列' : 'SAS URL', [inputs.value, parsedLine]));
       }
-      d.setBody(h('section', null, formRows, method === 'account_key' ? parsedLine : null), contSec, h('section', null, selLine, err));
+      d.setBody(pane('1', '認証情報', [], formRows, method === 'account_key' ? parsedLine : null), contSec, selLine, err);
       drawPicks();
       const note = h('span', { class: 'note', text: '入力した認証情報は暗号化して、この PC のこの Windows ユーザーだけが使える形で保存します。' });
       d.setFoot(note, button('キャンセル', () => d.close()), button(choose ? '決定' : '追加', async () => {
