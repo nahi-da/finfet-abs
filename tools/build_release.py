@@ -199,7 +199,7 @@ def package_rows(rt: dict, pkgs: list[dict]) -> list[dict]:
 
 def write_notices(stage: Path, rows: list[dict]) -> None:
     lines = ["# 同梱するソフトウェア", "",
-             "全部入り版には、次のソフトウェアが含まれます。この一覧は `tools/build_release.py` が、実際に導入したパッケージから作りました。",
+             "配布用の ZIP ファイルには、次のソフトウェアが含まれます。この一覧は、`tools/build_release.py` が実際に導入したパッケージから作成しました。",
              "ライセンスの文は `licenses\\` のフォルダーにあります。", "",
              "| 名前 | 版 | ライセンス | 入手先 |", "|---|---|---|---|"]
     for r in rows:
