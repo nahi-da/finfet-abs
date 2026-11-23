@@ -13,10 +13,10 @@
 <a href="index.html">はじめに</a>
 <a href="setup.html" aria-current="page">導入と更新</a>
 <a href="usage.html">使い方</a>
-<a href="patterns.html">パスパターンの書き方</a>
+<a href="patterns.html">パスパターンの記述方法</a>
 <a href="permissions.html">必要な権限</a>
-<a href="costs.html">料金と注意</a>
-<a href="troubleshooting.html">困ったときは</a>
+<a href="costs.html">料金と注意事項</a>
+<a href="troubleshooting.html">トラブルシューティング</a>
 <a href="data.html">データの取り扱い</a>
 <a href="licenses.html">ライセンス</a>
 </nav>
@@ -24,7 +24,7 @@
 <h1>導入と更新</h1>
 <h2>ダウンロードとハッシュの確認</h2>
 <ol>
-<li>インターネットに接続できる環境で、GitHub の Release のページから <code>finfet-abs-&lt;版&gt;-win-x64.zip</code> と <code>SHA256SUMS.txt</code> をダウンロードします。</li>
+<li>インターネットに接続できる環境で、GitHub の Release ページから <code>finfet-abs-&lt;版&gt;-win-x64.zip</code> と <code>SHA256SUMS.txt</code> をダウンロードします。</li>
 <li>ZIP の SHA-256 を計算し、<code>SHA256SUMS.txt</code> に記載された値と一致することを確認します。
 <pre>certutil -hashfile finfet-abs-&lt;版&gt;-win-x64.zip SHA256</pre></li>
 <li>（任意）GitHub CLI で、このリポジトリの GitHub Actions で作成されたことを確認します。
@@ -37,21 +37,21 @@
 <li>ZIP ファイルのプロパティで [許可する] をオンにしてから、任意のフォルダー（例: <code>C:\Tools\finfet-abs</code>）に展開します。</li>
 <li><code>finfet-abs.bat</code> を実行します。既定のブラウザに本ツールの画面が表示されます。</li>
 </ol>
-<p>ポータブルモードで使う場合は、起動の前に、展開したフォルダーに空の <code>data</code> フォルダーを作成します。</p>
+<p>ポータブルモードで使用する場合は、起動の前に、展開したフォルダーに空の <code>data</code> フォルダーを作成します。</p>
 <h2>更新</h2>
 <ol>
-<li>新しい版の ZIP を、上の手順で<strong>新しいフォルダー</strong>に展開します（古いフォルダーには上書きしないでください）。</li>
+<li>新しい版の ZIP を、前述の手順で<strong>新しいフォルダー</strong>に展開します（古いフォルダーには上書きしないでください）。</li>
 <li>本ツールを終了します。</li>
 <li>ポータブルモードの場合は、古いフォルダーの <code>data</code> を新しいフォルダーに移します。</li>
 <li>新しいフォルダーの <code>finfet-abs.bat</code> を起動します。動作を確認した後、古いフォルダーは削除できます。</li>
 </ol>
-<h2>pip の使い方</h2>
+<h2>pip の利用</h2>
 <ul>
 <li>導入済みのパッケージの確認: <code>runtime\pip.bat list</code>、<code>runtime\pip.bat check</code></li>
 <li>インターネットに接続できない環境での追加・更新: インターネットに接続できる環境で、Windows x64・Python 3.14 用の wheel を取得して持ち込み、次のコマンドでインストールします。
 <pre>runtime\pip.bat install --no-index --find-links &lt;wheel のフォルダー&gt; &lt;パッケージ&gt;</pre></li>
 </ul>
-<p class="note">パッケージを個別に更新すると、動作を確認していない版の組み合わせになります。通常は、新しい版の全部入り版で更新してください。</p>
+<p class="note">パッケージを個別に更新すると、動作を確認していない版の組み合わせになります。通常は、新しい版の配布用 ZIP ファイルで更新してください。</p>
 <footer>FinFeT <span data-fill="version">（開発版）</span></footer>
 </main>
 </div>

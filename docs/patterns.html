@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>パスパターンの書き方 - FinFeT</title>
+<title>パスパターンの記述方法 - FinFeT</title>
 <link rel="stylesheet" href="docs.css">
 </head>
 <body>
@@ -13,48 +13,48 @@
 <a href="index.html">はじめに</a>
 <a href="setup.html">導入と更新</a>
 <a href="usage.html">使い方</a>
-<a href="patterns.html" aria-current="page">パスパターンの書き方</a>
+<a href="patterns.html" aria-current="page">パスパターンの記述方法</a>
 <a href="permissions.html">必要な権限</a>
-<a href="costs.html">料金と注意</a>
-<a href="troubleshooting.html">困ったときは</a>
+<a href="costs.html">料金と注意事項</a>
+<a href="troubleshooting.html">トラブルシューティング</a>
 <a href="data.html">データの取り扱い</a>
 <a href="licenses.html">ライセンス</a>
 </nav>
 <main>
-<h1>パスパターンの書き方</h1>
+<h1>パスパターンの記述方法</h1>
 <h2>正規表現の基本</h2>
-<p>パスパターンは、Blob 名の<strong>全体</strong>に一致する正規表現（Python の正規表現）です。前後に <code>^</code>・<code>$</code> を記述する必要はありません。大文字と小文字は区別されます（検索のページのオプションで、区別しないように設定できます）。<code>{{</code> は変数の始まりとして扱われるため、文字としての「{」は <code>\{</code> と記述します。</p>
+<p>パスパターンは、Blob 名の<strong>全体</strong>に一致する正規表現（Python の正規表現）です。前後に <code>^</code>・<code>$</code> を記述する必要はありません。大文字と小文字は区別されます（検索ページのオプションで、区別しないように設定できます）。<code>{{</code> は変数の開始として扱われるため、「{」そのものは <code>\{</code> と記述します。</p>
 <table>
-<thead><tr><th>書き方</th><th>意味</th><th>例</th></tr></thead>
+<thead><tr><th>記述</th><th>意味</th><th>例</th></tr></thead>
 <tbody>
 <tr><td><code>.</code></td><td>任意の 1 文字</td><td><code>a.c</code> は abc、a1c に一致</td></tr>
 <tr><td><code>.*</code></td><td>任意の文字列（空も含む）</td><td><code>logs/.*</code> は logs/ の下のすべて</td></tr>
 <tr><td><code>[^/]*</code></td><td>「/」を含まない文字列（1 つの階層）</td><td><code>logs/[^/]*\.json</code> は logs/ の直下の .json だけ</td></tr>
-<tr><td><code>\.</code></td><td>文字の「.」</td><td><code>PT1H\.json</code></td></tr>
+<tr><td><code>\.</code></td><td>「.」そのもの</td><td><code>PT1H\.json</code></td></tr>
 <tr><td><code>(a|b)</code></td><td>a か b</td><td><code>(app|web)/.*</code></td></tr>
-<tr><td><code>[0-9]{2}</code></td><td>数字 2 文字</td><td><code>h=[0-9]{2}</code></td></tr>
+<tr><td><code>[0-9]{2}</code></td><td>数字 2 桁</td><td><code>h=[0-9]{2}</code></td></tr>
 </tbody>
 </table>
-<p class="note">先頭を文字そのもの（正規表現の記号を含まない部分）で始めると、その部分を prefix として一覧を取得するため、検索が速くなります。<code>.*\.json</code> のように先頭が記号の場合は、コンテナーのすべての Blob を一覧します。</p>
+<p class="note">パスパターンの先頭が固定の文字列（正規表現の記号を含まない部分）の場合は、その部分を prefix として一覧を取得するため、検索が高速になります。<code>.*\.json</code> のように先頭が記号の場合は、コンテナー内のすべての Blob の一覧を取得します。</p>
 <h2>変数</h2>
-<p><code>{{名前}}</code> の形で、パスパターンに変数を埋め込めます。変数の値は、検索のページの変数の欄で指定します。複数の値を指定すると、それぞれの値で検索します。</p>
+<p><code>{{名前}}</code> の形で、パスパターンに変数を埋め込めます。変数の値は、検索ページの変数の欄で指定します。複数の値を指定すると、それぞれの値で検索します。</p>
 <ul>
 <li>文字の変数: <code>locks/{{func}}/host</code> の <code>func</code> に「app1」「app2」を指定すると、<code>locks/app1/host</code> と <code>locks/app2/host</code> を検索します。</li>
 <li><strong>選択肢の変数</strong>: 変数の種類で「選択肢」を選択すると、値の一覧から検索する値を選択できます（複数選択、キーワードでの絞り込み）。パスパターンの自動生成では、値の種類が少ない部分が選択肢の変数になります。</li>
 <li>日時の変数: <code>{{dt=YYYY}}/{{dt=MM}}/{{dt=DD}}/{{dt=hh}}</code> のように、同じ名前の変数に書式を付けて記述します。期間（開始と終了）を指定すると、その期間に該当する Blob だけを、日時ごとの prefix で取得します。</li>
-<li>書式: <code>YYYY</code>（年 4 桁）、<code>YY</code>（年の下 2 桁）、<code>MM</code>（月）、<code>DD</code>（日）、<code>hh</code>（時。24 時間）、<code>mm</code>（分）、<code>ss</code>（秒）。<code>M</code>・<code>D</code>・<code>h</code>・<code>m</code>・<code>s</code> の 1 文字の書式は、ゼロで埋めない数字に一致します。</li>
-<li>同じ名前の変数を 2 回以上記述すると、すべての箇所が同じ値のものだけに一致します（例: <code>{{rule}}/{{rule}}_\d+\.csv</code>）。</li>
-<li>時差: Blob 名の日時が UTC で、入力をローカル時刻で行う場合などは、日時の変数の「入力の基準」でローカル時刻を選択します。Blob 名の日時の基準は、変数の行の「…」のメニューで変更できます（既定は UTC）。</li>
+<li>書式: <code>YYYY</code>（年 4 桁）、<code>YY</code>（年の下 2 桁）、<code>MM</code>（月）、<code>DD</code>（日）、<code>hh</code>（時。24 時間）、<code>mm</code>（分）、<code>ss</code>（秒）。<code>M</code>・<code>D</code>・<code>h</code>・<code>m</code>・<code>s</code> の 1 文字の書式は、ゼロ埋めしない数字に一致します。</li>
+<li>同じ名前の変数を 2 回以上記述した場合は、すべての箇所が同じ値の Blob 名だけに一致します（例: <code>{{rule}}/{{rule}}_\d+\.csv</code>）。</li>
+<li>時刻の基準: Blob 名の日時が UTC で、入力をローカル時刻で行う場合などは、日時の変数の「入力の基準」でローカル時刻を選択します。Blob 名の日時の基準は、変数の行の「…」のメニューで変更できます（既定は UTC）。</li>
 </ul>
 <h2>既知の形式</h2>
-<p>検索のページの [既知の形式から作成] で形式を選択すると、コンテナーとパスパターンを作成します。リソース ID の部分は、大文字・小文字が異なっていても一致します。</p>
+<p>検索ページの [既知の形式から作成] で形式を選択すると、コンテナーとパスパターンを作成します。リソース ID の部分は、大文字・小文字が異なっていても一致します。</p>
 <table>
 <thead><tr><th>分類</th><th>名前</th><th>コンテナー</th><th>説明</th></tr></thead>
 <tbody>
-<tr><td>Azure Monitor</td><td>リソースログ（診断設定）</td><td><code>insights-logs-{category}</code></td><td>診断設定でストレージアカウントに送ったリソースログ。1時間ごとの PT1H.json です。</td></tr>
+<tr><td>Azure Monitor</td><td>リソースログ（診断設定）</td><td><code>insights-logs-{category}</code></td><td>診断設定でストレージアカウントに送ったリソースログ。1 時間ごとに PT1H.json が作成されます。</td></tr>
 <tr><td>Azure Monitor</td><td>アクティビティログ</td><td><code>insights-activity-logs</code></td><td>診断設定でストレージアカウントに送ったアクティビティログ。</td></tr>
 <tr><td>Azure Monitor</td><td>メトリック（診断設定）</td><td><code>insights-metrics-pt1m</code></td><td>診断設定でストレージアカウントに送ったメトリック。</td></tr>
-<tr><td>Azure Monitor</td><td>Log Analytics のエクスポート</td><td><code>am-{table}</code></td><td>Log Analytics ワークスペースのデータのエクスポート。5 分ごとのフォルダーに PT05M.json が増えます。</td></tr>
+<tr><td>Azure Monitor</td><td>Log Analytics のエクスポート</td><td><code>am-{table}</code></td><td>Log Analytics ワークスペースのデータのエクスポート。5 分ごとのフォルダーに PT05M.json が作成されます。</td></tr>
 <tr><td>Microsoft Entra ID</td><td>サインインログ・監査ログ</td><td><code>insights-logs-{category}</code></td><td>Microsoft Entra ID の診断設定でストレージアカウントに送ったログ。</td></tr>
 <tr><td>ネットワーク</td><td>仮想ネットワークのフローログ</td><td><code>insights-logs-flowlogflowevent</code></td><td>Network Watcher の仮想ネットワークのフローログ。</td></tr>
 <tr><td>ネットワーク</td><td>NSG フローログ</td><td><code>insights-logs-networksecuritygroupflowevent</code></td><td>Network Watcher の NSG フローログ（廃止が予定されています）。</td></tr>
@@ -63,8 +63,8 @@
 <tr><td>Storage</td><td>変更フィード（セグメント）</td><td><code>$blobchangefeed</code></td><td>BLOB の変更フィードのセグメントのファイル（meta.json）。</td></tr>
 <tr><td>Storage</td><td>BLOB インベントリ</td><td><code>{container}</code></td><td>BLOB インベントリのデータ（CSV・Parquet）。</td></tr>
 <tr><td>Storage</td><td>BLOB インベントリ（マニフェスト）</td><td><code>{container}</code></td><td>BLOB インベントリのマニフェスト。</td></tr>
-<tr><td>そのほか</td><td>Event Hubs のキャプチャ</td><td><code>{container}</code></td><td>Event Hubs のキャプチャ（既定の名前の形式）。</td></tr>
-<tr><td>そのほか</td><td>Azure SQL Database の監査ログ</td><td><code>sqldbauditlogs</code></td><td>Azure SQL Database の監査ログ（.xel）。</td></tr>
+<tr><td>その他</td><td>Event Hubs のキャプチャ</td><td><code>{container}</code></td><td>Event Hubs のキャプチャ（既定の名前の形式）。</td></tr>
+<tr><td>その他</td><td>Azure SQL Database の監査ログ</td><td><code>sqldbauditlogs</code></td><td>Azure SQL Database の監査ログ（.xel）。</td></tr>
 </tbody>
 </table>
 <footer>FinFeT <span data-fill="version">（開発版）</span></footer>

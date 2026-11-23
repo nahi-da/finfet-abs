@@ -38,7 +38,7 @@ def main() -> int:
         return 1
     sys.stdout.reconfigure(encoding="utf-8")
     print(body)
-    print("\n---\n全部入り版の確かめ方は、同梱の docs/setup.html（ダウンロードとハッシュの確認）を見てください。")
+    print("\n---\n配布用の ZIP ファイルの検証方法は、同梱の docs/setup.html の「ダウンロードとハッシュの確認」を参照してください。")
     return 0
 
 
