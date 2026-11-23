@@ -65,6 +65,8 @@ const HELP = {
   'exit.wait_minutes': '画面をすべて閉じてから、本ツールを終了するまでの時間です。',
   'log.level': 'ログに書く内容の細かさです。問題を調べるときは DEBUG にします。',
   'log.max_files': 'ログのファイルを残す日数です。古いものから消します。',
+  'log.console': '本ツールを起動したときの黒いウィンドウ（コンソール）に、ログを表示します。ファイルのログと同じく、秘密の値は伏せ字にします。表示が追いつかないときは、一部の行を省きます（ファイルにはすべて残ります）。',
+  'log.console_level': 'コンソールに表示するログの細かさです。ファイルのログのレベルとは別に決められます。',
   'history.max_entries': '検索履歴を残す数の上限です。ピン留めした履歴は消しません。',
 };
 
@@ -160,6 +162,8 @@ function sections(session) {
         ['__data_dir', 'データ保存先', 'datadir'],
         ['log.level', 'ログのレベル', 'select', { options: [['DEBUG', 'DEBUG'], ['INFO', 'INFO'], ['WARNING', 'WARNING'], ['ERROR', 'ERROR']] }],
         ['log.max_files', 'ログを保存する数', 'num', { unit: '日分' }],
+        ['log.console', 'コンソールの表示', 'check', { text: '本ツールを起動したウィンドウ（コンソール）にもログを表示する' }],
+        ['log.console_level', 'コンソールのログのレベル', 'select', { options: [['DEBUG', 'DEBUG'], ['INFO', 'INFO'], ['WARNING', 'WARNING'], ['ERROR', 'ERROR']] }],
         ['history.max_entries', '検索履歴の上限', 'num', { unit: '件' }],
         ['__reset', '', 'reset'],
       ],

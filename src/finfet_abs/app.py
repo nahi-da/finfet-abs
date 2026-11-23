@@ -61,6 +61,8 @@ class App:
             self.job_log.set_level(self.settings.get("log.level"))
         if "log.max_files" in keys:
             logs.set_max_files(self.settings.get("log.max_files"))
+        if "log.console" in keys or "log.console_level" in keys:
+            logs.set_console(self.settings.get("log.console"), self.settings.get("log.console_level"))
         if "load.process_priority" in keys:
             winapi.set_process_priority(self.settings.get("load.process_priority"))
         self.events.publish("settings.changed", {"keys": keys})
@@ -164,6 +166,10 @@ def run(args) -> int:
     if not args.no_browser:
         webbrowser.open(url)
     console.started(__version__, url, demo)
+    # 起動の案内の後から、ログをコンソールにも表示します（案内がログに埋もれないように）
+    if app.settings.get("log.console"):
+        console.info("ログ（設定の「データとログ」で、表示の有無とレベルを変えられます）:")
+    logs.set_console(app.settings.get("log.console"), app.settings.get("log.console_level"))
 
     def on_console_event(event: int) -> None:
         app.request_shutdown()
