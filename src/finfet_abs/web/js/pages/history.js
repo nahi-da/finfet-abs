@@ -1,7 +1,7 @@
 // 検索履歴のページ（4.7）。
 
 import * as api from '../api.js';
-import { debounce, h, icon, iconButton, linkButton } from '../dom.js';
+import { debounce, h, icon, iconButton, linkButton, navButton } from '../dom.js';
 import { dateFull, dateShort, num } from '../format.js';
 import { confirmDialog } from '../parts/dialog.js';
 import { openExport, openImport } from '../parts/exchange.js';
@@ -80,7 +80,7 @@ export async function render(ctx) {
       return `two-line${lastPinned ? ' group-sep' : ''}`;
     },
     fetch: async (offset, limit) => ({ total: items.length, items: items.slice(offset, offset + limit) }),
-    empty: h('span', null, '検索履歴はありません。', h('a', { href: '/search', text: '検索を開く' })),
+    empty: h('span', null, '検索履歴はありません。', navButton('検索を開く', '/search')),
   });
   root.append(table.el);
   ctx.onLeave(() => table.destroy());

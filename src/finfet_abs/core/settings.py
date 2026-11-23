@@ -59,7 +59,8 @@ SCHEMA: list[Field] = [
     _c("ui.blob_name_display", "full", "full", "common", "tail"),
     # v1.4.0: テーマ（dark・light・system）と文字の大きさ
     _c("ui.theme", "dark", "dark", "light", "system"),
-    _c("ui.font_size", "normal", "normal", "large"),
+    # 既定は「画面の大きさに合わせる」（v1.5.2: 依頼者の意見。広い画面で UI が小さく感じるため）
+    _c("ui.font_size", "auto", "auto", "normal", "large"),
     Field("ui.tables", "dict", {}),
     # 検索
     _c("search.input_timezone", "local", "local", "utc"),

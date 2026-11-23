@@ -7,10 +7,9 @@ import { on } from '../events.js';
 import { dateShort, num, size } from '../format.js';
 import { runTask } from '../task.js';
 import { openDialog } from './dialog.js';
-import { formGrid, radios, radioValue, row, select, textInput } from './form.js';
+import { choiceCards, formGrid, radioValue, row, select, textInput } from './form.js';
 import { toastError } from './toast.js';
 
-const MODES = [['sample', '階層をたどって見本を集める'], ['first', '先頭から指定した件数'], ['all', 'すべての Blob']];
 
 /**
  * @param {{targets: Array<Object>}} opt 検索のページの接続先（コンテナーが決まっているもの）
@@ -33,13 +32,22 @@ export function openInferDialog(opt) {
       return;
     }
     const tSel = select(targets.map((t, i) => [String(i), `${t.storage_account} / ${t.container}`]), '0', { 'aria-label': '接続先' });
-    const modeR = radios('infer-mode', MODES, 'sample', () => { limitIn.disabled = radioValue(modeR) !== 'first'; });
-    const limitIn = textInput('10000', { width: 'w-num', inputmode: 'numeric', 'aria-label': '件数', disabled: true });
+    // 範囲（v1.5.2: 依頼者の意見で、違いの説明を付け、件数の入力欄を「先頭から指定した件数」の中に置いた）
+    const limitIn = textInput('10000', { width: 'w-num', inputmode: 'numeric', 'aria-label': '集める件数' });
+    const modeR = choiceCards('infer-mode', [
+      { value: 'sample', label: '階層をたどって見本を集める', tag: 'おすすめ',
+        desc: '階層（フォルダー）ごとに一部の名前だけを集めます。Blob が多くても短時間で終わります。Blob がある期間は、見本から求めた目安です。' },
+      { value: 'first', label: '先頭から指定した件数',
+        desc: '名前の順に、先頭から指定した件数を集めます。名前の後ろのほう（新しい日付など）の形式は含まれないことがあります。',
+        extra: h('span', { class: 'inline choice-extra' }, limitIn, '件') },
+      { value: 'all', label: 'すべての Blob',
+        desc: 'すべての名前を集めます。Blob がある期間を正確に求められますが、Blob が多いと、時間と要求の回数がかかります。' },
+    ], 'sample');
     const prefixIn = textInput('', { width: 'w-full', placeholder: '例: logs/2026/', 'aria-label': 'prefix' });
     const status = h('span', { class: 'muted' });
     const cacheInfo = h('span', { class: 'line' });
     const list = h('div');
-    d.body.append(formGrid(...row('接続先', tSel), ...row('範囲', h('div', null, modeR, h('div', { class: 'line' }, '件数', limitIn))),
+    d.body.append(formGrid(...row('接続先', tSel), ...row('範囲', modeR),
       ...row('prefix', prefixIn, { optional: true })), h('div', { class: 'line infer-status' }, status, cacheInfo), list);
 
     const runBtn = button('実行', () => run(false), { primary: true });

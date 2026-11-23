@@ -1,6 +1,6 @@
 // 変数の行（4.4.3）。種類によって、値の指定の欄の形が変わります。
 
-import { button, clear, h, iconButton, linkButton } from '../dom.js';
+import { addButton, button, clear, h, iconButton, linkButton, removeButton } from '../dom.js';
 import { openDialog } from './dialog.js';
 import { checkbox, select, setError, textInput } from './form.js';
 import { openMenu } from './menu.js';
@@ -451,10 +451,10 @@ export function variableRow(ctx) {
         h('label', { class: 'field grow' }, h('span', { class: 'field-label', text: `開始（${i + 2} つ目の期間）` }), mkMore(false, `${i + 2} つ目の期間の開始`)),
         h('label', { class: 'field grow' }, h('span', { class: 'field-label', text: '終了（この日時を含む）' }), mkMore(true, `${i + 2} つ目の期間の終了`)),
         h('div', { class: 'field' }, h('span', { class: 'field-label', text: ' ' }),
-          linkButton('この期間を削除', () => { more.splice(i, 1); if (more.length) v.more = more; else delete v.more; changed(); }))));
+          removeButton('この期間を削除', () => { more.splice(i, 1); if (more.length) v.more = more; else delete v.more; changed(); }))));
     });
     if (more.length < 19) {
-      body.append(h('div', { class: 'line' }, linkButton('期間を追加', () => { v.more = [...more, { start: '', end: '' }]; changed(); }),
+      body.append(h('div', { class: 'line' }, addButton('期間を追加', () => { v.more = [...more, { start: '', end: '' }]; changed(); }),
         more.length ? h('span', { class: 'muted', text: 'どれかの期間に入る Blob を検索します。' }) : null));
     }
     if (found) {

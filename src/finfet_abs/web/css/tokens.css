@@ -115,7 +115,7 @@
   }
 }
 
-/* 文字の大きさ: 大 */
+/* 文字の大きさ: 大（「画面の大きさに合わせる」では、幅 1,600px 以上で同じ大きさ。v1.5.2） */
 :root[data-size="large"] {
   --fs-body: 16px;
   --fs-small: 14px;
@@ -126,4 +126,37 @@
   --row-h: 40px;
   --tap: 44px;
   --tap-small: 36px;
+}
+
+@media (min-width: 1600px) {
+  :root[data-size="auto"] {
+    --fs-body: 16px;
+    --fs-small: 14px;
+    --fs-h1: 23px;
+    --fs-h2: 18px;
+    --fs-mono: 15px;
+    --fs-table: 15px;
+    --row-h: 40px;
+    --tap: 44px;
+    --tap-small: 36px;
+  }
+}
+
+/* とても広い画面（2,200px 以上。4K など）: 「画面の大きさに合わせる」と「大」で、さらに大きくします（v1.5.2） */
+@media (min-width: 2200px) {
+  :root[data-size="auto"], :root[data-size="large"] {
+    --fs-body: 18px;
+    --fs-small: 15px;
+    --fs-h1: 26px;
+    --fs-h2: 20px;
+    --fs-mono: 16px;
+    --fs-table: 16px;
+    --row-h: 44px;
+    --tap: 48px;
+    --tap-small: 40px;
+    --topbar-h: 56px;
+    --nav-w: 232px;
+    --sp-4: 18px;
+    --sp-6: 28px;
+  }
 }

@@ -1,7 +1,7 @@
 // 設定のページ（4.9）。
 
 import * as api from '../api.js';
-import { button, h, linkButton } from '../dom.js';
+import { button, h, linkButton, removeButton } from '../dom.js';
 import { mbps } from '../format.js';
 import { confirmDialog } from '../parts/dialog.js';
 import { pickFolder } from '../parts/folder.js';
@@ -58,7 +58,7 @@ const HELP = {
   'network.proxy.bypass': 'プロキシを使わない宛先です。「,」で区切ります。',
   'network.ca_bundle': '組織のプロキシが通信を検査する場合など、追加で信頼する CA 証明書（PEM 形式）のファイルです。',
   'ui.theme': '画面の色の組み合わせです。',
-  'ui.font_size': '画面の文字の大きさです。「大」では、表の行やボタンも大きくなります。',
+  'ui.font_size': '画面の文字の大きさです。「大」では、表の行やボタンも大きくなります。「画面の大きさに合わせる」では、ブラウザの幅が 1,600px 未満では標準、1,600px 以上では大、2,200px 以上ではさらに大きくします（幅の狭い画面の表示は変わりません）。',
   'ui.start_page': '本ツールを起動したときに最初に開くページです。',
   'ui.activity_popups': 'お知らせを、画面の右上にポップアップでも表示します。クリックすると、ジョブ・検索結果の詳細（エラーのときはエラーの内容）を開きます。マウスを重ねている間は消えません。見ているページのお知らせは、ポップアップにしません。すべてのお知らせは、上部のバーの「お知らせ」で後から見られます。',
   'ui.browser_notifications': 'リハイドレートの完了などを、Windows の通知（ブラウザの通知）でも知らせます。本ツールの画面が裏にあるときだけ通知します。',
@@ -152,7 +152,7 @@ function sections(session) {
     {
       id: 'ui', title: '画面', items: [
         ['ui.theme', 'テーマ', 'radios', { options: [['dark', 'ダーク'], ['light', 'ライト'], ['system', 'Windows の設定に合わせる']] }],
-        ['ui.font_size', '文字の大きさ', 'radios', { options: [['normal', '標準'], ['large', '大']] }],
+        ['ui.font_size', '文字の大きさ', 'radios', { options: [['auto', '画面の大きさに合わせる'], ['normal', '標準'], ['large', '大']] }],
         ['ui.start_page', '起動時に開くページ', 'select', { options: [['jobs', 'ジョブ'], ['search', '検索']] }],
         ['ui.activity_popups', 'ポップアップ', 'check', { text: 'ジョブの開始・完了・エラー、検索の終了などを、画面の右上にポップアップで知らせる' }],
         ['ui.browser_notifications', 'ブラウザの通知', 'check', { text: 'リハイドレートの完了などを、ブラウザの通知でも知らせる' }],
@@ -186,7 +186,7 @@ export async function render(ctx) {
   const whenRows = [];
   const bar = h('div', { class: 'sticky-bottom', hidden: true },
     button('保存', () => save(), { primary: true }),
-    linkButton('変更を破棄', () => { load(saved); updateDirty(); }));
+    removeButton('変更を破棄', () => { load(saved); updateDirty(); }));
 
   const changes = () => {
     const out = {};

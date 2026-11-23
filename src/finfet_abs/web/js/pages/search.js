@@ -1,7 +1,7 @@
 // 検索のページ（4.4）。入力の順番は 接続先 → パスパターン → 変数。検索のページに戻ると、入力はそのまま残っています。
 
 import * as api from '../api.js';
-import { button, clear, debounce, h, iconButton, linkButton } from '../dom.js';
+import { addButton, button, clear, debounce, h, iconButton, linkButton, menuButton } from '../dom.js';
 import { dateShort, num } from '../format.js';
 import { confirmDialog } from '../parts/dialog.js';
 import { openExport, openImport } from '../parts/exchange.js';
@@ -117,7 +117,7 @@ export async function render(ctx) {
         save();
         ctx.navigate('/search', { replace: true });
       }),
-      linkButton('最近の検索', (e) => recentMenu(e.currentTarget)),
+      menuButton('最近の検索', (e) => recentMenu(e.currentTarget)),
       linkButton('ファイルから読み込む', async () => {
         const r = await openImport({ allowLoad: true });
         if (r && r.condition) {
@@ -165,7 +165,7 @@ export async function render(ctx) {
       state.targets.forEach((t, i) => grid.append(...targetRow(t, i)));
       targetsSec.append(grid);
     }
-    targetsSec.append(h('div', { class: 'line' }, linkButton('接続先を追加', async () => {
+    targetsSec.append(h('div', { class: 'line' }, addButton('接続先を追加', async () => {
       const added = await openAddTargetDialog({ initialContainer: state.pendingContainer || '' });
       if (added && added.length) {
         for (const t of added) {
@@ -311,7 +311,7 @@ export async function render(ctx) {
   const icWarn = h('span', { class: 'warn', text: '一覧の取得を絞り込めないため、件数が多いと遅くなります', hidden: !state.ignore_case });
   const ic = checkbox('大文字・小文字を区別しない', state.ignore_case, (on) => { state.ignore_case = on; icWarn.hidden = !on; save(); analyze(); });
   patternSec.append(h('h2', { text: 'パスパターン' }), pi.el, patternErr, hint,
-    h('div', { class: 'line' }, linkButton('既知の形式から作成', () => fromKnown(null)), linkButton('パスパターンを自動生成', () => fromNames()), linkButton('履歴から', (e) => historyMenu(e.currentTarget)), ic, icWarn),
+    h('div', { class: 'line' }, linkButton('既知の形式から作成', () => fromKnown(null)), linkButton('パスパターンを自動生成', () => fromNames()), menuButton('履歴から', (e) => historyMenu(e.currentTarget)), ic, icWarn),
     prefixLine);
 
   async function historyMenu(anchor) {

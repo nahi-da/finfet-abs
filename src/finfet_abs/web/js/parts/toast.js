@@ -1,6 +1,6 @@
 // お知らせ（4.3.5）。操作の結果は左下に 5 秒間、後から確認したいものは上部のバーの「お知らせ」に残します。
 
-import { copyText, h } from '../dom.js';
+import { copyText, h, navButton } from '../dom.js';
 
 const MAX_NOTICES = 50;
 /** @type {{level: string, text: string, url?: string, at: Date, read: boolean}[]} */
@@ -20,7 +20,7 @@ export function toast(text, opt = {}) {
   if (!box) return;
   const el = h('div', { class: `toast${opt.error ? ' error' : ''}`, role: 'status' },
     h('span', { text }),
-    opt.href ? h('a', { href: opt.href, text: opt.linkText || '開く' }) : null);
+    opt.href ? navButton(opt.linkText || '開く', opt.href) : null);
   if (opt.copy) {
     el.append(h('button', { type: 'button', class: 'link-btn', text: '詳細をコピー', onclick: async () => {
       if (await copyText(opt.copy)) toast('詳細をコピーしました');

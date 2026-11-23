@@ -1,7 +1,7 @@
 // 接続先の追加のダイアログ（4.4.2.2）と、接続先の行の認証方式の選択（4.4.2.1）。
 
 import * as api from '../api.js';
-import { button, clear, debounce, h, iconButton, linkButton } from '../dom.js';
+import { addButton, button, clear, debounce, h, iconButton, linkButton } from '../dom.js';
 import { dateShort } from '../format.js';
 import { runTask } from '../task.js';
 import { confirmDialog, openDialog } from './dialog.js';
@@ -146,7 +146,7 @@ export function openAddTargetDialog(opt = {}) {
       const el = h('div', null,
         h('div', { class: 'inline' }, opts.title || h('span', { text: 'コンテナー' }), kw),
         msg, list,
-        h('div', { class: 'inline', style: { marginTop: '8px' } }, h('span', { text: 'コンテナー名' }), nameIn, linkButton('加える', addByName)));
+        h('div', { class: 'inline', style: { marginTop: '8px' } }, h('span', { text: 'コンテナー名' }), nameIn, addButton('加える', addByName)));
       return {
         el,
         setNames(n, message) { names = n; msg.textContent = message || ''; draw(); },
@@ -206,7 +206,7 @@ export function openAddTargetDialog(opt = {}) {
           'aria-label': '使うアカウント', onchange: (e) => azureScreen(e.target.value),
         }))
         : h('span', { text: a.tenant_name ? `${a.username}（${a.tenant_name}）` : a.username });
-      const addAcct = linkButton('アカウントを追加', async () => { if (await startSignIn(null, { add: true })) azureScreen(a.id); });
+      const addAcct = addButton('アカウントを追加', async () => { if (await startSignIn(null, { add: true })) azureScreen(a.id); });
       const modeRadios = h('div', { class: 'radios', role: 'radiogroup', 'aria-label': '認証方式' },
         ...[['entra_user', 'Entra ID ユーザーアカウント'], ['entra_key', 'アクセスキー']].map(([v, label]) => h('label.check', null,
           h('input', { type: 'radio', name: 'td-mode', value: v, checked: v === mode, onchange: () => { mode = v; drawAccounts(); } }), label)));
@@ -282,7 +282,7 @@ export function openAddTargetDialog(opt = {}) {
         loadContainers(n);
       };
       manual.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); addManual(); } });
-      const left = h('div', null, kw, acctList, h('div', { class: 'inline', style: { marginTop: '8px' } }, h('span', { text: '一覧にないストレージアカウント' }), manual, linkButton('加える', addManual)));
+      const left = h('div', null, kw, acctList, h('div', { class: 'inline', style: { marginTop: '8px' } }, h('span', { text: '一覧にないストレージアカウント' }), manual, addButton('加える', addManual)));
       const right = h('div', { class: 'td-right' }, cs.el);
       d.setBody(top, unavailable, h('div', { class: 'td-split' }, left, right), h('section', null, selLine, err));
       drawPicks();

@@ -1,7 +1,7 @@
 // 起動、ルーティング、ナビゲーション、上部のバー（4.2）。
 
 import * as api from './api.js';
-import { button, clear, h } from './dom.js';
+import { button, clear, h, navButton } from './dom.js';
 import * as events from './events.js';
 import { confirmDialog, infoDialog } from './parts/dialog.js';
 import { openMenu } from './parts/menu.js';
@@ -90,7 +90,7 @@ async function renderCurrent() {
   clear(root);
   if (!route) {
     setTitle('見つかりません');
-    root.append(h('h1', { text: '見つかりません' }), h('p', null, 'このページはありません。', h('a', { href: '/jobs', text: 'ジョブを開く' })));
+    root.append(h('h1', { text: '見つかりません' }), h('p', null, 'このページはありません。', navButton('ジョブを開く', '/jobs')));
     return;
   }
   const [re, mod, , name] = route;
@@ -185,12 +185,14 @@ const NAV_KEY = 'finfet.nav.compact';
  */
 export function applyLook(values) {
   const theme = values && ['dark', 'light', 'system'].includes(values['ui.theme']) ? values['ui.theme'] : 'dark';
-  const sizeV = values && values['ui.font_size'] === 'large' ? 'large' : 'normal';
+  // 文字の大きさ: auto（画面の大きさに合わせる。v1.5.2 からの既定）・normal・large
+  const fs = values && values['ui.font_size'];
+  const sizeV = fs === 'large' || fs === 'normal' ? fs : 'auto';
   const root = document.documentElement;
   const before = `${root.dataset.theme || ''}|${root.dataset.size || ''}`;
   root.dataset.theme = theme;
-  if (sizeV === 'large') root.dataset.size = 'large';
-  else delete root.dataset.size;
+  if (sizeV === 'normal') delete root.dataset.size;
+  else root.dataset.size = sizeV;
   try { localStorage.setItem(LOOK_KEY, JSON.stringify({ theme, size: sizeV })); } catch { /* 覚えておけなくても使えます */ }
   // 表の行の高さなどを合わせ直します
   if (before !== `${root.dataset.theme || ''}|${root.dataset.size || ''}`) window.dispatchEvent(new Event('resize'));
@@ -198,7 +200,7 @@ export function applyLook(values) {
 
 try {
   const look = JSON.parse(localStorage.getItem(LOOK_KEY) || 'null');
-  if (look) applyLook({ 'ui.theme': look.theme, 'ui.font_size': look.size });
+  applyLook(look ? { 'ui.theme': look.theme, 'ui.font_size': look.size } : null);
 } catch { /* 初めて開いたとき */ }
 
 function setupNav() {
@@ -222,7 +224,7 @@ function showNotices(anchor) {
   const items = notices.length
     ? notices.map((n) => h('div', { class: 'menu-item-text' },
       h('div', { class: n.level === 'error' ? 'danger' : n.level === 'warn' ? 'warn' : '' }, n.text),
-      h('div', { class: 'muted' }, dateShort(n.at.toISOString()), n.url ? ' ' : '', n.url ? h('a', { href: n.url, text: '開く' }) : null)))
+      h('div', { class: 'muted' }, dateShort(n.at.toISOString()), n.url ? ' ' : '', n.url ? navButton('開く', n.url) : null)))
     : [h('div', { class: 'menu-text', text: 'お知らせはありません。' })];
   const menu = openMenu(anchor, items);
   menu.style.maxHeight = '60vh';

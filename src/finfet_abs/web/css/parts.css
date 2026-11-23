@@ -30,6 +30,9 @@
 .icon-connections { --icon: url("/icons/connections.svg"); }
 .icon-settings { --icon: url("/icons/settings.svg"); }
 .icon-help { --icon: url("/icons/help.svg"); }
+.icon-plus { --icon: url("/icons/plus.svg"); }
+.icon-caret { --icon: url("/icons/caret.svg"); }
+.icon-arrow { --icon: url("/icons/arrow.svg"); }
 
 /* ---- ボタン */
 .btn {
@@ -73,6 +76,32 @@
 .link-btn:hover:not(:disabled) { background: var(--bg-hover); text-decoration: none; }
 .link-btn:disabled { color: var(--text-disabled); border-color: var(--line); background: transparent; cursor: default; }
 .link-btn.warn { color: var(--warn); border-color: var(--warn); }
+
+/* 目的ごとのボタンの見た目（v1.5.2: 依頼者の意見。見た目がすべて同じだと区別しにくいため）
+   - ほかのページへ移る（go）: 角の丸い淡い青の地に →
+   - 追加（add）: 破線の枠に +
+   - 削除・除外（remove）・中止（caution）: 赤い文字
+   - メニューを開く（menu）: ▾ */
+.link-btn.go, a.link-btn.go, .btn.go, a.btn.go {
+  border-color: transparent;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--link);
+  font-weight: 600;
+  text-decoration: none;
+}
+.link-btn.go:hover, .btn.go:hover { background: var(--accent-soft); border-color: var(--link); text-decoration: none; }
+.link-btn.go .icon, .btn.go .icon { transition: transform .12s; }
+.link-btn.go:hover .icon, .btn.go:hover .icon { transform: translateX(2px); }
+.link-btn.lb-add { border-style: dashed; border-color: var(--link); color: var(--link); background: transparent; }
+.link-btn.lb-add:hover:not(:disabled) { background: var(--accent-soft); }
+.link-btn.lb-remove { color: var(--danger); border-color: var(--line); background: transparent; }
+.link-btn.lb-remove:hover:not(:disabled) { border-color: var(--danger); background: transparent; }
+.link-btn.lb-menu { padding-right: var(--sp-2); }
+.btn.caution { color: var(--danger); border-color: var(--danger); background: transparent; }
+.btn.caution:hover:not(:disabled) { background: var(--bg-hover); }
+.btn.caution:disabled { color: var(--text-disabled); border-color: var(--line); }
+@media (prefers-reduced-motion: reduce) { .link-btn.go .icon, .btn.go .icon { transition: none; } }
 
 .icon-btn {
   display: inline-flex;
@@ -118,6 +147,22 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--accent); width
 
 .check { display: inline-flex; align-items: center; gap: var(--sp-2); cursor: pointer; min-height: var(--tap-small); }
 .radios { display: flex; flex-wrap: wrap; gap: 0 var(--sp-4); align-items: center; min-height: var(--tap); }
+/* 説明付きの選択肢（v1.5.2） */
+.radios.choice-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(14em, 1fr)); gap: var(--sp-2); align-items: stretch; width: 100%; }
+.choice-card {
+  display: flex; gap: var(--sp-2); align-items: flex-start; padding: var(--sp-2) var(--sp-3);
+  border: 1px solid var(--line-strong); border-radius: var(--radius); background: var(--bg-raised); cursor: pointer;
+}
+.choice-card > input { margin-top: 3px; }
+.choice-card:hover { background: var(--bg-hover); }
+.choice-card:has(input:checked) { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); background: var(--accent-soft); }
+.choice-card:has(input:focus-visible) { outline: 2px solid var(--focus); outline-offset: 2px; }
+.choice-body { display: flex; flex-direction: column; gap: var(--sp-1); min-width: 0; }
+.choice-title { font-weight: 600; display: flex; align-items: center; gap: var(--sp-2); flex-wrap: wrap; }
+.choice-tag { font-size: var(--fs-small); font-weight: 400; padding: 0 var(--sp-2); border-radius: 999px; background: var(--accent); color: var(--accent-text); }
+.choice-desc { font-size: var(--fs-small); color: var(--text-muted); line-height: 1.5; }
+.choice-extra { margin-top: var(--sp-1); }
+.choice-card:not(:has(input:checked)) .choice-extra { opacity: .55; }
 .inline { display: inline-flex; align-items: center; gap: var(--sp-2); flex-wrap: wrap; }
 .line { display: flex; align-items: center; gap: var(--sp-2); flex-wrap: wrap; min-height: var(--tap); }
 .line + .line { margin-top: var(--sp-1); }
@@ -228,17 +273,26 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--accent); width
 .vtable .vcell.center { text-align: center; display: flex; justify-content: center; }
 .vtable .vhead .vcell { position: relative; user-select: none; display: flex; align-items: center; gap: var(--sp-1); }
 .vtable .vhead .vcell.right { justify-content: flex-end; }
-.vtable .vhead .vcell.sortable { cursor: pointer; }
-.vtable .vhead .vcell.sortable:hover { color: var(--text); }
+.vtable .vhead .sort-btn {
+  display: inline-flex; align-items: center; gap: var(--sp-1); min-width: 0; max-width: calc(100% - 8px);
+  min-height: var(--tap-small); padding: 0 var(--sp-1); margin-left: calc(-1 * var(--sp-1));
+  border: 0; border-radius: var(--radius); background: none; color: inherit; font: inherit; cursor: pointer;
+}
+.vtable .vhead .sort-btn:hover { color: var(--text); background: var(--bg-hover); }
+.vtable .vhead .sort-btn .icon { opacity: 0; flex: none; }
+.vtable .vhead .sort-btn:hover .icon, .vtable .vhead .sort-btn:focus-visible .icon { opacity: .5; }
+.vtable .vhead .sort-btn.on { color: var(--text); }
+.vtable .vhead .sort-btn.on .icon { opacity: 1; }
 /* 列の幅を変える境界（v1.5.0: 依頼者の意見で、常に縦線を見せ、つかめる幅を広げた） */
 .vtable .vhead .resizer {
   position: absolute;
   top: 0;
   right: 0;
   z-index: 1;
-  width: 10px;
+  width: 12px;
   height: 100%;
   cursor: col-resize;
+  touch-action: none;
 }
 .vtable .vhead .resizer::after {
   content: "";
@@ -541,3 +595,43 @@ a.popup-body:hover .popup-open { text-decoration: underline; }
 @media (max-width: 639px) {
   .popups { right: var(--sp-2); left: var(--sp-2); width: auto; }
 }
+
+/* ---- 保存するパスをブロックで組み立てる（v1.5.2: 依頼者の意見） */
+.tmpl-field { display: flex; flex-direction: column; gap: var(--sp-2); width: 100%; }
+.path-blocks { border: 1px solid var(--line); border-radius: var(--radius); padding: var(--sp-2); background: var(--bg); display: flex; flex-direction: column; gap: var(--sp-2); }
+.pb-head { display: flex; align-items: center; gap: var(--sp-2); }
+.pb-head .push { margin-left: auto; }
+.pb-canvas {
+  display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-1); min-height: calc(var(--tap) + 8px);
+  padding: var(--sp-1) var(--sp-2); border: 1px dashed var(--line-strong); border-radius: var(--radius); background: var(--bg-input);
+}
+.pb-empty { color: var(--text-muted); font-size: var(--fs-small); }
+.pb-block, .pb-chip {
+  --kind: var(--line-strong);
+  display: inline-flex; align-items: center; gap: var(--sp-1); min-height: var(--tap-small); padding: 0 var(--sp-1) 0 var(--sp-2);
+  border: 1px solid var(--kind); border-left-width: 4px; border-radius: var(--radius);
+  background: color-mix(in srgb, var(--kind) 16%, var(--bg-raised)); color: var(--text); white-space: nowrap;
+}
+.pb-block { cursor: grab; }
+.pb-block:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.pb-block.dragging { opacity: .4; }
+.pb-block.drop-before { box-shadow: -4px 0 0 -1px var(--accent); }
+.pb-block.drop-after { box-shadow: 4px 0 0 -1px var(--accent); }
+.pb-block.builtin, .pb-chip.builtin { --kind: var(--link); }
+.pb-block.var, .pb-chip.var { --kind: var(--ok); }
+.pb-block.datetime, .pb-chip.datetime { --kind: var(--warn); }
+.pb-block.text, .pb-chip.text { --kind: var(--line-strong); font-family: var(--font-mono); }
+.pb-block.sep, .pb-chip.sep { --kind: var(--text-muted); font-family: var(--font-mono); font-weight: 700; }
+.pb-block.sep { padding-left: var(--sp-2); border-left-width: 1px; border-radius: 999px; }
+.pb-text { border: 0; background: transparent; color: var(--text); font: inherit; padding: 0; min-width: 2ch; }
+.pb-text:focus { outline: none; }
+.pb-del { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; padding: 0; border: 0; border-radius: 4px; background: none; color: var(--text-muted); cursor: pointer; }
+.pb-del:hover { background: var(--bg-hover); color: var(--danger); }
+.pb-del .icon { width: 12px; height: 12px; -webkit-mask-size: 12px 12px; mask-size: 12px 12px; }
+.pb-palette { display: flex; flex-wrap: wrap; gap: var(--sp-2) var(--sp-4); }
+.pb-group { display: flex; flex-direction: column; gap: var(--sp-1); min-width: 0; }
+.pb-group-title { font-size: var(--fs-small); color: var(--text-muted); }
+.pb-chips { display: flex; flex-wrap: wrap; gap: var(--sp-1); }
+.pb-chip { cursor: pointer; padding-right: var(--sp-2); font: inherit; }
+.pb-chip:hover { background: color-mix(in srgb, var(--kind) 30%, var(--bg-raised)); }
+.pb-chip .icon { opacity: .7; width: 12px; height: 12px; -webkit-mask-size: 12px 12px; mask-size: 12px 12px; }
