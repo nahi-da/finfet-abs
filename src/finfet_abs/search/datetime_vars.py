@@ -47,6 +47,8 @@ SHAPES = {
 }
 
 MAX_STEPS = 5000
+#: 追加の期間の数の上限（v1.5.0）
+MAX_EXTRA_PERIODS = 19
 
 
 class DateTimeFormatError(ValueError):
@@ -418,6 +420,16 @@ def resolve_value(value: dict, *, now_utc: datetime, input_zone: Zone, path_zone
         return DateTimeValue("units", units=parse_units(value.get("units") or {}))
     if mode == "period":
         rs = period_ranges(value.get("start", ""), value.get("end", ""), value.get("step"), value.get("step_unit"))
+        # 追加の期間（v1.5.0。依頼者の依頼: 複数の期間を指定する）。どれかの期間に入れば一致します
+        more = value.get("more") or []
+        if len(more) > MAX_EXTRA_PERIODS:
+            raise ValueError(f"追加の期間は {MAX_EXTRA_PERIODS} 個までです。")
+        for i, p in enumerate(more):
+            try:
+                rs += period_ranges((p or {}).get("start", ""), (p or {}).get("end", ""), value.get("step"), value.get("step_unit"))
+            except ValueError as exc:
+                raise ValueError(f"{i + 2} つ目の期間: {exc}") from None
+        rs = merge_ranges(rs)
     elif mode == "relative":
         now_wall = input_zone.from_utc(now_utc.astimezone(timezone.utc).replace(tzinfo=None))
         rs = relative_ranges(value.get("kind", ""), now_wall, value.get("n"), value.get("from"), value.get("to"))

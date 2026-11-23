@@ -115,7 +115,9 @@ def value_summary(v: dict) -> str:
             return RELATIVE_LABELS.get(k, k or "")
         if mode == "period":
             s, e = val.get("start", ""), val.get("end", "")
-            return s if s == e else f"{s}〜{e}"
+            text = s if s == e else f"{s}〜{e}"
+            more = val.get("more") or []
+            return text + (f" ほか {len(more)} 期間" if more else "")
         if mode == "units":
             return "単位ごと"
         return ""

@@ -386,6 +386,8 @@ export async function render(ctx) {
     };
     v.start = shift(v.start);
     v.end = shift(v.end);
+    // 追加の期間（v1.5.0）も、同じ日数だけ動かします
+    for (const p of Array.isArray(v.more) ? v.more : []) { p.start = shift(p.start); p.end = shift(p.end); }
     def.touched = true;
     save();
     drawVars();

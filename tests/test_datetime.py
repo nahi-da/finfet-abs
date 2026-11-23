@@ -100,6 +100,32 @@ class GranularityTest(unittest.TestCase):
                 self.assertGreater(n, 0)
                 self.assertTrue(c.datetimes["dt"].ordered)
 
+    def test_brute_multiple_periods(self) -> None:
+        """複数の期間（v1.5.0）: どれかの期間に入る Blob だけが一致し、prefix が漏れないこと。"""
+        cases = [
+            {"mode": "period", "start": "2026-01-01", "end": "2026-03-31", "more": [{"start": "2026-05-01", "end": "2026-06-30"}]},
+            {"mode": "period", "start": "2026-11-28 22", "end": "2026-11-29 01",
+             "more": [{"start": "2026-12-31", "end": "2027-01-01"}, {"start": "2026-11-29", "end": "2026-11-29"}]},
+            {"mode": "period", "start": "2026-02-01 09", "end": "2026-02-03", "step": 1, "step_unit": "day",
+             "more": [{"start": "2026-04-10 09", "end": "2026-04-12"}]},
+        ]
+        fmt = lambda t: f"y={t.year}/m={t.month:02d}/d={t.day:02d}/h={t.hour:02d}/m=00/PT1H.json"  # noqa: E731
+        for v in cases:
+            for tz in ("utc", "local"):
+                c, n = brute(self, r"y={{dt=YYYY}}/m={{dt=MM}}/d={{dt=DD}}/h={{dt=hh}}/m=00/PT1H\.json", v, fmt,
+                             dtv.HOUR, datetime(2025, 12, 28), datetime(2027, 1, 5), input_tz=tz)
+                self.assertGreater(n, 0)
+        # 1 つ目と 2 つ目の間（4 月）は一致しません
+        c = compile_path(r"y={{dt=YYYY}}/m={{dt=MM}}/d={{dt=DD}}/.*", dtvar(cases[0]), input_timezone="utc", ctx=CTX)
+        self.assertIsNotNone(c.match("y=2026/m=02/d=10/a.json"))
+        self.assertIsNone(c.match("y=2026/m=04/d=10/a.json"))
+        self.assertIsNotNone(c.match("y=2026/m=06/d=30/a.json"))
+        # 誤りは何番目の期間かを示します
+        bad = {"mode": "period", "start": "2026-01-01", "end": "2026-01-02", "more": [{"start": "2026-03-05", "end": "2026-03-01"}]}
+        with self.assertRaises(PatternError) as cm:
+            compile_path("{{dt=YYYY}}/{{dt=MM}}/{{dt=DD}}", dtvar(bad), input_timezone="utc", ctx=CTX)
+        self.assertIn("2 つ目の期間", str(cm.exception.issues[0].message))
+
     def test_brute_unpadded_and_not_ordered(self) -> None:
         v = {"mode": "period", "start": "2026-01-30", "end": "2026-03-02"}
         brute(self, "{{dt=YYYY}}/{{dt=M}}/{{dt=D}}/x", v, lambda t: f"{t.year}/{t.month}/{t.day}/x", dtv.DAY,
