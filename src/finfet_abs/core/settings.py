@@ -64,6 +64,8 @@ SCHEMA: list[Field] = [
     # 検索
     _c("search.input_timezone", "local", "local", "utc"),
     _i("search.merge_trial_pages", 1, 1, 10),
+    # 一覧の 1 回の要求で取得する件数（依頼者の依頼。v1.5.0。Azure の上限は 5,000）
+    _i("search.page_size", 5000, 1, 5000),
     _i("search.max_prefixes", 32, 1, 256),
     _i("search.max_results", 300000, 1, 300000),
     _i("search.list_concurrency", 4, 1, 16),

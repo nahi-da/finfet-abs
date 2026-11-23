@@ -21,6 +21,7 @@ from .prefix import normalize
 
 log = logging.getLogger(__name__)
 
+#: 1 回の要求で取得する件数の既定と上限（List Blobs の maxresults の上限が 5,000。設定 search.page_size。v1.5.0）
 PAGE_SIZE = 5000
 
 
@@ -97,7 +98,7 @@ class ListStats:
 
 def list_target(backend: StorageBackend, target: ContainerRef, prefixes: list[str], *,
                 on_items: Callable[[list[BlobInfo]], None], cancel: threading.Event | None = None,
-                trial_pages: int = 1, concurrency: int = 4, cache: ListingCache | None = None,
+                trial_pages: int = 1, concurrency: int = 4, cache: ListingCache | None = None, page_size: int = PAGE_SIZE,
                 stats: ListStats | None = None, include_metadata: bool = False,
                 connection: Callable[[], object] | None = None) -> None:
     """1つの接続先（コンテナー）の一覧を取得し、ページごとに on_items に渡します。
@@ -108,6 +109,7 @@ def list_target(backend: StorageBackend, target: ContainerRef, prefixes: list[st
     stats = stats or ListStats()
     cancel = cancel or threading.Event()
     connection = connection or nullcontext
+    page_size = max(1, min(PAGE_SIZE, int(page_size)))
     prefixes = normalize(prefixes or [""])
     key = target.key
     emit_lock = threading.Lock()
@@ -136,7 +138,7 @@ def list_target(backend: StorageBackend, target: ContainerRef, prefixes: list[st
     def fetch_page(prefix: str, token: str | None):
         check()
         with connection():
-            page = backend.list_blobs_page(target, prefix, token, PAGE_SIZE, include_metadata)
+            page = backend.list_blobs_page(target, prefix, token, page_size, include_metadata)
         stats.add(1, len(page.items))
         return page
 
