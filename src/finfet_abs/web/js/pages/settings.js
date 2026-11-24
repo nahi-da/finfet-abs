@@ -169,6 +169,7 @@ function sections(session) {
         ['ui.blob_name_display', 'Blob 名の表示', 'select', { options: [['full', '全体'], ['common', '共通する階層を省略'], ['tail', '末尾のみ']] }],
         ['exit.when_closed', '自動の終了', 'check', { text: '本ツールの画面（ブラウザのタブ）をすべて閉じた場合に、本ツールを終了する（実行中のジョブ・検索がある場合は、完了後に終了します）' }],
         ['exit.wait_minutes', '終了までの時間', 'num', { unit: '分（画面をすべて閉じてから）' }],
+        ['__tutorial', 'チュートリアル', 'tutorial'],
       ],
     },
     {
@@ -331,6 +332,11 @@ export async function render(ctx) {
         if (session.acl_warning) parts.push(h('div', { class: 'warn', text: 'データフォルダーのアクセス制限（ACL）を設定できませんでした。ほかのユーザーがデータを閲覧できる可能性があります。' }));
         return row(label, parts);
       }
+      case 'tutorial':
+        // チュートリアル（4.12）: 通常のモードでは、デモモードの本ツールを起動して新しいタブで始めます
+        return row(label, [button('チュートリアルを始める', () => import('../parts/tutorial.js').then((t) => t.launch())),
+          h('div', { class: 'muted', text: session.demo ? '架空のデータで、検索からダウンロードまでの流れを体験します。'
+            : '架空のデータで、検索からダウンロードまでの流れを体験します。デモモードの FinFeT を起動し、新しいタブで開きます（実際の Azure には接続しません）。' })]);
       case 'reset':
         return row('', button('設定を既定に戻す', async () => {
           const ok = await confirmDialog({ title: '設定を既定に戻しますか', body: 'すべての設定を既定値に戻します。保存されているプロキシのパスワードも削除されます。', okText: '既定に戻す' });

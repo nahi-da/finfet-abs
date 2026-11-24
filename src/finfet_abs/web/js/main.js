@@ -361,7 +361,18 @@ async function boot() {
   applyLook(app.settings);
   refreshAuth();
   events.start(s.events_last);
+  // チュートリアル（4.12）: ?tutorial=1 なら、検索のページの入力を空にして始めます
+  const tutorialStart = new URLSearchParams(location.search).get('tutorial') === '1';
+  if (tutorialStart) {
+    try { sessionStorage.removeItem('finfet.search.state'); } catch { /* なくても続けます */ }
+    history.replaceState(null, '', location.pathname);
+  }
   await renderCurrent();
+  import('./parts/tutorial.js').then((t) => {
+    if (tutorialStart) t.start();
+    else if (t.isActive()) t.resume();
+    else t.offerOnce();
+  }).catch((e) => console.error(e));
 }
 
 boot();

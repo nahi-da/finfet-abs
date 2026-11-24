@@ -146,7 +146,9 @@ class WsgiApp:
         """S3: 起動コードを Cookie に交換して `/` にリダイレクトします。"""
         if not self.security.consume_launch_code(req.arg("code")):
             return simple_page("FinFeT", "このページの URL は無効か、有効期限が切れています。finfet-abs.bat を再度実行してください。", 400)
-        return redirect("/", [self.security.session_cookie_header()])
+        # next は決めた値のみ受け付けます（任意の URL へのリダイレクトはしません。チュートリアル 4.12）
+        target = "/search?tutorial=1" if req.arg("next") == "tutorial" else "/"
+        return redirect(target, [self.security.session_cookie_header()])
 
 
 def _is_backend_error(exc: Exception) -> bool:
