@@ -12,7 +12,7 @@ import threading
 import time
 import uuid
 from contextlib import nullcontext
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Callable
 
 from ..azure.backend import AccountRef, AuthRef, BackendError, ContainerRef
@@ -20,7 +20,7 @@ from ..core.clock import SYSTEM_CLOCK, Clock, to_iso
 from ..core.errors import AppError, NotFound
 from . import caseresolve
 from . import datetime_vars as dtv
-from .listing import Cancelled, LimitReached, ListingCache, ListStats, list_target
+from .listing import Cancelled, LimitReached, ListingCache, ListingView, ListStats, SharedListing, list_target
 from .pattern import CompileContext, PatternError, compile_path, container_literal_prefix, expand_containers
 from .sortkey import sort_key
 
@@ -60,6 +60,8 @@ class SearchService:
         self.history = history
         self.clock = clock
         self.local_zone = local_zone or dtv.LocalZone()
+        #: 一覧の保持（v1.6.0。検索とパスパターンの自動生成で共有します）
+        self.listing = SharedListing()
         self.connection = connection
         self._sem = threading.Semaphore(MAX_CONCURRENT)
         self._runs: dict[str, SearchRun] = {}
@@ -69,11 +71,26 @@ class SearchService:
     # ------------------------------------------------------------ 開始
 
     def ctx(self) -> CompileContext:
+        from .holidays import HolidayCalendar
         return CompileContext(now_utc=self.clock.now(), local_zone=self.local_zone,
-                              max_prefixes=int(self.settings.get("search.max_prefixes")))
+                              max_prefixes=int(self.settings.get("search.max_prefixes")),
+                              holidays=HolidayCalendar.from_settings(str(self.settings.get("holidays.extra") or ""),
+                                                                     str(self.settings.get("holidays.not_holiday") or "")))
 
-    def start(self, cond: dict) -> str:
-        """検索を始め、検索の ID を返します。"""
+    def shared_listing(self) -> SharedListing:
+        """設定を反映した一覧の保持（v1.6.0）。"""
+        self.listing.configure(ttl=int(self.settings.get("listing.ttl_minutes")) * 60.0,
+                               max_items=int(self.settings.get("listing.max_items")),
+                               enabled=bool(self.settings.get("listing.reuse")))
+        return self.listing
+
+    @staticmethod
+    def listing_extra(t: dict, hns: bool = False) -> tuple:
+        """一覧の保持のキーに加える、認証とメタデータの有無。"""
+        return (t.get("auth_kind") or "entra_user", (t.get("account") or "").lower(), bool(hns))
+
+    def start(self, cond: dict, refresh: bool = False) -> str:
+        """検索を始め、検索の ID を返します。refresh なら、接続先の一覧の保持を消してから取得します（v1.6.0）。"""
         if not cond.get("targets"):
             raise AppError("NO_TARGETS", "接続先を追加してください。")
         for i, t in enumerate(cond["targets"]):
@@ -90,6 +107,10 @@ class SearchService:
         sid = str(uuid.uuid4())
         now = to_iso(self.clock.now())
         run = SearchRun(sid, cond)
+        if refresh:
+            for t in cond["targets"]:
+                head = (t["storage_account"], t.get("endpoint_suffix") or "core.windows.net")
+                self.listing.clear(head if "{{" in t["container"] else head + (t["container"],))
 
         def fn(c):
             c.execute("INSERT INTO searches(id, condition_json, status, started_at) VALUES(?,?,?,?)",
@@ -176,7 +197,8 @@ class SearchService:
             "id": run.id, "matched": matched, "listed": sum(t["listed"] for t in targets),
             "targets": [{"no": t["no"], "status": t["status"], "label": TARGET_LABELS.get(t["status"], ""),
                          "listed": t["listed"], "matched": t["matched"], "requests": t["requests"],
-                         "storage_account": t["storage_account"], "container": t["container"], "error": t["error"]}
+                         "storage_account": t["storage_account"], "container": t["container"], "error": t["error"],
+                         "reused_at": t.get("reused_at")}
                         for t in sorted(targets, key=lambda x: x["no"])]})
 
     def _auth(self, t: dict) -> AuthRef:
@@ -336,11 +358,13 @@ class SearchService:
                 raise LimitReached()
 
         status, error = "completed", None
+        listing = self.shared_listing()
+        view = ListingView(listing, self.listing_extra(t, hns)) if listing.enabled else self._cache(run)
         try:
             list_target(backend, target, compiled.prefixes, on_items=on_items, cancel=run.cancel,
                         trial_pages=int(cond.get("options", {}).get("merge_trial_pages") or
                                         self.settings.get("search.merge_trial_pages")),
-                        concurrency=int(self.settings.get("search.list_concurrency")), cache=self._cache(run),
+                        concurrency=int(self.settings.get("search.list_concurrency")), cache=view,
                         stats=stats, include_metadata=hns, connection=self.connection,
                         page_size=int(self.settings.get("search.page_size")))
         except LimitReached:
@@ -356,6 +380,8 @@ class SearchService:
         with run.lock:
             run.targets[no]["listed"] = stats.listed
             run.targets[no]["requests"] = stats.requests
+            if isinstance(view, ListingView) and view.reused_at is not None:
+                run.targets[no]["reused_at"] = to_iso(datetime.fromtimestamp(view.reused_at, timezone.utc))
         self._set_target(run, no, status=status, error=error)
         log.info("一覧を取得しました: %s/%s（取得 %s 件・一致 %s 件・要求 %s 回）", account.account, container, stats.listed,
                  run.targets[no]["matched"], stats.requests)

@@ -173,6 +173,7 @@ class CompileContext:
     now_utc: datetime
     local_zone: Zone = field(default_factory=dtv.LocalZone)
     max_prefixes: int = 32
+    holidays: object = None  # holidays.HolidayCalendar（None は設定の追加なし）
 
     def zone(self, name: str) -> Zone:
         return dtv.UTC_ZONE if name == "utc" else self.local_zone
@@ -437,6 +438,18 @@ def _compile_datetime(name: str, defn: dict, tokens: list[Token], idxs: list[int
     info = DateTimeInfo(name, value.mode, path_tz, value.input_ranges, value.ranges, False, gran)
     datetimes[name] = info
     years = list(range(value.ranges[0][0].year, value.ranges[-1][1].year + 1)) if value.ranges else []
+    days_ok = _days_filter(name, (defn.get("value") or {}).get("days"), symbols_all, fixed_fields, gran,
+                           path_zone, input_zone, ctx)
+
+    def add_days_check(extract) -> None:
+        if days_ok is None:
+            return
+
+        def check_days(m, extract=extract, n=name) -> bool:
+            vals: dict = {}
+            extract(m, vals)
+            return days_ok({dtv.UNITS.index(k): v for k, v in (vals.get(n) or {}).items()})
+        checks.append(check_days)
 
     # 上位から順に並ぶか（7.3.1）
     plan = _ordered_plan(tokens, idxs, fixed_fields, fixed_tuple)
@@ -468,6 +481,7 @@ def _compile_datetime(name: str, defn: dict, tokens: list[Token], idxs: list[int
                         fields[unit] = dtv.resolve_yy(iv, years)[0] if sym == "YY" else iv
                 vals[n] = {dtv.UNITS[u]: fields[u] for u in sorted(fields)}
             extractors.append(extract)
+            add_days_check(extract)
             return
 
     # 上位から順に並ばない場合など: 共通する上位の単位を固定した広めの正規表現と、追加の判定
@@ -530,6 +544,57 @@ def _compile_datetime(name: str, defn: dict, tokens: list[Token], idxs: list[int
 
     checks.append(check)
     extractors.append(extract)
+    add_days_check(extract)
+
+
+def _days_filter(name: str, days: dict | None, symbols: list[str], fixed_fields: dict, gran: int,
+                 path_zone: Zone, input_zone: Zone, ctx: CompileContext):
+    """曜日・祝日の絞り込み（v1.6.0）の判定（単位ごとの値 → 一致するか）。指定がなければ None。
+
+    日は入力の基準のタイムゾーンで決め、パスの単位の区間が条件に合う日と重なれば一致とします。
+    """
+    if not days:
+        return None
+    weekdays = {int(w) for w in days.get("weekdays", range(7)) if str(w).lstrip("-").isdigit() and 0 <= int(w) <= 6}
+    hmode = days.get("holidays", "include")
+    if hmode not in ("include", "exclude", "only"):
+        raise VariableError(name, f"変数「{name}」の祝日の扱いが正しくありません。")
+    if len(weekdays) == 7 and hmode == "include":
+        return None
+    if not weekdays:
+        raise VariableError(name, f"変数「{name}」の曜日を 1 つ以上選択してください。")
+    units = {dtv.SYMBOLS[s][0] for s in symbols} | set(fixed_fields)
+    if not {dtv.MONTH, dtv.DAY} <= units or not (dtv.YEAR in units or "YY" in symbols):
+        raise VariableError(name, f"変数「{name}」: 曜日・祝日で絞り込むには、パスパターンに年・月・日の単位が必要です。")
+    from .holidays import HolidayCalendar
+    cal = ctx.holidays if isinstance(ctx.holidays, HolidayCalendar) else HolidayCalendar()
+    same = type(path_zone) is type(input_zone) and getattr(path_zone, "offset", None) == getattr(input_zone, "offset", None)
+
+    def day_ok(d) -> bool:
+        if d.weekday() not in weekdays:
+            return False
+        if hmode == "include":
+            return True
+        hol = cal.is_holiday(d)
+        return hol if hmode == "only" else not hol
+
+    def check(fields: dict[int, int]) -> bool:
+        try:
+            tup = tuple(fields[u] for u in range(gran + 1))
+            start, end = dtv.unit_start(tup), dtv.unit_end(tup)
+        except (KeyError, ValueError):
+            return False
+        if not same:
+            start = input_zone.from_utc(path_zone.to_utc(start))
+            end = input_zone.from_utc(path_zone.to_utc(end))
+        d = start.date()
+        last = (end - dtv.timedelta(microseconds=1)).date()
+        while d <= last:
+            if day_ok(d):
+                return True
+            d += dtv.timedelta(days=1)
+        return False
+    return check
 
 
 def _constant_units(value: dtv.DateTimeValue) -> dict[int, int]:

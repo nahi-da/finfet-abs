@@ -468,6 +468,10 @@ def _choice_name(prefix: str, n: int, used: dict) -> str:
 MODES = ("sample", "first", "all")
 
 
+class SwitchToQuick(Exception):
+    """フルスキャンの途中で、クイックスキャンに切り替える（v1.6.0）。"""
+
+
 class Cancelled(Exception):
     pass
 
@@ -532,7 +536,10 @@ class NameCache:
 def collect(backend, target: ContainerRef, *, mode: str = "sample", prefix: str = "", limit: int = 10000,
             per_level: int = 10, max_depth: int = 40, max_requests: int = 500, cancel: threading.Event | None = None,
             progress: Callable[[int, int], None] | None = None,
-            connection: Callable[[], object] | None = None, page_size: int = 5000) -> tuple[list[tuple[str, int | None]], dict]:
+            connection: Callable[[], object] | None = None, page_size: int = 5000,
+            store: Callable[..., None] | None = None, stop: threading.Event | None = None,
+            on_threshold: Callable[[int, float], str] | None = None,
+            threshold: int = 100_000) -> tuple[list[tuple[str, int | None]], dict]:
     """Blob 名を集めます。戻り値は [(名前, 大きさ)] と、要求の回数・打ち切ったかの情報。
 
     - sample: 階層ごとに、まず名前の順の一覧の 1 ページ（page_size 件。既定 5,000 件）を取ります。1 ページで終われば、その下は
@@ -543,7 +550,17 @@ def collect(backend, target: ContainerRef, *, mode: str = "sample", prefix: str 
 
     info: requests（要求の回数）、truncated（上限で打ち切った）、complete（すべての Blob を集めた。sample で見本だけを
     たどった場合は False）、sizes_known（すべての大きさが分かっている。sample で階層の名前だけ取れた Blob は不明）
+
+    v1.6.0:
+    - store(prefix, items, upper): 取得した一覧（BlobInfo）を一覧の保持に渡します。upper は途中までの場合の最後の名前
+    - stop: all で設定されたら、そこまでで打ち切ります（[ここまでで生成]）
+    - on_threshold(件数, 経過秒): all で threshold 件を取得してまだ続きがあるときに 1 回だけ呼び、
+      "continue"・"stop"・"quick" を受け取ります。"quick" なら SwitchToQuick を出します
     """
+    import time as _time
+    started = _time.monotonic()
+    store = store or (lambda prefix, items, upper=None: None)
+    stop = stop or threading.Event()
     from contextlib import nullcontext
     page_size = max(1, min(5000, int(page_size)))  # 1 回の要求で取得する件数（設定 search.page_size。v1.5.0）
     cancel = cancel or threading.Event()
@@ -575,9 +592,12 @@ def collect(backend, target: ContainerRef, *, mode: str = "sample", prefix: str 
             for b in page.items:
                 add(b.name, b.size)
             if page.continuation is None:
+                store(pre, page.items)
                 progress(len(out), info["requests"])
                 continue
             last = page.items[-1].name if page.items else pre
+            if page.items:
+                store(pre, page.items, last)
             with connection():
                 children = backend.walk_prefixes(target, pre, limit=5000)
             info["requests"] += 1
@@ -604,6 +624,8 @@ def collect(backend, target: ContainerRef, *, mode: str = "sample", prefix: str 
         return out, info
     cont = None
     cap = None if mode == "all" else max(1, int(limit))
+    blobs: list = []
+    asked = False
     while True:
         if cancel.is_set():
             raise Cancelled()
@@ -612,14 +634,32 @@ def collect(backend, target: ContainerRef, *, mode: str = "sample", prefix: str 
         info["requests"] += 1
         for b in page.items:
             out.append((b.name, b.size))
+            blobs.append(b)
             if cap is not None and len(out) >= cap:
                 info["truncated"] = page.continuation is not None or b is not page.items[-1]
                 info["complete"] = not info["truncated"]
+                store(prefix, blobs, b.name if info["truncated"] else None)
                 progress(len(out), info["requests"])
                 return out, info
         progress(len(out), info["requests"])
         cont = page.continuation
         if not cont:
+            store(prefix, blobs)
+            return out, info
+        decision = None
+        if mode == "all" and not asked and on_threshold is not None and len(out) >= threshold:
+            asked = True
+            decision = on_threshold(len(out), _time.monotonic() - started)
+            if cancel.is_set():
+                raise Cancelled()
+        if decision == "quick":
+            if blobs:
+                store(prefix, blobs, blobs[-1].name)
+            raise SwitchToQuick()
+        if stop.is_set() or decision == "stop":
+            info.update(truncated=True, complete=False, stopped=True)
+            if blobs:
+                store(prefix, blobs, blobs[-1].name)
             return out, info
 
 

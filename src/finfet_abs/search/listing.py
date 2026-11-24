@@ -83,6 +83,133 @@ class ListingCache:
 
 
 @dataclass
+class _Held:
+    prefix: str
+    upper: str | None
+    items: list[BlobInfo]
+    fetched: float
+
+
+class SharedListing:
+    """一覧の保持（v1.6.0）: 検索とパスパターンの自動生成で取得した一覧を、メモリにのみ一定時間保持します。
+
+    キーは接続先（ContainerRef.key）に、認証とメタデータの有無を加えたものです。範囲は prefix と、
+    途中までしか取得していない場合はその最後の名前（upper）で表します（ListingCache と同じ考え方）。
+    """
+
+    def __init__(self, *, ttl: float = 1800.0, max_items: int = 1_000_000, enabled: bool = True,
+                 clock: Callable[[], float] | None = None) -> None:
+        import time
+        self.ttl, self.max_items, self.enabled = ttl, max_items, enabled
+        self.clock = clock or time.time
+        self._lock = threading.Lock()
+        self._entries: dict[tuple, list[_Held]] = {}
+        self._count = 0
+
+    def configure(self, *, ttl: float | None = None, max_items: int | None = None, enabled: bool | None = None) -> None:
+        with self._lock:
+            if ttl is not None:
+                self.ttl = ttl
+            if max_items is not None:
+                self.max_items = max_items
+            if enabled is not None:
+                self.enabled = enabled
+            if not self.enabled:
+                self._entries.clear()
+                self._count = 0
+            self._purge(self.clock())
+
+    def _purge(self, now: float) -> None:
+        for key in list(self._entries):
+            keep = [e for e in self._entries[key] if now - e.fetched <= self.ttl]
+            self._count -= sum(len(e.items) for e in self._entries[key]) - sum(len(e.items) for e in keep)
+            if keep:
+                self._entries[key] = keep
+            else:
+                del self._entries[key]
+        while self._count > self.max_items and self._entries:
+            key, idx = min(((k, i) for k, es in self._entries.items() for i in range(len(es))),
+                           key=lambda ki: self._entries[ki[0]][ki[1]].fetched)
+            e = self._entries[key].pop(idx)
+            self._count -= len(e.items)
+            if not self._entries[key]:
+                del self._entries[key]
+
+    def lookup(self, key: tuple, prefix: str) -> tuple[list[BlobInfo], float] | None:
+        """prefix の一覧と、取得した時刻。保持していなければ None。"""
+        if not self.enabled:
+            return None
+        with self._lock:
+            self._purge(self.clock())
+            best = None
+            for e in self._entries.get(key, []):
+                if not prefix.startswith(e.prefix):
+                    continue
+                if e.upper is None or covered_by_trial(prefix, e.upper):
+                    if best is None or e.fetched > best.fetched:
+                        best = e
+            if best is None:
+                return None
+            items = best.items if prefix == best.prefix and best.upper is None else \
+                [b for b in best.items if b.name.startswith(prefix)]
+            return items, best.fetched
+
+    def put(self, key: tuple, prefix: str, items: list[BlobInfo], upper: str | None = None,
+            fetched: float | None = None) -> None:
+        if not self.enabled or len(items) > self.max_items:
+            return
+        with self._lock:
+            now = self.clock()
+            entries = self._entries.setdefault(key, [])
+            # 新しい範囲に含まれる古い範囲は捨てます
+            if upper is None:
+                for e in [e for e in entries if e.prefix.startswith(prefix)]:
+                    entries.remove(e)
+                    self._count -= len(e.items)
+            entries.append(_Held(prefix, upper, list(items), now if fetched is None else fetched))
+            self._count += len(items)
+            self._purge(now)
+
+    def clear(self, key_head: tuple) -> None:
+        """接続先（キーの先頭が key_head のもの）の保持を消します。"""
+        with self._lock:
+            for k in [k for k in self._entries if k[:len(key_head)] == key_head]:
+                self._count -= sum(len(e.items) for e in self._entries[k])
+                del self._entries[k]
+
+    def coverage(self, key: tuple, prefixes: list[str]) -> float | None:
+        """prefix の一覧がすべて保持されていれば、そのうち最も古い取得の時刻。"""
+        oldest = None
+        for p in normalize(prefixes or [""]):
+            hit = self.lookup(key, p)
+            if hit is None:
+                return None
+            oldest = hit[1] if oldest is None else min(oldest, hit[1])
+        return oldest
+
+
+class ListingView:
+    """1 つの接続先の、保持した一覧の使い方（list_target の cache に渡します）。使った一覧の取得の時刻を記録します。"""
+
+    def __init__(self, shared: SharedListing, extra: tuple) -> None:
+        self.shared = shared
+        self.extra = extra
+        self.reused_at: float | None = None
+        self._lock = threading.Lock()
+
+    def lookup(self, key: tuple, prefix: str) -> list[BlobInfo] | None:
+        hit = self.shared.lookup(key + self.extra, prefix)
+        if hit is None:
+            return None
+        with self._lock:
+            self.reused_at = hit[1] if self.reused_at is None else min(self.reused_at, hit[1])
+        return hit[0]
+
+    def put(self, key: tuple, prefix: str, items: list[BlobInfo], upper: str | None = None) -> None:
+        self.shared.put(key + self.extra, prefix, items, upper)
+
+
+@dataclass
 class ListStats:
     """接続先ごとの取得の集計。"""
 
@@ -169,6 +296,13 @@ def list_target(backend: StorageBackend, target: ContainerRef, prefixes: list[st
     if cached is not None:
         emit(cached)
         return
+    if cache:
+        # prefix ごとにすべて保持していれば、要求なしで終わります（一覧の保持。v1.6.0）
+        held = [cache.lookup(key, p) for p in prefixes]
+        if all(h is not None for h in held):
+            for h in held:
+                emit(h)
+            return
     # まず共通の prefix で、決めたページ数だけ取得します
     trial: list[BlobInfo] = []
     token = None

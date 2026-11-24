@@ -69,6 +69,11 @@ const HELP = {
   'log.max_files': 'ログファイルを保持する日数です。古いものから削除します。',
   'log.console': '本ツールの起動時に開くウィンドウ（コンソール）に、ログを表示します。ファイルのログと同様に、秘密の値は伏せ字にします。表示が追いつかない場合は、一部の行を省略します（ファイルにはすべて記録されます）。',
   'log.console_level': 'コンソールに表示するログの詳細度です。ファイルに出力するログのレベルとは別に設定できます。',
+  'listing.reuse': '検索とパスパターンの自動生成で取得した Blob の一覧を、メモリ上に一定時間保持します。次の検索では保持した範囲を再利用し、保持していない範囲のみを Azure から取得するため、検索時間を短縮できます。保持した一覧はディスクには保存せず、本ツールの終了時に破棄します。ただし、保持している間に追加・変更された Blob は検索結果に反映されません。最新の状態で検索する場合は、検索ページの [最新の情報に更新] を使用してください。',
+  'listing.ttl_minutes': '取得した一覧を保持する時間です。この時間を過ぎた一覧は破棄し、次の検索で再取得します。',
+  'listing.max_items': '保持する一覧の合計件数の上限です。上限を超える場合は、古い一覧から破棄します。1 件あたり数百バイトのメモリを使用します。',
+  'holidays.extra': '日時の変数で祝日を除外する場合などに、祝日として扱う日（会社の休日など）です。YYYY-MM-DD の形式で、複数指定する場合は「,」で区切ります。',
+  'holidays.not_holiday': '日本の祝日のうち、祝日として扱わない日（出勤日とする祝日など）です。YYYY-MM-DD の形式で、複数指定する場合は「,」で区切ります。',
   'history.max_entries': '検索履歴を保持する数の上限です。ピン留めした履歴は削除しません。',
 };
 
@@ -88,6 +93,11 @@ function sections(session) {
         ['search.input_timezone', '期間の入力の既定', 'select', { options: TZ }],
         ['search.exclude_adls_directories', 'Data Lake のディレクトリを除外する', 'check'],
         ['search.keep_recent', '検索結果を保持する数', 'num', { unit: '件' }],
+        ['listing.reuse', '一覧の保持', 'check', { text: '取得した Blob の一覧を一定時間保持し、次の検索で再利用する' }],
+        ['listing.ttl_minutes', '一覧を保持する時間', 'num', { unit: '分' }],
+        ['listing.max_items', '保持する一覧の上限', 'num', { unit: '件' }],
+        ['holidays.extra', '祝日として扱う日', 'text', { width: 'w-mid', placeholder: '例: 2026-12-29, 2026-12-30', optional: true }],
+        ['holidays.not_holiday', '祝日として扱わない日', 'text', { width: 'w-mid', placeholder: '例: 2026-11-23', optional: true }],
       ],
     },
     {

@@ -10,6 +10,7 @@
 | msal | MIT |
 | msal-extensions | MIT |
 | waitress | ZPL-2.1 |
+| jpholiday | MIT |
 | cryptography | Apache-2.0 OR BSD-3-Clause |
 | cffi | MIT |
 | pycparser | BSD-3-Clause |

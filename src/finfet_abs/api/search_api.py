@@ -207,15 +207,20 @@ def register(router, app) -> None:
     # ------------------------------------------------------------ Blob 名からパスパターンを作る（decisions.md）
 
     infer_cancels: dict[str, threading.Event] = {}
+    infer_controls: dict[str, dict] = {}
     from ..search.infer import NameCache
     name_cache = NameCache()
+    #: フルスキャンで一時停止して確認する件数（v1.6.0）
+    INFER_THRESHOLD = 100_000
 
     @router.post("/api/v1/pattern/infer")
     def pattern_infer(req: Request):
+        import queue
+
         from ..search import infer
         body = req.json()
         target = body.get("target") or {}
-        mode = body.get("mode") or "sample"
+        mode = body.get("mode") or "all"
         if mode not in infer.MODES:
             raise AppError("BAD_MODE", "範囲の指定が正しくありません。")
         if not target.get("storage_account") or not target.get("container"):
@@ -228,6 +233,8 @@ def register(router, app) -> None:
         prefix = str(body.get("prefix") or "").lstrip("/")
         refresh = bool(body.get("refresh"))
         cancel = threading.Event()
+        stop = threading.Event()
+        decisions: queue.Queue = queue.Queue()
         holder: dict = {}
         # 集めた名前の保持のキー（接続先と認証）。秘密情報は含めません
         tkey = (target["storage_account"].lower(), target.get("endpoint_suffix") or "core.windows.net", target["container"],
@@ -239,36 +246,76 @@ def register(router, app) -> None:
                           tenant_id=target.get("tenant"), account=target.get("account"))
             ct = ContainerRef(AccountRef(target["storage_account"], target.get("endpoint_suffix") or "core.windows.net", ref),
                               target["container"])
+            listing = s["search"].shared_listing()
+            lkey = ct.key + s["search"].listing_extra(target, False)
             last = [time.monotonic()]  # 最初の知らせは 0.5 秒後（処理の ID が決まってから）
 
             def progress(n: int, requests: int) -> None:
                 if time.monotonic() - last[0] >= 0.5:
                     last[0] = time.monotonic()
                     app.events.publish("infer.progress", {"id": holder.get("id"), "names": n, "requests": requests})
+
+            def on_threshold(n: int, elapsed: float) -> str:
+                rate = n / elapsed if elapsed > 0 else 0
+                app.events.publish("infer.progress", {"id": holder.get("id"), "names": n, "paused": True,
+                                                      "elapsed_s": round(elapsed, 1), "rate": round(rate),
+                                                      "estimate_1m_s": round(1_000_000 / rate) if rate else None})
+                while not cancel.is_set():
+                    try:
+                        return decisions.get(timeout=0.5)
+                    except queue.Empty:
+                        continue
+                return "stop"
+
+            def store(p: str, items: list, upper: str | None = None) -> None:
+                listing.put(lkey, p, items, upper)
+
             if refresh:
                 name_cache.clear_target(tkey)
+                listing.clear(lkey)
+            fetched = None
             hit = None if refresh else name_cache.get(tkey, mode, prefix, limit)
+            held = None if refresh or hit is not None or mode == "first" else listing.lookup(lkey, prefix)
+            switched = False
             try:
                 if hit is not None:
                     fetched, items, info = hit
                     info = dict(info, requests=0)
+                elif held is not None:
+                    items = [(b.name, b.size) for b in held[0]]
+                    info = {"requests": 0, "truncated": False, "sizes_known": True, "complete": True}
+                    fetched = held[1]
                 else:
-                    items, info = infer.collect(s["backend"], ct, mode=mode, prefix=prefix, limit=limit, per_level=per_level,
-                                                page_size=int(app.settings.get("search.page_size")),
-                                                cancel=cancel, progress=progress, connection=s["limits"].request
-                                                if "limits" in s else None)
-                    fetched = name_cache.put(tkey, mode, prefix, limit, items, info)
+                    common = dict(page_size=int(app.settings.get("search.page_size")), cancel=cancel, progress=progress,
+                                  connection=s["limits"].request if "limits" in s else None, store=store)
+                    try:
+                        items, info = infer.collect(s["backend"], ct, mode=mode, prefix=prefix, limit=limit,
+                                                    per_level=per_level, stop=stop, on_threshold=on_threshold,
+                                                    threshold=INFER_THRESHOLD, **common)
+                    except infer.SwitchToQuick:
+                        switched = True
+                        items, info = infer.collect(s["backend"], ct, mode="sample", prefix=prefix, per_level=per_level,
+                                                    **common)
+                    if not info.get("stopped"):
+                        fetched = name_cache.put(tkey, "sample" if switched else mode, prefix, limit, items, info)
+                    else:
+                        fetched = time.time()
             except infer.Cancelled:
                 raise AppError("CANCELLED", "中止しました。") from None
             finally:
                 infer_cancels.pop(holder.get("id"), None)
+                infer_controls.pop(holder.get("id"), None)
             cands = infer.infer(items)
             return {"candidates": cands, "names": len(items), "requests": info["requests"],
                     "truncated": info["truncated"], "complete": info["complete"], "sizes_known": info["sizes_known"],
-                    "from_cache": hit is not None, "fetched_at": to_iso(datetime.fromtimestamp(fetched, timezone.utc))}
+                    "stopped": bool(info.get("stopped")), "switched": switched,
+                    "mode": "sample" if switched else mode,
+                    "from_cache": hit is not None or held is not None,
+                    "fetched_at": to_iso(datetime.fromtimestamp(fetched, timezone.utc))}
         tid = s["tasks"].submit(run, "pattern-infer")
         holder["id"] = tid
         infer_cancels[tid] = cancel
+        infer_controls[tid] = {"stop": stop, "decisions": decisions}
         return json_response({"task_id": tid}, 202)
 
     @router.post("/api/v1/pattern/infer/{tid}/cancel")
@@ -277,6 +324,19 @@ def register(router, app) -> None:
         if ev is not None:
             ev.set()
         return json_response({"ok": ev is not None})
+
+    @router.post("/api/v1/pattern/infer/{tid}/decide")
+    def pattern_infer_decide(req: Request):
+        """フルスキャンの [ここまでで生成]・一時停止の選択（continue・stop・quick。v1.6.0）。"""
+        action = (req.json() or {}).get("action")
+        if action not in ("continue", "stop", "quick"):
+            raise bad_request("操作の指定が正しくありません。")
+        ctl = infer_controls.get(req.params["tid"])
+        if ctl is not None:
+            if action == "stop":
+                ctl["stop"].set()
+            ctl["decisions"].put(action)
+        return json_response({"ok": ctl is not None})
 
     # ------------------------------------------------------------ 検索
 
@@ -287,7 +347,7 @@ def register(router, app) -> None:
             cond = clean_condition(body.get("condition") or body)
         except ValueError as exc:
             raise bad_request(str(exc), "CONDITION_INVALID") from None
-        sid = s["search"].start(cond)
+        sid = s["search"].start(cond, refresh=bool((body or {}).get("refresh")))
         for t in cond["targets"]:
             recent.add(app.db, "storage_account", t["storage_account"])
             if "{{" not in t["container"]:
