@@ -72,6 +72,13 @@ SCHEMA: list[Field] = [
     _i("search.list_concurrency", 4, 1, 16),
     _b("search.exclude_adls_directories", True),
     _i("search.keep_recent", 10, 1, 100),
+    # 一覧の保持（v1.6.0。メモリにのみ保持し、保存しない）
+    _b("listing.reuse", True),
+    _i("listing.ttl_minutes", 30, 1, 1440),
+    _i("listing.max_items", 1000000, 10000, 5000000),
+    # 曜日・祝日の絞り込み（v1.6.0）: 祝日として扱う日・扱わない日（YYYY-MM-DD を改行か「,」で区切る）
+    _s("holidays.extra", "", 20000),
+    _s("holidays.not_holiday", "", 20000),
     # 取得
     _c("fetch.method", "rehydrate_download", "rehydrate_download", "rehydrate_only", "download_only"),
     _s("fetch.directory", "%USERPROFILE%\\Downloads"),

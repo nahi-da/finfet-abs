@@ -10,6 +10,28 @@ const CHAR_CLASSES = [['digit', '数字'], ['lower', '英小文字'], ['upper', 
 const UNIT_NAMES = [['year', '年', 'YYYY|YY|year'], ['month', '月', 'MM|M|month'], ['day', '日', 'DD|D|day'],
   ['hour', '時', 'hh|h|hour'], ['minute', '分', 'mm|m|minute'], ['second', '秒', 'ss|s|second']];
 
+/**
+ * 値の「*」の書き方（v1.6.0）: 文字の「*」を「\*」にします。Azure から取得した候補と、v1.5 までの値に使います。
+ * この書き方で特別な意味を持つのは「\*」の組だけです（「\」の後が「*」でなければ、「\」は文字のまま）。
+ * そのため「\」自体を書き換える必要はありません（例: 文字の「\*」は「\\*」になり、「\」と文字の「*」として読まれます）。
+ */
+export function escapeWildcard(x) { return String(x).split('*').join('\\*'); }
+
+/** v1.5 までの一致方法（exact・prefix・partial）の値を、「*」の書き方に直します（読み込んだときに 1 回だけ）。 */
+export function toWildcardValues(v) {
+  if (!v || v.mode !== 'one_of' || v.syntax === 'wildcard') return v;
+  const m = v.match || 'exact';
+  v.values = (v.values || []).map((it) => {
+    const e = escapeWildcard(it.value);
+    return { ...it, value: m === 'prefix' ? `${e}*` : m === 'partial' ? `*${e}*` : e };
+  });
+  v.syntax = 'wildcard';
+  delete v.match;
+  return v;
+}
+
+const WEEKDAYS = ['月', '火', '水', '木', '金', '土', '日'];
+
 /** 書式の中の単位（日時の変数の書式から）。 */
 function unitsInFormats(formats) {
   const out = new Set();
@@ -187,7 +209,7 @@ export function variableRow(ctx) {
       const prevVals = d.type === 'choice' ? (d.value.options || []) : d.value.mode === 'one_of' ? (d.value.values || []).map((x) => x.value) : [];
       d.type = t;
       if (t === 'choice') d.value = { options: [...prevVals], selected: [...prevVals] };
-      else if (t === 'string' && prevVals.length) d.value = { mode: 'one_of', match: 'exact', values: prevVals.map((x) => ({ value: x, enabled: true })) };
+      else if (t === 'string' && prevVals.length) d.value = { mode: 'one_of', syntax: 'wildcard', values: prevVals.map((x) => ({ value: escapeWildcard(x), enabled: true })) };
       else d.value = { mode: 'any' };
       changed();
     },
@@ -205,14 +227,50 @@ export function variableRow(ctx) {
     return el;
   }
 
+  // 除く値（v1.6.0）: 一致した Blob のうち、変数の部分がこの値のものを対象から外します
+  function drawExclude(v, numeric) {
+    if (!Array.isArray(v.exclude)) {
+      body.append(h('div', { class: 'line' }, linkButton('除く値を指定', () => { v.exclude = []; changed(); })));
+      return;
+    }
+    const chips = h('div', { class: 'chips ex-chips' });
+    const drawChips = () => {
+      clear(chips);
+      v.exclude.forEach((it, i) => {
+        const cb = h('input', { type: 'checkbox', checked: it.enabled !== false, 'aria-label': `${it.value} を除く`, onchange: (e) => { it.enabled = e.target.checked; drawChips(); changed(); } });
+        chips.append(h('span', { class: `chip${it.enabled === false ? ' off' : ''}` }, cb, it.value, iconButton('close', `${it.value} を削除`, () => { v.exclude.splice(i, 1); drawChips(); changed(); })));
+      });
+    };
+    drawChips();
+    const inp = textInput('', { width: 'w-mid', placeholder: numeric ? '除く数値を入力' : '除く値を入力', 'aria-label': `${ctx.name} の除く値`, inputmode: numeric ? 'numeric' : undefined });
+    const add = (vals) => {
+      for (const x of vals.map((y) => y.trim()).filter(Boolean)) {
+        if (!v.exclude.some((y) => y.value === x)) v.exclude.push({ value: x, enabled: true });
+      }
+      drawChips();
+      changed();
+    };
+    inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); add([inp.value]); inp.value = ''; } });
+    inp.addEventListener('paste', (e) => {
+      const t = e.clipboardData.getData('text');
+      if (t.includes('\n')) { e.preventDefault(); add(t.split(/\r?\n/)); }
+    });
+    const remove = linkButton('除く値を使わない', () => { delete v.exclude; changed(); });
+    body.append(h('div', { class: 'line' }, h('span', { class: 'field-label', text: '除く値' }), chips, inp, remove),
+      h('div', { class: 'muted', text: numeric ? 'この数値の Blob は、検索結果に含まれません。'
+        : 'この値の Blob は、検索結果に含まれません。「*」は任意の文字列を表します（例: test*）。' }));
+  }
+
   function drawString() {
-    const v = d.value;
+    const v = toWildcardValues(d.value);
     const modeSel = select([['any', '任意'], ['one_of', '次のうちいずれか'], ['chars', '条件に合う文字列']], v.mode, {
       'aria-label': `${ctx.name} の値の指定`,
       onchange: (e) => {
         const m = e.target.value;
-        d.value = m === 'one_of' ? { mode: 'one_of', match: 'exact', values: [] }
+        const ex = d.value.exclude;
+        d.value = m === 'one_of' ? { mode: 'one_of', syntax: 'wildcard', values: [] }
           : m === 'chars' ? { mode: 'chars', classes: ['digit', 'lower'], extra: '', allow_slash: false, min: 1, max: null } : { mode: 'any' };
+        if (ex) d.value.exclude = ex;
         changed();
       },
     });
@@ -244,13 +302,10 @@ export function variableRow(ctx) {
         const t = e.clipboardData.getData('text');
         if (t.includes('\n')) { e.preventDefault(); add(t.split(/\r?\n/)); }
       });
-      const match = select([['exact', '完全一致'], ['prefix', '前方一致'], ['partial', '部分一致']], v.match || 'exact', {
-        'aria-label': '一致方法', onchange: (e) => { v.match = e.target.value; changed(); },
-      });
-      line.append(match);
       const row2 = h('div', { class: 'line' }, chips, inp);
-      if (ctx.fetchCandidates) row2.append(linkButton('Azure から候補を取得', () => candidates(add)));
-      body.append(row2);
+      // Azure から取得した値の「*」は、文字の「*」として扱います
+      if (ctx.fetchCandidates) row2.append(linkButton('Azure から候補を取得', () => candidates((vals) => add(vals.map(escapeWildcard)))));
+      body.append(row2, h('div', { class: 'muted', text: '「*」は任意の文字列を表します（例: app* は app で始まる値）。文字の「*」は「\\*」と入力します。' }));
     } else if (v.mode === 'chars') {
       v.classes = v.classes || [];
       const boxes = CHAR_CLASSES.map(([k, label]) => checkbox(label, v.classes.includes(k), (on) => {
@@ -264,6 +319,7 @@ export function variableRow(ctx) {
           checkbox('/ を含める', !!v.allow_slash, (on) => { v.allow_slash = on; changed(); }),
           h('span', { class: 'labeled' }, h('span', { text: '長さ' }), numIn(v.min, '最小の長さ', (n) => { v.min = n; }), h('span', { text: '〜' }), numIn(v.max, '最大の長さ', (n) => { v.max = n; }))));
     }
+    drawExclude(v, false);
   }
 
   // 選択肢（依頼者の依頼。decisions.md）: 選択肢の一覧から、検索する値を選びます。複数選択とキーワードでの絞り込み
@@ -293,6 +349,7 @@ export function variableRow(ctx) {
           quiet();
         });
         cb.classList.add('choice-item');
+        if ((d.new_options || []).includes(o)) cb.classList.add('is-new');
         cb.title = o;
         list.append(cb);
       }
@@ -330,9 +387,26 @@ export function variableRow(ctx) {
     body.append(list);
     const foot = h('div', { class: 'line' }, addIn);
     if (ctx.fetchCandidates) foot.append(linkButton('Azure から候補を取得', () => candidates(addValues)));
-    if (d.from_sample) foot.append(h('span', { class: 'muted', text: '一部の Blob 名から作成した選択肢です。ほかの値は、手動で追加するか、Azure から取得してください。' }));
     body.append(foot);
+    if (d.from_sample) {
+      body.append(caveat('クイックスキャンでは一部の Blob のみを確認したため、ここに表示されていない値を持つ Blob が存在する場合があります。表示されていない値の Blob は、検索結果に含まれません。'));
+    }
     drawList();
+  }
+
+  // クイックスキャンの結果の注意書き（v1.6.0）。[すべての Blob を確認] で、値や期間を求め直します
+  function caveat(text) {
+    const box = h('div', { class: 'notice' }, h('p', { text }));
+    if (ctx.scanAll) {
+      const st = h('span', { class: 'muted' });
+      const btn = button('すべての Blob を確認', async () => {
+        btn.disabled = true;
+        st.textContent = '確認しています…';
+        try { await ctx.scanAll(); } catch (e) { st.textContent = e.message; btn.disabled = false; }
+      });
+      box.append(h('div', { class: 'line' }, btn, st));
+    }
+    return box;
   }
 
   async function candidates(add) {
@@ -359,7 +433,12 @@ export function variableRow(ctx) {
     const v = d.value;
     const modeSel = select([['any', '任意'], ['fixed', '固定'], ['range', '範囲']], v.mode, {
       'aria-label': `${ctx.name} の値の指定`,
-      onchange: (e) => { d.value = e.target.value === 'range' ? { mode: 'range', start: 1, end: 10, step: 1 } : e.target.value === 'fixed' ? { mode: 'fixed', value: 0 } : { mode: 'any' }; changed(); },
+      onchange: (e) => {
+        const ex = d.value.exclude;
+        d.value = e.target.value === 'range' ? { mode: 'range', start: 1, end: 10, step: 1 } : e.target.value === 'fixed' ? { mode: 'fixed', value: 0 } : { mode: 'any' };
+        if (ex && e.target.value !== 'fixed') d.value.exclude = ex;
+        changed();
+      },
     });
     const line = h('div', { class: 'line' }, typeSel, modeSel);
     if (v.mode === 'fixed') line.append(numIn(v.value, '値', (n) => { v.value = n; }));
@@ -369,6 +448,7 @@ export function variableRow(ctx) {
     }
     line.append(h('span', { class: 'labeled' }, h('span', { text: '桁数' }), numIn(d.padding, '桁数（ゼロ埋め）', (n) => { d.padding = n || undefined; })));
     body.append(line);
+    if (v.mode !== 'fixed') drawExclude(v, true);
   }
 
   // 日時の変数（依頼者の意見で作り直し。decisions.md）。指定の方法はタブで切り替え、期間は日付・時刻の部品で入力します。
@@ -384,9 +464,11 @@ export function variableRow(ctx) {
 
     const modeSeg = segmented([['period', '期間'], ['relative', '相対'], ['units', '単位ごと'], ['any', 'すべて']], v.mode || 'any', `${ctx.name} の指定の方法`, (m) => {
       if (m === v.mode) return;
+      const days = v.days;
       d.value = m === 'relative' ? { mode: 'relative', kind: 'last_days', n: 7 }
         : m === 'period' ? (found && found.complete !== false ? { mode: 'period', start: found.start, end: found.end } : { mode: 'period', start: '', end: '' })
           : m === 'units' ? { mode: 'units', units: {} } : { mode: 'any' };
+      if (days) d.value.days = days;
       changed();
     });
     const tzSeg = segmented([['local', 'ローカル時刻'], ['utc', 'UTC']], tz, '期間の入力の基準', (t) => { if (t !== tz) ctx.onInputTimezone(t); });
@@ -402,6 +484,34 @@ export function variableRow(ctx) {
 
     if (v.mode !== 'any') drawSummary(v, found, tz);
     if (v.mode === 'period' || v.mode === 'relative') drawStep(v);
+    drawDays(v, units);
+    if (d.found && d.found.complete === false && found) {
+      body.append(caveat(`クイックスキャンでは一部の Blob のみを確認したため、表示している期間（${found.start} 〜 ${found.end}）より前または後の日時の Blob が存在する場合があります。その場合、期間を既定のまま検索すると、それらの Blob は検索結果に含まれません。`));
+    }
+  }
+
+  // 曜日・祝日（v1.6.0）。日は入力の基準で判定します。祝日は日本の祝日と、設定で追加した休日です
+  function drawDays(v, units) {
+    if (!units.some((u) => u[0] === 'day')) return;
+    const days = v.days || { weekdays: [0, 1, 2, 3, 4, 5, 6], holidays: 'include' };
+    const set = (next) => {
+      const all = next.weekdays.length === 7 && next.holidays === 'include';
+      if (all) delete v.days; else v.days = { weekdays: [...next.weekdays].sort(), holidays: next.holidays };
+      changed();
+    };
+    const quick = h('div', { class: 'quick' });
+    for (const [t, wd, hol] of [['すべての日', [0, 1, 2, 3, 4, 5, 6], 'include'], ['平日（祝日を除く）', [0, 1, 2, 3, 4], 'exclude'], ['土日・祝日', [5, 6], 'add'], ['土日', [5, 6], 'include']]) {
+      quick.append(h('button', { type: 'button', class: 'quick-btn', text: t, onclick: () => set({ weekdays: wd, holidays: hol }) }));
+    }
+    const boxes = WEEKDAYS.map((w, i) => checkbox(w, days.weekdays.includes(i), (on) => {
+      set({ ...days, weekdays: on ? [...new Set([...days.weekdays, i])] : days.weekdays.filter((x) => x !== i) });
+    }));
+    const hol = select([['include', '祝日を区別しない'], ['exclude', '祝日を除く'], ['add', '祝日も含める'], ['only', '祝日のみ']], days.holidays, {
+      'aria-label': '祝日の扱い', onchange: (e) => set({ ...days, holidays: e.target.value }),
+    });
+    body.append(h('div', { class: 'field' }, h('span', { class: 'field-label', text: '曜日・祝日' }),
+      h('div', null, quick, h('div', { class: 'line' }, ...boxes, hol),
+        v.days ? h('div', { class: 'muted', text: '日付は入力の基準（ローカル時刻または UTC）で判定します。祝日は日本の祝日です。会社の休日は、設定で追加できます。' }) : null)));
   }
 
   function drawPeriod(v, kind, found, tz) {

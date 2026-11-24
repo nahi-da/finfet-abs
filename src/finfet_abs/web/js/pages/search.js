@@ -2,7 +2,7 @@
 
 import * as api from '../api.js';
 import { addButton, button, clear, debounce, h, iconButton, linkButton, menuButton } from '../dom.js';
-import { dateShort, num } from '../format.js';
+import { dateShort, num, size } from '../format.js';
 import { confirmDialog } from '../parts/dialog.js';
 import { openExport, openImport } from '../parts/exchange.js';
 import { checkbox, setError, textInput } from '../parts/form.js';
@@ -54,7 +54,7 @@ async function fromCondition(cond, opt = {}) {
 function toCondition() {
   const vars = {};
   for (const [k, v] of Object.entries(state.variables)) {
-    const { touched, ...rest } = v;
+    const { touched, new_options: _n, ...rest } = v;
     vars[k] = rest;
   }
   return {
@@ -150,7 +150,11 @@ export async function render(ctx) {
   const patternSec = h('section', { class: 'part' });
   const varsSec = h('section', { class: 'part' });
   const searchBtn = button('検索', () => startSearch(), { primary: true });
-  const bottom = h('div', { class: 'sticky-bottom search-actions' }, h('span', { class: 'push' }), searchBtn);
+  // 一覧の保持（v1.6.0）: 保持した一覧を使う場合に、取得した時刻と [最新の情報に更新] を示します
+  const listingLine = h('span', { class: 'line muted listing-line' });
+  let held = null;
+  let refreshNext = false;
+  const bottom = h('div', { class: 'sticky-bottom search-actions' }, listingLine, h('span', { class: 'push' }), searchBtn);
   // 広い画面では 2 列（左: 接続先・パスパターン、右: 変数）にします（v1.5.0。依頼者の意見: 大きい画面で余白が多い）
   root.append(h('div', { class: 'search-cols' }, h('div', { class: 'search-col' }, targetsSec, patternSec), h('div', { class: 'search-col vars-col' }, varsSec)), bottom);
   let analysis = null;
@@ -382,6 +386,9 @@ export async function render(ctx) {
           analyze();
         })));
     }
+    if (held && held.held) {
+      headRow.append(h('span', { class: 'muted var-count', text: `一致する Blob: ${num(held.count)} 件（${size(held.bytes)}。保持している一覧から算出）` }));
+    }
     varsSec.append(headRow);
     const names = Object.keys(state.variables);
     if (!names.length) {
@@ -405,8 +412,70 @@ export async function render(ctx) {
           return r.values;
         } : null,
         shiftHint: state.shift && def.type === 'datetime' && def.value?.mode === 'period' ? () => shiftToToday(def) : null,
+        scanAll: state.targets.length ? () => scanAll(n) : null,
       }));
     }
+  }
+
+  // [すべての Blob を確認]（v1.6.0）: クイックスキャンで作った選択肢・期間を、すべての Blob から求め直します
+  async function scanAll(n) {
+    const def = state.variables[n];
+    const r = await runTask('POST', '/api/v1/pattern/scan', { target: toCondition().targets[0], path_pattern: state.path_pattern, names: [n],
+      variables: toCondition().variables, ignore_case: state.ignore_case, input_timezone: state.input_timezone });
+    if (def.type === 'datetime') {
+      const f = r.found[n];
+      if (f) {
+        const old = def.found ? periodFromFound(def.found, def.path_timezone || 'utc', state.input_timezone) : null;
+        const v = def.value || {};
+        def.found = f;
+        const p = periodFromFound(f, def.path_timezone || 'utc', state.input_timezone);
+        // 期間が、前の「Blob が存在する期間」のままなら、新しい期間に合わせます
+        if (v.mode === 'any' || (v.mode === 'period' && old && v.start === old.start && v.end === old.end)) def.value = { ...v, mode: 'period', start: p.start, end: p.end };
+      } else {
+        def.found = null;
+      }
+      toast('すべての Blob を確認しました。Blob が存在する期間を更新しました。');
+    } else {
+      const v = def.value;
+      const vals = r.choices[n] || [];
+      const all = v.selected.length === v.options.length;
+      const added = vals.filter((x) => !v.options.includes(x));
+      v.options = [...v.options, ...added];
+      // すべて選択していたなら、新しい値も選択します。そうでなければ選択せず、「新規」の印を付けます
+      if (all) v.selected = [...v.selected, ...added];
+      else def.new_options = [...new Set([...(def.new_options || []), ...added])];
+      delete def.from_sample;
+      toast(added.length ? `すべての Blob を確認しました。新しい値が ${num(added.length)} 個見つかりました${all ? '（選択済み）' : '（未選択）'}。` : 'すべての Blob を確認しました。新しい値はありません。');
+    }
+    if (def.type === 'datetime' && def.found) def.found.complete = true;
+    def.touched = true;
+    save();
+    drawVars();
+    analyze();
+  }
+
+  // 保持した一覧の状態と、件数の見込み（Azure への要求はしません）
+  async function checkListing() {
+    const c = toCondition();
+    if (!c.targets.length || !state.path_pattern || c.targets.some((t) => !t.container)) { held = null; drawListing(); return; }
+    try { held = await api.post('/api/v1/listing/status', { condition: c }); } catch { held = null; }
+    if (!ctx.isCurrent()) return;
+    drawListing();
+    drawVars();
+  }
+  const checkListingSoon = debounce(checkListing, 500);
+
+  function drawListing() {
+    clear(listingLine);
+    if (refreshNext) {
+      listingLine.append(h('span', { text: '検索の開始時に、Blob の一覧を Azure から取得し直します。' }),
+        linkButton('取り消す', () => { refreshNext = false; drawListing(); }));
+      return;
+    }
+    if (!held || !held.held) return;
+    const min = Math.max(0, Math.floor((Date.now() - Date.parse(held.fetched_at)) / 60000));
+    listingLine.append(h('span', { text: min < 1 ? '1 分以内に取得した Blob の一覧を使用します。' : `${num(min)} 分前に取得した Blob の一覧を使用します。` }),
+      linkButton('最新の情報に更新', () => { refreshNext = true; drawListing(); }));
   }
 
   function shiftToToday(def) {
@@ -492,6 +561,7 @@ export async function render(ctx) {
     }
     drawVars();
     drawTargets();
+    checkListingSoon();
   }
   const analyzeSoon = debounce(analyze, 300);
 
@@ -522,7 +592,8 @@ export async function render(ctx) {
       return;
     }
     try {
-      const r = await api.post('/api/v1/searches', { condition: toCondition() });
+      const r = await api.post('/api/v1/searches', { condition: toCondition(), refresh: refreshNext });
+      refreshNext = false;
       ctx.navigate(`/searches/${r.search_id}`);
     } catch (e) {
       if (e.data && e.data.issues) {

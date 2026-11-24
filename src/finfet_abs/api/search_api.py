@@ -6,6 +6,7 @@ import json
 import logging
 import threading
 import time
+from contextlib import nullcontext
 from datetime import datetime, timedelta, timezone
 
 from ..azure.backend import AccountRef, AuthRef, ContainerRef
@@ -166,56 +167,221 @@ def register(router, app) -> None:
             return {"recent": recent_names, "containers": names, "error": err}
         return task(run, "suggest-containers")
 
+    def container_ref(target: dict) -> ContainerRef:
+        ref = AuthRef(target.get("auth_kind") or "entra_user", credential_id=target.get("credential_id"),
+                      tenant_id=target.get("tenant"), account=target.get("account"))
+        return ContainerRef(AccountRef(target.get("storage_account", ""), target.get("endpoint_suffix") or "core.windows.net",
+                                       ref), target.get("container", ""))
+
+    def held_or_fetch(target: dict, prefixes: list[str], *, max_requests: int | None,
+                      progress=None) -> tuple[list, bool, float | None]:
+        """prefix の一覧を、保持した一覧から（なければ取得して）返します。
+
+        戻り値は (BlobInfo の一覧, すべて取得したか, 保持した一覧の最も古い取得の時刻)。max_requests を超えたら、
+        そこまでの一覧を返します（すべて取得したか = False）。
+        """
+        from ..search.listing import normalize
+        ct = container_ref(target)
+        listing = s["search"].shared_listing()
+        lkey = ct.key + s["search"].listing_extra(target, False)
+        out: list = []
+        complete = True
+        oldest = None
+        requests = 0
+        page_size = int(app.settings.get("search.page_size"))
+        conn = s["limits"].request if "limits" in s else nullcontext
+        for p in normalize(prefixes or [""]):
+            hit = listing.lookup(lkey, p)
+            if hit is not None:
+                out.extend(hit[0])
+                oldest = hit[1] if oldest is None else min(oldest, hit[1])
+                continue
+            got: list = []
+            token = None
+            while True:
+                if max_requests is not None and requests >= max_requests:
+                    complete = False
+                    break
+                with conn():
+                    page = s["backend"].list_blobs_page(ct, p, token, page_size)
+                requests += 1
+                got.extend(page.items)
+                if progress:
+                    progress(len(out) + len(got), requests)
+                token = page.continuation
+                if not token:
+                    break
+            if complete:
+                listing.put(lkey, p, got)
+            elif got:
+                listing.put(lkey, p, got, got[-1].name)
+            out.extend(got)
+            if not complete:
+                break
+        return out, complete, oldest
+
+    def relaxed_compile(body: dict, names: set[str], *, any_datetime: bool):
+        """names の変数を任意（日時の変数は any_datetime なら任意の日時）にしてコンパイルします。"""
+        variables = {k: dict(v) for k, v in (body.get("variables") or {}).items()}
+        for n in names:
+            v = variables.get(n) or {}
+            if v.get("type") == "datetime":
+                if any_datetime:
+                    variables[n] = {**v, "value": {"mode": "any"}}
+            else:
+                variables[n] = {"type": "string", "value": {"mode": "any"}}
+        try:
+            return compile_path(str(body.get("path_pattern") or ""), variables, ignore_case=bool(body.get("ignore_case")),
+                                input_timezone=body.get("input_timezone") or "local", ctx=s["search"].ctx())
+        except PatternError:
+            raise bad_request("パスパターンまたは変数の指定に誤りがあります。") from None
+
+    def iso_or_none(t: float | None) -> str | None:
+        return to_iso(datetime.fromtimestamp(t, timezone.utc)) if t else None
+
     @router.post("/api/v1/suggest/values")
     def suggest_values(req: Request):
-        """[Azure から候補を取得]（3.2.3.1）: その変数より前の部分を固定し、その階層の名前の一覧を取得します。"""
+        """[Azure から候補を取得]（3.2.3.1。v1.6.0 で修正）: Blob 名をパスパターンに照らし、その変数の部分を取り出します。
+
+        その変数は任意として照合します。保持した一覧を使い、なければ最大 20 回の要求で取得します。
+        """
         body = req.json()
         target = body.get("target") or {}
         name = body.get("name", "")
-        pattern = str(body.get("path_pattern") or "")
-        variables = body.get("variables") or {}
-        tokens, issues = tokenize(pattern)
+        tokens, issues = tokenize(str(body.get("path_pattern") or ""))
         if issues:
             raise bad_request("パスパターンに誤りがあります。")
-        idx = next((i for i, t in enumerate(tokens) if t.kind == "var" and t.name == name), None)
-        if idx is None:
+        if not any(t.kind == "var" and t.name == name for t in tokens):
             raise bad_request("変数がパスパターンに含まれていません。")
-        before = "".join(t.text for t in tokens[:idx])
-        try:
-            part = compile_path(before + "(?:.*)", variables, input_timezone=body.get("input_timezone") or "local",
-                                ctx=s["search"].ctx())
-            prefixes = part.prefixes[:8]
-        except PatternError:
-            prefixes = [compute_prefix(before)[0] if before else ""]
+        compiled = relaxed_compile(body, {name}, any_datetime=False)
 
         def run():
-            ref = AuthRef(target.get("auth_kind") or "entra_user", credential_id=target.get("credential_id"),
-                          tenant_id=target.get("tenant"), account=target.get("account"))
-            ct = ContainerRef(AccountRef(target.get("storage_account", ""), target.get("endpoint_suffix") or "core.windows.net",
-                                         ref), target.get("container", ""))
-            values: list[str] = []
-            for p in prefixes:
-                for item in s["backend"].walk_prefixes(ct, p, 1000):
-                    v = item.rstrip("/")
-                    if v and "/" not in v and v not in values:
-                        values.append(v)
-                if len(values) >= 1000:
-                    break
-            return {"values": values[:1000], "prefixes": prefixes}
+            items, complete, oldest = held_or_fetch(target, compiled.prefixes, max_requests=20)
+            values: dict[str, None] = {}
+            for b in items:
+                m = compiled.match(b.name)
+                if m and isinstance(m.get(name), str):
+                    values[m[name]] = None
+                    if len(values) >= 1000:
+                        complete = False
+                        break
+            return {"values": sorted(values), "complete": complete, "prefixes": compiled.prefixes[:8],
+                    "fetched_at": iso_or_none(oldest)}
         return task(run, "suggest-values")
+
+    @router.post("/api/v1/pattern/scan")
+    def pattern_scan(req: Request):
+        """[すべての Blob を確認]（v1.6.0）: パスパターンの範囲の一覧をすべて取得し（保持した一覧を使います）、
+        選択肢の変数の値と、日時の変数の Blob が存在する期間を求め直します。"""
+        body = req.json()
+        target = body.get("target") or {}
+        names = [str(n) for n in body.get("names") or []]
+        variables = body.get("variables") or {}
+        compiled = relaxed_compile(body, set(names), any_datetime=True)
+        holder: dict = {}
+
+        def run():
+            last = [time.monotonic()]
+
+            def progress(n: int, requests: int) -> None:
+                if time.monotonic() - last[0] >= 0.5:
+                    last[0] = time.monotonic()
+                    app.events.publish("infer.progress", {"id": holder.get("id"), "names": n, "requests": requests})
+            items, complete, oldest = held_or_fetch(target, compiled.prefixes, max_requests=None, progress=progress)
+            is_dt = {n: (variables.get(n) or {}).get("type") == "datetime" for n in names}
+            choices: dict[str, dict[str, None]] = {n: {} for n in names if not is_dt[n]}
+            spans: dict[str, list] = {n: [None, None] for n in names if is_dt[n]}
+            count = 0
+            for b in items:
+                m = compiled.match(b.name)
+                if m is None:
+                    continue
+                count += 1
+                for n, vals in choices.items():
+                    if isinstance(m.get(n), str):
+                        vals[m[n]] = None
+                for n, sp in spans.items():
+                    f = m.get(n)
+                    if not isinstance(f, dict) or "year" not in f:
+                        continue
+                    try:
+                        tup = []
+                        for u in dtv.UNITS:
+                            if u not in f:
+                                break
+                            tup.append(int(f[u]))
+                        t0 = dtv.unit_start(tuple(tup))
+                    except (KeyError, ValueError):
+                        continue
+                    sp[0] = t0 if sp[0] is None or t0 < sp[0] else sp[0]
+                    sp[1] = t0 if sp[1] is None or t0 > sp[1] else sp[1]
+            return {"choices": {n: sorted(v) for n, v in choices.items()},
+                    "found": {n: {"first": sp[0].isoformat(), "last": sp[1].isoformat(), "complete": True}
+                              for n, sp in spans.items() if sp[0] is not None},
+                    "matched": count, "complete": complete, "fetched_at": iso_or_none(oldest)}
+        tid = s["tasks"].submit(run, "pattern-scan")
+        holder["id"] = tid
+        return json_response({"task_id": tid}, 202)
+
+    @router.post("/api/v1/listing/status")
+    def listing_status(req: Request):
+        """保持した一覧の状態と、件数の見込み（v1.6.0。Azure への要求はしません）。
+
+        すべての接続先で、パスパターンの範囲の一覧が保持されている場合のみ、一致する件数とサイズを返します。
+        """
+        from ..search.listing import normalize
+        body = req.json()
+        cond = body.get("condition") or {}
+        targets = cond.get("targets") or []
+        listing = s["search"].shared_listing()
+        if not listing.enabled or not targets:
+            return json_response({"enabled": listing.enabled, "held": False})
+        try:
+            compiled = compile_path(str(cond.get("path_pattern") or ""), cond.get("variables") or {},
+                                    ignore_case=bool(cond.get("ignore_case")),
+                                    input_timezone=cond.get("input_timezone") or "local", ctx=s["search"].ctx())
+        except PatternError:
+            return json_response({"enabled": True, "held": False})
+        oldest = None
+        count = 0
+        total = 0
+        for t in targets:
+            if not t.get("container") or "{{" in str(t.get("container")):
+                return json_response({"enabled": True, "held": False})
+            lkey = container_ref(t).key + s["search"].listing_extra(t, False)
+            at = listing.coverage(lkey, compiled.prefixes)
+            if at is None:
+                return json_response({"enabled": True, "held": False})
+            oldest = at if oldest is None else min(oldest, at)
+            seen: set[str] = set()
+            for p in normalize(compiled.prefixes or [""]):
+                hit = listing.lookup(lkey, p)
+                for b in hit[0] if hit else []:
+                    if b.name in seen:
+                        continue
+                    seen.add(b.name)
+                    if not b.is_directory and compiled.match(b.name) is not None:
+                        count += 1
+                        total += b.size or 0
+        return json_response({"enabled": True, "held": True, "fetched_at": iso_or_none(oldest), "count": count, "bytes": total})
 
     # ------------------------------------------------------------ Blob 名からパスパターンを作る（decisions.md）
 
     infer_cancels: dict[str, threading.Event] = {}
+    infer_controls: dict[str, dict] = {}
     from ..search.infer import NameCache
     name_cache = NameCache()
+    #: フルスキャンで一時停止して確認する件数（v1.6.0）
+    INFER_THRESHOLD = 100_000
 
     @router.post("/api/v1/pattern/infer")
     def pattern_infer(req: Request):
+        import queue
+
         from ..search import infer
         body = req.json()
         target = body.get("target") or {}
-        mode = body.get("mode") or "sample"
+        mode = body.get("mode") or "all"
         if mode not in infer.MODES:
             raise AppError("BAD_MODE", "範囲の指定が正しくありません。")
         if not target.get("storage_account") or not target.get("container"):
@@ -228,6 +394,8 @@ def register(router, app) -> None:
         prefix = str(body.get("prefix") or "").lstrip("/")
         refresh = bool(body.get("refresh"))
         cancel = threading.Event()
+        stop = threading.Event()
+        decisions: queue.Queue = queue.Queue()
         holder: dict = {}
         # 集めた名前の保持のキー（接続先と認証）。秘密情報は含めません
         tkey = (target["storage_account"].lower(), target.get("endpoint_suffix") or "core.windows.net", target["container"],
@@ -239,36 +407,76 @@ def register(router, app) -> None:
                           tenant_id=target.get("tenant"), account=target.get("account"))
             ct = ContainerRef(AccountRef(target["storage_account"], target.get("endpoint_suffix") or "core.windows.net", ref),
                               target["container"])
+            listing = s["search"].shared_listing()
+            lkey = ct.key + s["search"].listing_extra(target, False)
             last = [time.monotonic()]  # 最初の知らせは 0.5 秒後（処理の ID が決まってから）
 
             def progress(n: int, requests: int) -> None:
                 if time.monotonic() - last[0] >= 0.5:
                     last[0] = time.monotonic()
                     app.events.publish("infer.progress", {"id": holder.get("id"), "names": n, "requests": requests})
+
+            def on_threshold(n: int, elapsed: float) -> str:
+                rate = n / elapsed if elapsed > 0 else 0
+                app.events.publish("infer.progress", {"id": holder.get("id"), "names": n, "paused": True,
+                                                      "elapsed_s": round(elapsed, 1), "rate": round(rate),
+                                                      "estimate_1m_s": round(1_000_000 / rate) if rate else None})
+                while not cancel.is_set():
+                    try:
+                        return decisions.get(timeout=0.5)
+                    except queue.Empty:
+                        continue
+                return "stop"
+
+            def store(p: str, items: list, upper: str | None = None) -> None:
+                listing.put(lkey, p, items, upper)
+
             if refresh:
                 name_cache.clear_target(tkey)
+                listing.clear(lkey)
+            fetched = None
             hit = None if refresh else name_cache.get(tkey, mode, prefix, limit)
+            held = None if refresh or hit is not None or mode == "first" else listing.lookup(lkey, prefix)
+            switched = False
             try:
                 if hit is not None:
                     fetched, items, info = hit
                     info = dict(info, requests=0)
+                elif held is not None:
+                    items = [(b.name, b.size) for b in held[0]]
+                    info = {"requests": 0, "truncated": False, "sizes_known": True, "complete": True}
+                    fetched = held[1]
                 else:
-                    items, info = infer.collect(s["backend"], ct, mode=mode, prefix=prefix, limit=limit, per_level=per_level,
-                                                page_size=int(app.settings.get("search.page_size")),
-                                                cancel=cancel, progress=progress, connection=s["limits"].request
-                                                if "limits" in s else None)
-                    fetched = name_cache.put(tkey, mode, prefix, limit, items, info)
+                    common = dict(page_size=int(app.settings.get("search.page_size")), cancel=cancel, progress=progress,
+                                  connection=s["limits"].request if "limits" in s else None, store=store)
+                    try:
+                        items, info = infer.collect(s["backend"], ct, mode=mode, prefix=prefix, limit=limit,
+                                                    per_level=per_level, stop=stop, on_threshold=on_threshold,
+                                                    threshold=INFER_THRESHOLD, **common)
+                    except infer.SwitchToQuick:
+                        switched = True
+                        items, info = infer.collect(s["backend"], ct, mode="sample", prefix=prefix, per_level=per_level,
+                                                    **common)
+                    if not info.get("stopped"):
+                        fetched = name_cache.put(tkey, "sample" if switched else mode, prefix, limit, items, info)
+                    else:
+                        fetched = time.time()
             except infer.Cancelled:
                 raise AppError("CANCELLED", "中止しました。") from None
             finally:
                 infer_cancels.pop(holder.get("id"), None)
+                infer_controls.pop(holder.get("id"), None)
             cands = infer.infer(items)
             return {"candidates": cands, "names": len(items), "requests": info["requests"],
                     "truncated": info["truncated"], "complete": info["complete"], "sizes_known": info["sizes_known"],
-                    "from_cache": hit is not None, "fetched_at": to_iso(datetime.fromtimestamp(fetched, timezone.utc))}
+                    "stopped": bool(info.get("stopped")), "switched": switched,
+                    "mode": "sample" if switched else mode,
+                    "from_cache": hit is not None or held is not None,
+                    "fetched_at": to_iso(datetime.fromtimestamp(fetched, timezone.utc))}
         tid = s["tasks"].submit(run, "pattern-infer")
         holder["id"] = tid
         infer_cancels[tid] = cancel
+        infer_controls[tid] = {"stop": stop, "decisions": decisions}
         return json_response({"task_id": tid}, 202)
 
     @router.post("/api/v1/pattern/infer/{tid}/cancel")
@@ -277,6 +485,19 @@ def register(router, app) -> None:
         if ev is not None:
             ev.set()
         return json_response({"ok": ev is not None})
+
+    @router.post("/api/v1/pattern/infer/{tid}/decide")
+    def pattern_infer_decide(req: Request):
+        """フルスキャンの [ここまでで生成]・一時停止の選択（continue・stop・quick。v1.6.0）。"""
+        action = (req.json() or {}).get("action")
+        if action not in ("continue", "stop", "quick"):
+            raise bad_request("操作の指定が正しくありません。")
+        ctl = infer_controls.get(req.params["tid"])
+        if ctl is not None:
+            if action == "stop":
+                ctl["stop"].set()
+            ctl["decisions"].put(action)
+        return json_response({"ok": ctl is not None})
 
     # ------------------------------------------------------------ 検索
 
@@ -287,7 +508,7 @@ def register(router, app) -> None:
             cond = clean_condition(body.get("condition") or body)
         except ValueError as exc:
             raise bad_request(str(exc), "CONDITION_INVALID") from None
-        sid = s["search"].start(cond)
+        sid = s["search"].start(cond, refresh=bool((body or {}).get("refresh")))
         for t in cond["targets"]:
             recent.add(app.db, "storage_account", t["storage_account"])
             if "{{" not in t["container"]:

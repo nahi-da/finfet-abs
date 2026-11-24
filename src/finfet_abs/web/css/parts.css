@@ -635,3 +635,12 @@ a.popup-body:hover .popup-open { text-decoration: underline; }
 .pb-chip { cursor: pointer; padding-right: var(--sp-2); font: inherit; }
 .pb-chip:hover { background: color-mix(in srgb, var(--kind) 30%, var(--bg-raised)); }
 .pb-chip .icon { opacity: .7; width: 12px; height: 12px; -webkit-mask-size: 12px 12px; mask-size: 12px 12px; }
+
+/* 注意書き（クイックスキャンの結果・フルスキャンの一時停止。v1.6.0） */
+.notice { border: 1px solid color-mix(in srgb, var(--warn) 60%, transparent); background: color-mix(in srgb, var(--warn) 10%, var(--bg-raised));
+  border-radius: var(--radius); padding: var(--sp-2) var(--sp-3); margin: var(--sp-2) 0; }
+.notice p { margin: 0 0 var(--sp-1); }
+.notice .line { margin-top: var(--sp-2); }
+.notice[hidden] { display: none; }
+.choice-item.is-new::after { content: '新規'; margin-left: var(--sp-1); font-size: var(--fs-small); color: var(--warn); }
+.ex-chips .chip { text-decoration: line-through; }
