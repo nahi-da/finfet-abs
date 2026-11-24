@@ -557,7 +557,7 @@ def _days_filter(name: str, days: dict | None, symbols: list[str], fixed_fields:
         return None
     weekdays = {int(w) for w in days.get("weekdays", range(7)) if str(w).lstrip("-").isdigit() and 0 <= int(w) <= 6}
     hmode = days.get("holidays", "include")
-    if hmode not in ("include", "exclude", "only"):
+    if hmode not in ("include", "exclude", "only", "add"):
         raise VariableError(name, f"変数「{name}」の祝日の扱いが正しくありません。")
     if len(weekdays) == 7 and hmode == "include":
         return None
@@ -571,12 +571,12 @@ def _days_filter(name: str, days: dict | None, symbols: list[str], fixed_fields:
     same = type(path_zone) is type(input_zone) and getattr(path_zone, "offset", None) == getattr(input_zone, "offset", None)
 
     def day_ok(d) -> bool:
-        if d.weekday() not in weekdays:
-            return False
+        wd = d.weekday() in weekdays
         if hmode == "include":
-            return True
+            return wd
         hol = cal.is_holiday(d)
-        return hol if hmode == "only" else not hol
+        # exclude: 曜日に合い、祝日でない日。only: 曜日に合う祝日。add: 曜日に合う日と、すべての祝日
+        return (wd and not hol) if hmode == "exclude" else (wd and hol) if hmode == "only" else (wd or hol)
 
     def check(fields: dict[int, int]) -> bool:
         try:

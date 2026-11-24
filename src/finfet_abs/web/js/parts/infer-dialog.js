@@ -32,31 +32,49 @@ export function openInferDialog(opt) {
       return;
     }
     const tSel = select(targets.map((t, i) => [String(i), `${t.storage_account} / ${t.container}`]), '0', { 'aria-label': '接続先' });
-    // 範囲（v1.5.2: 依頼者の意見で、違いの説明を付け、件数の入力欄を「先頭から指定した件数」の中に置いた）
-    const limitIn = textInput('10000', { width: 'w-num', inputmode: 'numeric', 'aria-label': '取得する件数' });
+    // 範囲（v1.6.0: フルスキャンとクイックスキャンの 2 つ。「先頭から指定した件数」は画面から外しました）
     const modeR = choiceCards('infer-mode', [
-      { value: 'sample', label: '階層ごとに一部を取得', tag: 'おすすめ',
+      { value: 'all', label: 'フルスキャン', tag: 'おすすめ',
+        desc: 'すべての Blob 名を取得します。パスパターンを正確に生成できます。Blob の件数が多い場合は時間がかかりますが、取得の途中で [ここまでで生成] を押すと、それまでに取得した Blob 名から生成できます。' },
+      { value: 'sample', label: 'クイックスキャン',
         desc: '階層ごとに一部の Blob のみを取得します。コンテナー内の Blob が数十万件を超える場合でも、処理時間を短縮できます。ただし、すべての Blob を確認するわけではないため、パスパターンが正確に生成できない場合があります。' },
-      { value: 'first', label: '先頭から指定した件数',
-        desc: '名前順に、先頭から指定した件数の Blob 名を取得します。後半の Blob（日付が新しいものなど）の形式は、生成されるパスパターンに含まれない場合があります。',
-        extra: h('span', { class: 'inline choice-extra' }, limitIn, '件') },
-      { value: 'all', label: 'すべての Blob',
-        desc: 'すべての Blob 名を取得します。パスパターンを正確に生成できます。ただし、Blob の件数が多い場合は、処理時間と Azure への要求の回数が増えます。' },
-    ], 'sample');
+    ], 'all');
     const prefixIn = textInput('', { width: 'w-full', placeholder: '例: logs/2026/', 'aria-label': 'prefix' });
     const status = h('span', { class: 'muted' });
     const cacheInfo = h('span', { class: 'line' });
+    // フルスキャンで 100,000 件を取得して、まだ続きがあるときの確認（v1.6.0）
+    const pausePanel = h('div', { class: 'notice infer-pause', hidden: true });
     const list = h('div');
     d.body.append(formGrid(...row('接続先', tSel), ...row('範囲', modeR),
-      ...row('prefix', prefixIn, { optional: true })), h('div', { class: 'line infer-status' }, status, cacheInfo), list);
+      ...row('prefix', prefixIn, { optional: true })), h('div', { class: 'line infer-status' }, status, cacheInfo), pausePanel, list);
 
     const runBtn = button('実行', () => run(false), { primary: true });
     const stopBtn = button('中止', () => { if (taskId) api.post(`/api/v1/pattern/infer/${taskId}/cancel`, {}).catch(() => {}); });
+    const decide = (action) => {
+      pausePanel.hidden = true;
+      if (taskId) api.post(`/api/v1/pattern/infer/${taskId}/decide`, { action }).catch(() => {});
+      if (action !== 'continue') status.textContent = action === 'stop' ? '取得した Blob 名から生成しています…' : 'クイックスキャンに切り替えています…';
+    };
+    const hereBtn = button('ここまでで生成', () => decide('stop'));
     stopBtn.hidden = true;
-    d.setFoot(h('span.push'), stopBtn, button('閉じる', () => d.close(true)), runBtn);
+    hereBtn.hidden = true;
+    d.setFoot(h('span.push'), stopBtn, hereBtn, button('閉じる', () => d.close(true)), runBtn);
 
+    const minutes = (sec) => (sec < 60 ? `${Math.max(1, Math.round(sec))} 秒` : `${num(Math.round(sec / 60))} 分`);
     offs.push(on('infer.progress', (p) => {
-      if (p.id === taskId) status.textContent = `${num(p.names)} 件の Blob 名を取得しました（要求 ${num(p.requests)} 回）`;
+      if (p.id !== taskId) return;
+      if (p.paused) {
+        status.textContent = '';
+        pausePanel.replaceChildren(
+          h('p', { text: `${num(p.names)} 件の Blob 名を取得しました（${minutes(p.elapsed_s)}）。まだ取得していない Blob があります。` }),
+          p.estimate_1m_s ? h('p', { text: `現在の速さ（1 秒あたり約 ${num(p.rate)} 件）では、Blob が 100 万件ある場合、すべて取得するまでに約 ${minutes(p.estimate_1m_s)} かかります。` }) : null,
+          h('p', { text: '取得を続けるか、取得した Blob 名から生成するか、クイックスキャンに切り替えるかを選んでください。' }),
+          h('div', { class: 'line' }, button('続行', () => decide('continue'), { primary: true }), button('ここまでで生成', () => decide('stop')),
+            button('クイックスキャンに切り替える', () => decide('quick'))));
+        pausePanel.hidden = false;
+        return;
+      }
+      status.textContent = `${num(p.names)} 件の Blob 名を取得しました（要求 ${num(p.requests)} 回）`;
     }));
 
     async function run(refresh) {
@@ -67,12 +85,14 @@ export function openInferDialog(opt) {
       status.textContent = '取得しています…';
       runBtn.disabled = true;
       stopBtn.hidden = false;
+      hereBtn.hidden = mode !== 'all';
+      pausePanel.hidden = true;
       try {
         // 結果の待ち合わせは runTask（処理がすぐ終わって、待ち受けより先に task.done が届いても取りこぼさない）
         const r = await runTask('POST', '/api/v1/pattern/infer', {
           target: { storage_account: t.storage_account, endpoint_suffix: t.endpoint_suffix, container: t.container, auth_kind: t.auth_kind,
             tenant: t.tenant || null, credential_id: t.credential_id || null, account: t.account || null },
-          mode, prefix: prefixIn.value.trim(), limit: Number(limitIn.value) || 10000, refresh: !!refresh,
+          mode, prefix: prefixIn.value.trim(), refresh: !!refresh,
         }, (id) => { taskId = id; });
         taskId = null;
         if (closed) return;
@@ -85,13 +105,17 @@ export function openInferDialog(opt) {
       } finally {
         runBtn.disabled = false;
         stopBtn.hidden = true;
+        hereBtn.hidden = true;
+        pausePanel.hidden = true;
       }
     }
 
     function draw(r, t) {
       status.textContent = `${num(r.names)} 件の Blob 名から、${num(r.candidates.length)} 件の候補を生成しました（要求 ${num(r.requests)} 回）`
-        + (r.truncated ? '。件数の上限に達したため、一部の Blob のみを対象にしています' : '')
-        + (!r.truncated && !r.complete ? '。一部の Blob のみを取得したため、件数は取得した Blob の数です' : '');
+        + (r.stopped ? '。取得を途中で止めたため、取得した Blob 名のみを対象にしています。件数は取得した Blob の数です'
+          : r.switched ? '。クイックスキャンに切り替えたため、一部の Blob のみを対象にしています。件数は取得した Blob の数です'
+            : r.truncated ? '。件数の上限に達したため、一部の Blob のみを対象にしています'
+              : !r.complete ? '。一部の Blob のみを取得したため、件数は取得した Blob の数です' : '');
       if (r.from_cache) {
         // 一度集めた名前は 60 分の間保持し、取得し直さずに使います（依頼者の依頼）
         cacheInfo.append(h('span', { class: 'muted', text: `${dateShort(r.fetched_at)} に取得した Blob 名を使用しました。` }),

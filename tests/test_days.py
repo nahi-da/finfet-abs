@@ -49,6 +49,10 @@ class DaysTest(unittest.TestCase):
         c = compile_path(r"{{dt=YYYY}}/{{dt=MM}}/{{dt=DD}}/a\.log", dt(PERIOD, {"weekdays": [5, 6]}),
                          input_timezone="utc", ctx=CTX)
         self.assertEqual(self.names(c), [21, 22, 28, 29])
+        # 土日と祝日（休日）: 祝日も含める
+        c = compile_path(r"{{dt=YYYY}}/{{dt=MM}}/{{dt=DD}}/a\.log", dt(PERIOD, {"weekdays": [5, 6], "holidays": "add"}),
+                         input_timezone="utc", ctx=CTX)
+        self.assertEqual(self.names(c), [21, 22, 23, 28, 29])
 
     def test_company_holidays(self) -> None:
         ctx = CompileContext(now_utc=CTX.now_utc, local_zone=CTX.local_zone,

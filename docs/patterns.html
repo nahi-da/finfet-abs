@@ -39,12 +39,13 @@
 <h2>変数</h2>
 <p><code>{{名前}}</code> の形で、パスパターンに変数を埋め込めます。変数の値は、検索ページの変数の欄で指定します。複数の値を指定すると、それぞれの値で検索します。</p>
 <ul>
-<li>文字の変数: <code>locks/{{func}}/host</code> の <code>func</code> に「app1」「app2」を指定すると、<code>locks/app1/host</code> と <code>locks/app2/host</code> を検索します。</li>
+<li>文字の変数: <code>locks/{{func}}/host</code> の <code>func</code> に「app1」「app2」を指定すると、<code>locks/app1/host</code> と <code>locks/app2/host</code> を検索します。値の「*」は、1 つの階層の中の任意の文字列です（例: <code>app*</code>。文字の「*」は「\*」）。除く値も指定できます。</li>
 <li><strong>選択肢の変数</strong>: 変数の種類で「選択肢」を選択すると、値の一覧から検索する値を選択できます（複数選択、キーワードでの絞り込み）。パスパターンの自動生成では、値の種類が少ない部分が選択肢の変数になります。</li>
 <li>日時の変数: <code>{{dt=YYYY}}/{{dt=MM}}/{{dt=DD}}/{{dt=hh}}</code> のように、同じ名前の変数に書式を付けて記述します。期間（開始と終了）を指定すると、その期間に該当する Blob のみを、日時ごとの prefix で取得します。</li>
 <li>書式: <code>YYYY</code>（年 4 桁）、<code>YY</code>（年の下 2 桁）、<code>MM</code>（月）、<code>DD</code>（日）、<code>hh</code>（時。24 時間）、<code>mm</code>（分）、<code>ss</code>（秒）。<code>M</code>・<code>D</code>・<code>h</code>・<code>m</code>・<code>s</code> の 1 文字の書式は、ゼロ埋めしない数字に一致します。</li>
 <li>同じ名前の変数を 2 回以上記述した場合は、すべての箇所が同じ値の Blob 名のみに一致します（例: <code>{{rule}}/{{rule}}_\d+\.csv</code>）。</li>
 <li>時刻の基準: Blob 名の日時が UTC で、入力をローカル時刻で行う場合などは、日時の変数の「入力の基準」でローカル時刻を選択します。Blob 名の日時の基準は、変数の行の「…」のメニューで変更できます（既定は UTC）。</li>
+<li>曜日・祝日: 日時の変数では、曜日と祝日で絞り込めます。パスパターンに年・月・日の単位が必要です。</li>
 </ul>
 <h2>既知の形式</h2>
 <p>検索ページの [既知の形式から作成] で形式を選択すると、コンテナーとパスパターンを作成します。リソース ID の部分は、大文字・小文字が異なっていても一致します。</p>
