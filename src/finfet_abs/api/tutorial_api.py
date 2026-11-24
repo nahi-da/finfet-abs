@@ -54,13 +54,27 @@ def demo_launch_url(local=None, *, spawn=_spawn_demo, wait=instance.wait_for_exi
     return f"{url}&next={NEXT_TUTORIAL}"
 
 
+def same_host(url: str, host_header: str | None) -> str:
+    """デモモードの URL のホスト名を、画面を開いているホスト名（127.0.0.1 か localhost）に合わせます（v1.7.1）。
+
+    Azure へのサインインの後、画面は localhost で開かれます。ブラウザは 127.0.0.1 と localhost を別のサイトとして
+    扱うため、localhost の画面から 127.0.0.1 のデモモードを開くと、ほかのサイトからの要求として拒否されます（S4）。
+    Host ヘッダーは、安全対策（S5）で 127.0.0.1 か localhost であることを確かめた後の値です。
+    """
+    name = (host_header or "").rsplit(":", 1)[0].lower()
+    prefix = "http://127.0.0.1:"
+    if name == "localhost" and url.startswith(prefix):
+        return "http://localhost:" + url[len(prefix):]
+    return url
+
+
 def register(router, app) -> None:
     @router.post("/api/v1/tutorial/launch")
     def tutorial_launch(req: Request):
         """チュートリアルを始めます。戻り値の same_tab が true なら同じタブで、false なら新しいタブで url を開きます。"""
         if app.demo:
             return json_response({"url": TUTORIAL_PATH, "same_tab": True})
-        return json_response({"url": demo_launch_url(), "same_tab": False})
+        return json_response({"url": same_host(demo_launch_url(), req.header("host")), "same_tab": False})
 
     @router.post("/api/v1/tutorial/offered")
     def tutorial_offered(req: Request):

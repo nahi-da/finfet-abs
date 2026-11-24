@@ -78,5 +78,15 @@ class TutorialApiTest(unittest.TestCase):
                                          wait=lambda local, demo, timeout: None)
 
 
+class SameHostTest(unittest.TestCase):
+    def test_same_host(self) -> None:
+        """localhost で開いた画面からは、デモモードも localhost で開きます（別のサイトとして拒否されないように。v1.7.1）。"""
+        u = "http://127.0.0.1:5000/auth/launch?code=c&next=tutorial"
+        self.assertEqual(tutorial_api.same_host(u, "localhost:6000"), "http://localhost:5000/auth/launch?code=c&next=tutorial")
+        self.assertEqual(tutorial_api.same_host(u, "LOCALHOST:6000"), "http://localhost:5000/auth/launch?code=c&next=tutorial")
+        self.assertEqual(tutorial_api.same_host(u, "127.0.0.1:6000"), u)
+        self.assertEqual(tutorial_api.same_host(u, None), u)
+
+
 if __name__ == "__main__":
     unittest.main()

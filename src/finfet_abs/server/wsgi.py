@@ -9,7 +9,7 @@ from typing import Callable
 from ..core.errors import AppError
 from .http import Request, Response, error_response, file_response, json_response, redirect, simple_page
 from .router import Router
-from .security import CSRF_HEADER, INSTANCE_HEADER, SECURITY_HEADERS, SESSION_COOKIE, UNSAFE_METHODS, Security
+from .security import CSRF_HEADER, INSTANCE_HEADER, SECURITY_HEADERS, UNSAFE_METHODS, Security
 from .static import StaticFiles
 
 log = logging.getLogger(__name__)
@@ -113,7 +113,7 @@ class WsgiApp:
                 return file_response(*found)
 
         # S2: Cookie
-        if not sec.session_ok(req.cookies.get(SESSION_COOKIE)):
+        if not sec.session_ok(req.cookies.get(sec.cookie_name)):
             if is_api:
                 return error_response(AppError("UNAUTHORIZED", "本ツールの画面を開き直してください。", status=401))
             return simple_page("FinFeT", "本ツールの画面を開くには、finfet-abs.bat を再度実行してください。", 401)
