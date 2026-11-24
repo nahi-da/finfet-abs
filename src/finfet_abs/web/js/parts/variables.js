@@ -10,8 +10,12 @@ const CHAR_CLASSES = [['digit', '数字'], ['lower', '英小文字'], ['upper', 
 const UNIT_NAMES = [['year', '年', 'YYYY|YY|year'], ['month', '月', 'MM|M|month'], ['day', '日', 'DD|D|day'],
   ['hour', '時', 'hh|h|hour'], ['minute', '分', 'mm|m|minute'], ['second', '秒', 'ss|s|second']];
 
-/** 値の「*」の書き方（v1.6.0）: 文字の「*」を「\\*」にします。Azure から取得した候補に使います。 */
-export function escapeWildcard(x) { return String(x).replace(/\*/g, '\\*'); }
+/**
+ * 値の「*」の書き方（v1.6.0）: 文字の「*」を「\*」にします。Azure から取得した候補と、v1.5 までの値に使います。
+ * この書き方で特別な意味を持つのは「\*」の組だけです（「\」の後が「*」でなければ、「\」は文字のまま）。
+ * そのため「\」自体を書き換える必要はありません（例: 文字の「\*」は「\\*」になり、「\」と文字の「*」として読まれます）。
+ */
+export function escapeWildcard(x) { return String(x).split('*').join('\\*'); }
 
 /** v1.5 までの一致方法（exact・prefix・partial）の値を、「*」の書き方に直します（読み込んだときに 1 回だけ）。 */
 export function toWildcardValues(v) {

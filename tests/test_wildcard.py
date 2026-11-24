@@ -38,6 +38,12 @@ class WildcardTest(unittest.TestCase):
         c = cp(r"{{v}}\.txt", one_of(r"a\*b"))
         self.assertIsNotNone(c.match("a*b.txt"))
         self.assertIsNone(c.match("axb.txt"))
+        # 画面の escapeWildcard は「*」のみを「\*」にします。文字の「\*」（a\*）は「a\\*」になり、そのまま一致します
+        c = cp(r"{{v}}\.txt", one_of("a\\\\*"))
+        self.assertIsNotNone(c.match("a\\*.txt"))
+        self.assertIsNone(c.match("a\\x.txt"))
+        c = cp(r"{{v}}\.txt", one_of("a\\b"))  # 「*」の前でない「\」は文字のまま
+        self.assertIsNotNone(c.match("a\\b.txt"))
 
     def test_special_characters_escaped(self) -> None:
         c = cp(r"{{v}}\.txt", one_of("a.b*"))
