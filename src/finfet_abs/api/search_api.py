@@ -414,11 +414,11 @@ def register(router, app) -> None:
             def progress(n: int, requests: int) -> None:
                 if time.monotonic() - last[0] >= 0.5:
                     last[0] = time.monotonic()
-                    app.events.publish("infer.progress", {"id": holder.get("id"), "names": n, "requests": requests})
+                    app.events.publish("infer.progress", {"id": holder.get("id"), "phase": "fetch", "names": n, "requests": requests})
 
             def on_threshold(n: int, elapsed: float) -> str:
                 rate = n / elapsed if elapsed > 0 else 0
-                app.events.publish("infer.progress", {"id": holder.get("id"), "names": n, "paused": True,
+                app.events.publish("infer.progress", {"id": holder.get("id"), "phase": "paused", "names": n, "paused": True,
                                                       "elapsed_s": round(elapsed, 1), "rate": round(rate),
                                                       "estimate_1m_s": round(1_000_000 / rate) if rate else None})
                 while not cancel.is_set():
@@ -455,6 +455,8 @@ def register(router, app) -> None:
                                                     threshold=INFER_THRESHOLD, **common)
                     except infer.SwitchToQuick:
                         switched = True
+                        app.events.publish("infer.progress", {"id": holder.get("id"), "phase": "fetch", "mode": "sample",
+                                                              "switched": True, "names": 0, "requests": 0})
                         items, info = infer.collect(s["backend"], ct, mode="sample", prefix=prefix, per_level=per_level,
                                                     **common)
                     if not info.get("stopped"):
@@ -466,6 +468,8 @@ def register(router, app) -> None:
             finally:
                 infer_cancels.pop(holder.get("id"), None)
                 infer_controls.pop(holder.get("id"), None)
+            # 生成の段階（v1.7.2。件数が多いと時間がかかるため、画面に段階を示します）
+            app.events.publish("infer.progress", {"id": holder.get("id"), "phase": "generate", "names": len(items)})
             cands = infer.infer(items)
             return {"candidates": cands, "names": len(items), "requests": info["requests"],
                     "truncated": info["truncated"], "complete": info["complete"], "sizes_known": info["sizes_known"],

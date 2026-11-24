@@ -178,6 +178,7 @@ export function variableRow(ctx) {
   const d = ctx.def;
   d.value = d.value || { mode: 'any' };
   const changed = () => { ctx.def.touched = true; ctx.onChange(); };
+  const shown = {}; // 入力中に差し替える表示（検索する期間・期間の帯）
   const nameCell = h('div', { class: 'var-name' }, h('span', { class: 'mono', text: ctx.name }), d.label ? h('span', { class: 'muted', text: ` ${d.label}` }) : null);
   const body = h('div', { class: 'var-body' });
   const side = h('div', { class: 'var-side' });
@@ -528,7 +529,9 @@ export function variableRow(ctx) {
     if (ctx.shiftHint) quick.append(h('button', { type: 'button', class: 'quick-btn', text: '今日に合わせて移動', onclick: ctx.shiftHint }));
     body.append(h('div', { class: 'field' }, h('span', { class: 'field-label', text: 'すぐに入力' }), quick));
 
-    const limit = found && found.complete !== false ? { min: toInputValue(found.start, kind, false), max: toInputValue(found.end, kind, true) } : {};
+    // 年を 4 桁までにします（上限がないと、Chrome は年に 6 桁まで入れられ、4 桁を打っても月に進みません。v1.7.2）
+    const MAX = { number: '9999', month: '9999-12', date: '9999-12-31', 'datetime-local': '9999-12-31T23:59:59' };
+    const limit = found && found.complete !== false ? { min: toInputValue(found.start, kind, false), max: toInputValue(found.end, kind, true) } : { max: MAX[kind.type] };
     const mk = (val, isEnd, label) => {
       const el = h('input', { type: kind.type, class: 'input dt-input', value: toInputValue(val, kind, isEnd), 'aria-label': label, ...limit });
       if (kind.step) el.step = kind.step;
@@ -568,8 +571,9 @@ export function variableRow(ctx) {
         more.length ? h('span', { class: 'muted', text: 'いずれかの期間に含まれる Blob を検索します。' }) : null));
     }
     if (found) {
-      const sels = [[v.start, v.end], ...more.map((p) => [p.start, p.end])].filter(([a, b]) => a && b).map(([a, b]) => [normPoint(a, false), normPoint(b, true)]);
-      body.append(rangeBar(found, sels.length ? sels : null, tz));
+      shown.barArgs = [v, found, tz];
+      shown.bar = periodBar(v, found, tz);
+      body.append(shown.bar);
     }
   }
 
@@ -645,6 +649,12 @@ export function variableRow(ctx) {
   }
 
   function drawSummary(v, found, tz) {
+    shown.summary = summaryBox(v, found, tz);
+    shown.summaryArgs = [v, found, tz];
+    body.append(shown.summary);
+  }
+
+  function summaryBox(v, found, tz) {
     const tzName = tz === 'utc' ? 'UTC' : 'ローカル時刻';
     const box = h('div', { class: 'dt-summary', 'aria-live': 'polite' });
     const info = ctx.dtInfo;
@@ -671,7 +681,7 @@ export function variableRow(ctx) {
     if (found && v.mode !== 'period') {
       box.append(h('span', { class: 'muted', text: `Blob が存在する期間（${tzName}）: ${found.start} 〜 ${found.end}${d.found.complete ? '' : '（一部の Blob 名から算出）'}` }));
     }
-    body.append(box);
+    return box;
   }
 
   function drawStep(v) {
@@ -687,6 +697,12 @@ export function variableRow(ctx) {
     det.append(h('div', { class: 'field' }, h('span', { class: 'field-label', text: '間隔（0 の場合は指定なし。指定すると、開始日時から一定の間隔ごとの日時のみを検索します）' }),
       h('div', { class: 'pair' }, stepN, stepU)));
     body.append(det);
+  }
+
+  function periodBar(v, found, tz) {
+    const more = Array.isArray(v.more) ? v.more : [];
+    const sels = [[v.start, v.end], ...more.map((p) => [p.start, p.end])].filter(([a, b]) => a && b).map(([a, b]) => [normPoint(a, false), normPoint(b, true)]);
+    return rangeBar(found, sels.length ? sels : null, tz);
   }
 
   function rangeBar(found, sel, tz) {
@@ -725,6 +741,21 @@ export function variableRow(ctx) {
       h('button', { type: 'button', 'aria-label': `${label}を 1 増やす`, text: '＋', onclick: () => set(Number(inp.value) + 1) }));
   }
 
+  // 入力欄を作り直さずに、表示だけを最新にします（v1.7.2）。日時の入力欄で入力している間は、変数の欄を
+  // 描き直さないため（フォーカスが外れるため）、検索する期間の表示と期間の帯は、ここで差し替えます
+  row.refreshInfo = (dtInfo) => {
+    ctx.dtInfo = dtInfo;
+    if (shown.summary && shown.summary.isConnected) {
+      const next = summaryBox(...shown.summaryArgs);
+      shown.summary.replaceWith(next);
+      shown.summary = next;
+    }
+    if (shown.bar && shown.bar.isConnected) {
+      const next = periodBar(...shown.barArgs);
+      shown.bar.replaceWith(next);
+      shown.bar = next;
+    }
+  };
   return row;
 }
 

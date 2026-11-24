@@ -44,16 +44,22 @@ export function openInferDialog(opt) {
     const cacheInfo = h('span', { class: 'line' });
     // フルスキャンで 100,000 件を取得して、まだ続きがあるときの確認（v1.6.0）
     const pausePanel = h('div', { class: 'notice infer-pause', hidden: true });
+    const prog = progressPanel(pausePanel);
     const list = h('div');
     d.body.append(formGrid(...row('接続先', tSel), ...row('範囲', modeR),
-      ...row('prefix', prefixIn, { optional: true })), h('div', { class: 'line infer-status' }, status, cacheInfo), pausePanel, list);
+      ...row('prefix', prefixIn, { optional: true })), prog.el, h('div', { class: 'line infer-status' }, status, cacheInfo), list);
 
     const runBtn = button('実行', () => run(false), { primary: true });
     const stopBtn = button('中止', () => { if (taskId) api.post(`/api/v1/pattern/infer/${taskId}/cancel`, {}).catch(() => {}); });
     const decide = (action) => {
       pausePanel.hidden = true;
       if (taskId) api.post(`/api/v1/pattern/infer/${taskId}/decide`, { action }).catch(() => {});
-      if (action !== 'continue') status.textContent = action === 'stop' ? '取得した Blob 名から生成しています…' : 'クイックスキャンに切り替えています…';
+      // 選んだ直後から、次の段階を示します（以前は、次の知らせが届くまで何も表示されませんでした）
+      // [ここまでで生成] は、フルスキャンの取得を続けるときだけ残します
+      hereBtn.hidden = action !== 'continue';
+      if (action === 'continue') prog.fetch({ note: '取得を続けています。' });
+      else if (action === 'stop') prog.generate(null, '取得を止め、それまでに取得した Blob 名から生成します。');
+      else prog.fetch({ mode: 'sample', reset: true, note: 'クイックスキャンに切り替えています。' });
     };
     const hereBtn = button('ここまでで生成', () => decide('stop'));
     stopBtn.hidden = true;
@@ -63,8 +69,13 @@ export function openInferDialog(opt) {
     const minutes = (sec) => (sec < 60 ? `${Math.max(1, Math.round(sec))} 秒` : `${num(Math.round(sec / 60))} 分`);
     offs.push(on('infer.progress', (p) => {
       if (p.id !== taskId) return;
+      if (p.phase === 'generate') {
+        hereBtn.hidden = true; // 生成の段階では、取得を止める操作はありません
+        prog.generate(p.names);
+        return;
+      }
       if (p.paused) {
-        status.textContent = '';
+        prog.pause(p.names);
         pausePanel.replaceChildren(
           h('p', { text: `${num(p.names)} 件の Blob 名を取得しました（${minutes(p.elapsed_s)}）。まだ取得していない Blob があります。` }),
           p.estimate_1m_s ? h('p', { text: `現在の速さ（1 秒あたり約 ${num(p.rate)} 件）では、Blob が 100 万件ある場合、すべて取得するまでに約 ${minutes(p.estimate_1m_s)} かかります。` }) : null,
@@ -74,7 +85,8 @@ export function openInferDialog(opt) {
         pausePanel.hidden = false;
         return;
       }
-      status.textContent = `${num(p.names)} 件の Blob 名を取得しました（要求 ${num(p.requests)} 回）`;
+      prog.fetch({ names: p.names, requests: p.requests, mode: p.mode, reset: !!p.switched,
+        note: p.switched ? 'クイックスキャンに切り替えました。階層ごとに一部の Blob 名を取得しています。' : undefined });
     }));
 
     async function run(refresh) {
@@ -82,7 +94,8 @@ export function openInferDialog(opt) {
       const mode = radioValue(modeR);
       list.replaceChildren();
       cacheInfo.replaceChildren();
-      status.textContent = '取得しています…';
+      status.textContent = '';
+      prog.start(mode);
       runBtn.disabled = true;
       stopBtn.hidden = false;
       hereBtn.hidden = mode !== 'all';
@@ -95,6 +108,7 @@ export function openInferDialog(opt) {
           mode, prefix: prefixIn.value.trim(), refresh: !!refresh,
         }, (id) => { taskId = id; });
         taskId = null;
+        prog.stop();
         if (closed) return;
         draw(r, t);
       } catch (e) {
@@ -103,6 +117,7 @@ export function openInferDialog(opt) {
         if (e.code !== 'CANCELLED') toastError(e);
         else status.textContent = '中止しました。';
       } finally {
+        prog.stop();
         runBtn.disabled = false;
         stopBtn.hidden = true;
         hereBtn.hidden = true;
@@ -149,4 +164,95 @@ export function openInferDialog(opt) {
       list.append(table);
     }
   });
+}
+
+/**
+ * 自動生成の進み具合の表示（v1.7.2。依頼者の依頼: 取得中の表示が簡素で、確認の後に続行するとスキャン中か分からない）。
+ * 段階（Blob 名の取得 → パスパターンの生成）と、取得した件数・要求の回数・経過時間・速さを、終わるまで表示し続けます。
+ * 経過時間は画面で 1 秒ごとに進めます（サーバーからの知らせが届かない間も、動いていることが分かるように）。
+ * 確認（100,000 件）の間は帯を止め、件数を残したまま、確認の欄を表示します。
+ */
+function progressPanel(pausePanel) {
+  const modeLabel = { all: 'フルスキャン', sample: 'クイックスキャン' };
+  const step1 = h('li', { class: 'ip-step' });
+  const step2 = h('li', { class: 'ip-step', text: 'パスパターンの生成' });
+  const bar = h('div', { class: 'ip-bar', 'aria-hidden': 'true' }, h('div', { class: 'ip-bar-fill' }));
+  const names = h('strong', { class: 'ip-num' });
+  const requests = h('span');
+  const elapsed = h('span');
+  const rate = h('span');
+  const stats = h('div', { class: 'ip-stats' }, h('span', null, '取得した Blob 名 ', names, ' 件'), requests, elapsed, rate);
+  const note = h('div', { class: 'ip-note muted', 'aria-live': 'polite' });
+  const el = h('div', { class: 'infer-progress', hidden: true }, h('ol', { class: 'ip-steps' }, step1, step2), bar, stats, note, pausePanel);
+  let t0 = 0;
+  let pausedAt = 0;
+  let pausedMs = 0;
+  let timer = null;
+  let st = { names: 0, requests: 0, mode: 'all' };
+  const clock = () => {
+    const now = pausedAt || Date.now();
+    const sec = Math.max(0, Math.floor((now - t0 - pausedMs) / 1000));
+    elapsed.textContent = `経過 ${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}`;
+    rate.textContent = sec >= 2 && st.names ? `約 ${num(Math.round(st.names / sec))} 件/秒` : '';
+  };
+  const setStep = (a, b) => {
+    step1.className = `ip-step ${a}`;
+    step2.className = `ip-step ${b}`;
+  };
+  const draw = () => {
+    step1.textContent = `Blob 名の取得（${modeLabel[st.mode] || ''}）`;
+    names.textContent = num(st.names);
+    requests.textContent = st.requests ? `要求 ${num(st.requests)} 回` : '';
+    clock();
+  };
+  const resume = () => {
+    if (pausedAt) { pausedMs += Date.now() - pausedAt; pausedAt = 0; }
+    bar.classList.remove('paused');
+  };
+  return {
+    el,
+    start(mode) {
+      st = { names: 0, requests: 0, mode };
+      t0 = Date.now(); pausedAt = 0; pausedMs = 0;
+      clearInterval(timer);
+      timer = setInterval(clock, 1000);
+      setStep('active', '');
+      bar.classList.remove('paused');
+      note.textContent = mode === 'all'
+        ? 'Azure から、すべての Blob 名を取得しています。件数が多い場合は時間がかかります（[ここまでで生成] で、途中から生成できます）。'
+        : 'Azure から、階層ごとに一部の Blob 名を取得しています。';
+      el.hidden = false;
+      draw();
+    },
+    fetch({ names: n, requests: r, mode, reset, note: text } = {}) {
+      resume();
+      if (reset) { st.names = 0; st.requests = 0; }
+      if (mode) st.mode = mode;
+      if (n !== undefined) st.names = n;
+      if (r !== undefined) st.requests = r;
+      setStep('active', '');
+      if (text) note.textContent = text;
+      draw();
+    },
+    pause(n) {
+      if (!pausedAt) pausedAt = Date.now();
+      if (n !== undefined) st.names = n;
+      setStep('paused', '');
+      bar.classList.add('paused');
+      note.textContent = '取得を一時停止しています。下の確認で、続け方を選んでください。';
+      draw();
+    },
+    generate(n, text) {
+      resume();
+      if (n !== undefined && n !== null) st.names = n;
+      setStep('done', 'active');
+      note.textContent = text || `取得した ${num(st.names)} 件の Blob 名から、パスパターンを生成しています。`;
+      draw();
+    },
+    stop() {
+      clearInterval(timer);
+      timer = null;
+      el.hidden = true;
+    },
+  };
 }
