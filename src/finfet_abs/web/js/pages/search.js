@@ -325,7 +325,51 @@ export async function render(ctx) {
 
   // ---------------------------------------------------------------- 変数
   const choiceFilters = new Map(); // 選択肢の変数の絞り込みの文字（行を描き直しても保つ）
+  // 日時の入力欄（期間の開始・終了）で入力している間は、変数の欄を描き直しません。
+  // Chrome は日付・時刻の部品を 1 つ変えるたびに change を出すため、描き直すとフォーカスが外れ、
+  // 続けて打った数字が失われていました（「15」と打つと「1」だけ入る）。値はそのつど状態に入れ、
+  // 描き直しは日時の入力欄からフォーカスが離れたときにまとめて行います。
+  // フォーカスの有無は focusin・focusout で追います（日付の部品を打ち終えたときの change では、
+  // document.activeElement が一時的に body を返すことがあるため）。
+  let varsPending = false;
+  let dtInput = null;
+  let pointerInVars = false;
+  const dtFocused = () => !!(dtInput && dtInput.isConnected && varsSec.contains(dtInput));
+  varsSec.addEventListener('focusin', (e) => {
+    dtInput = e.target.classList && e.target.classList.contains('dt-input') ? e.target : null;
+  });
+  // 描き直しを待っていたら、日時の入力欄から離れたときに描き直します。フォーカスのあった部品は、
+  // 描き直した後も同じ位置の部品に戻します
+  const flushVars = () => {
+    if (!varsPending || dtFocused() || pointerInVars || !ctx.isCurrent()) return;
+    const sel = 'button, input, select, textarea, [tabindex]';
+    const a = document.activeElement;
+    const idx = a && varsSec.contains(a) ? [...varsSec.querySelectorAll(sel)].indexOf(a) : -1;
+    drawVars();
+    if (idx >= 0) varsSec.querySelectorAll(sel)[idx]?.focus();
+  };
+  // 変数の欄でマウスのボタンを押している間も、描き直しを待ちます（押している間に描き直すと、
+  // ボタンが作り直されて押したことにならないため。打った後の解析は 300 ミリ秒後に描き直します）
+  varsSec.addEventListener('pointerdown', () => {
+    pointerInVars = true;
+    const done = () => {
+      window.removeEventListener('pointerup', done, true);
+      window.removeEventListener('pointercancel', done, true);
+      setTimeout(() => { pointerInVars = false; flushVars(); }, 0);
+    };
+    window.addEventListener('pointerup', done, true);
+    window.addEventListener('pointercancel', done, true);
+  }, true);
+  varsSec.addEventListener('focusout', (e) => {
+    if (e.target === dtInput) dtInput = null;
+    setTimeout(flushVars, 0);
+  });
   function drawVars() {
+    if (dtFocused() || pointerInVars) {
+      varsPending = true;
+      return;
+    }
+    varsPending = false;
     clear(varsSec);
     const headRow = h('div', { class: 'line' }, h('h2', { text: '変数' }));
     if (analysis?.merge) {
