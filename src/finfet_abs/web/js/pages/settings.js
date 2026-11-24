@@ -170,6 +170,7 @@ function sections(session) {
         ['exit.when_closed', '自動の終了', 'check', { text: '本ツールの画面（ブラウザのタブ）をすべて閉じた場合に、本ツールを終了する（実行中のジョブ・検索がある場合は、完了後に終了します）' }],
         ['exit.wait_minutes', '終了までの時間', 'num', { unit: '分（画面をすべて閉じてから）' }],
         ['__tutorial', 'チュートリアル', 'tutorial'],
+        ['__other_browser', '別のブラウザで開く', 'other_browser'],
       ],
     },
     {
@@ -337,6 +338,10 @@ export async function render(ctx) {
         return row(label, [button('チュートリアルを始める', () => import('../parts/tutorial.js').then((t) => t.launch())),
           h('div', { class: 'muted', text: session.demo ? '架空のデータで、検索からダウンロードまでの流れを体験します。'
             : '架空のデータで、検索からダウンロードまでの流れを体験します。デモモードの FinFeT を起動し、新しいタブで開きます（実際の Azure には接続しません）。' })]);
+      case 'other_browser':
+        // 別のブラウザで開く（v1.7.2）: 起動コード付きの URL（1 回だけ・60 秒間有効）を表示します
+        return row(label, [button('URL を表示', () => import('../parts/other-browser.js').then((m) => m.openOtherBrowserDialog())),
+          h('div', { class: 'muted', text: 'この画面を、既定のブラウザ以外のブラウザで開くための URL を表示します。' })]);
       case 'reset':
         return row('', button('設定を既定に戻す', async () => {
           const ok = await confirmDialog({ title: '設定を既定に戻しますか', body: 'すべての設定を既定値に戻します。保存されているプロキシのパスワードも削除されます。', okText: '既定に戻す' });

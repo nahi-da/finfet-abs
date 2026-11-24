@@ -659,3 +659,24 @@ a.popup-body:hover .popup-open { text-decoration: underline; }
 .tut-missing { margin: 0 0 var(--sp-2); color: var(--warn); }
 .tut-btns { display: flex; align-items: center; gap: var(--sp-2); margin-top: var(--sp-3); }
 .tut-btns .push { margin-left: auto; }
+
+/* ---- パスパターンの自動生成の進み具合（v1.7.2） */
+.infer-progress { margin: var(--sp-3) 0; padding: var(--sp-3) var(--sp-4); border: 1px solid var(--line); border-radius: 6px; background: var(--bg-raised); display: flex; flex-direction: column; gap: var(--sp-2); }
+.infer-progress[hidden] { display: none; }
+.ip-steps { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: var(--sp-1) var(--sp-4); counter-reset: ip; }
+.ip-step { counter-increment: ip; color: var(--text-muted); display: inline-flex; align-items: center; gap: var(--sp-2); }
+.ip-step::before { content: counter(ip); display: inline-grid; place-items: center; width: 1.6em; height: 1.6em; border-radius: 50%; border: 1px solid var(--line); font-size: .85em; }
+.ip-step.active { color: var(--text); font-weight: 700; }
+.ip-step.active::before { border-color: var(--accent); background: var(--accent); color: #fff; }
+.ip-step.paused { color: var(--warn); font-weight: 700; }
+.ip-step.paused::before { content: "Ⅱ"; border-color: var(--warn); }
+.ip-step.done::before { content: "✓"; border-color: var(--accent); color: var(--accent); }
+.ip-bar { position: relative; height: 4px; border-radius: 2px; background: var(--line); overflow: hidden; }
+.ip-bar-fill { position: absolute; top: 0; bottom: 0; width: 30%; border-radius: 2px; background: var(--accent); animation: ip-move 1.4s ease-in-out infinite; }
+.ip-bar.paused .ip-bar-fill { animation: none; left: 0; width: 100%; background: var(--warn); opacity: .5; }
+@keyframes ip-move { from { left: -30%; } to { left: 100%; } }
+@media (prefers-reduced-motion: reduce) { .ip-bar-fill { animation: none; left: 0; width: 100%; opacity: .6; } }
+.ip-stats { display: flex; flex-wrap: wrap; gap: var(--sp-1) var(--sp-4); align-items: baseline; font-variant-numeric: tabular-nums; }
+.ip-stats > span:empty { display: none; }
+.ip-num { font-size: 1.25em; }
+.infer-progress .infer-pause { margin: var(--sp-1) 0 0; }

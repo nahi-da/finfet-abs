@@ -374,9 +374,4 @@ details.more[open] summary { margin-bottom: var(--sp-2); }
   .search-cols .vars-col > section.part:first-child { border-top: 0; }
   .search-cols .vars-col { border-left: 1px solid var(--line); padding-left: var(--sp-8); min-height: 100%; }
 }
-/* 設定のページ: 節を 2 列に並べます */
-@media (min-width: 1600px) {
-  .settings-body { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 var(--sp-8); align-items: start; }
-  .settings-body section:nth-child(2) { border-top: 0; padding-top: 0; }
-  .settings-body .form { --label-w: 13em; }
-}
+/* 設定のページは、広い画面でも 1 列にします（v1.7.2。依頼者の依頼。以前は 1600px 以上で 2 列） */

@@ -88,6 +88,16 @@ def register(router, app) -> None:
             ae.set_state(client, state)
         return json_response({"ok": True})
 
+    @router.post("/api/v1/app/launch-url")
+    def launch_url(req: Request):
+        """別のブラウザで開くための、起動コード付きの URL（v1.7.2）。
+
+        起動コードは 1 回だけ・60 秒間使えます（S3）。この要求は、本ツールの画面（Cookie と CSRF のヘッダーがある）からだけ
+        受け付けるため、URL を知ることができるのは、すでに画面を開いている利用者だけです。
+        """
+        from .tutorial_api import same_host
+        return json_response({"url": same_host(app.security.launch_url(), req.header("host")), "expires_in": 60})
+
     @router.post("/api/v1/app/shutdown")
     def shutdown(req: Request):
         body = req.json()

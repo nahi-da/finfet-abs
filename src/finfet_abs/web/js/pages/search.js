@@ -368,9 +368,16 @@ export async function render(ctx) {
     if (e.target === dtInput) dtInput = null;
     setTimeout(flushVars, 0);
   });
+  const rows = new Map(); // 変数の名前 → 行（入力中に表示だけを差し替えるため）
+  let varCount = null;
+  const varCountText = () => (held && held.held ? `一致する Blob: ${num(held.count)} 件（${size(held.bytes)}。保持している一覧から算出）` : '');
   function drawVars() {
     if (dtFocused() || pointerInVars) {
       varsPending = true;
+      // 入力欄は作り直さず、検索する期間の表示・期間の帯・一致する Blob の件数だけを最新にします（v1.7.2。
+      // 以前は、日時の入力欄から離れる（ほかの場所をクリックする）まで、表示が変わりませんでした）
+      for (const [n, row] of rows) row.refreshInfo?.((analysis?.datetimes || []).find((x) => x.name === n) || null);
+      if (varCount) { varCount.textContent = varCountText(); varCount.hidden = !varCount.textContent; }
       return;
     }
     varsPending = false;
@@ -386,9 +393,10 @@ export async function render(ctx) {
           analyze();
         })));
     }
-    if (held && held.held) {
-      headRow.append(h('span', { class: 'muted var-count', text: `一致する Blob: ${num(held.count)} 件（${size(held.bytes)}。保持している一覧から算出）` }));
-    }
+    varCount = h('span', { class: 'muted var-count', text: varCountText() });
+    varCount.hidden = !varCount.textContent;
+    headRow.append(varCount);
+    rows.clear();
     varsSec.append(headRow);
     const names = Object.keys(state.variables);
     if (!names.length) {
@@ -399,7 +407,7 @@ export async function render(ctx) {
     const formatsOf = (n) => [...state.path_pattern.matchAll(new RegExp(`\\{\\{${n}=([^{}]*)\\}\\}`, 'g'))].map((m) => m[1]);
     for (const n of names) {
       const def = state.variables[n];
-      varsSec.append(variableRow({
+      const row = variableRow({
         name: n, def, inPattern: analysis ? inPattern.has(n) : true, formats: formatsOf(n), inputTimezone: state.input_timezone,
         dtInfo: (analysis?.datetimes || []).find((x) => x.name === n) || null,
         onChange: () => { save(); drawVars(); analyzeSoon(); },
@@ -413,7 +421,9 @@ export async function render(ctx) {
         } : null,
         shiftHint: state.shift && def.type === 'datetime' && def.value?.mode === 'period' ? () => shiftToToday(def) : null,
         scanAll: state.targets.length ? () => scanAll(n) : null,
-      }));
+      });
+      rows.set(n, row);
+      varsSec.append(row);
     }
   }
 

@@ -37,6 +37,19 @@ class TutorialApiTest(unittest.TestCase):
         # デモモードの保存先は、デモのデータ保存先の downloads
         self.assertEqual(app.settings.get("fetch.directory"), str(app.location.data_dir / "downloads"))
 
+    def test_launch_url_for_other_browser(self) -> None:
+        """別のブラウザで開くための URL（v1.7.2）: 1 回だけ使え、画面の Cookie と CSRF がなければ作れないこと。"""
+        app, c = self.client(False)
+        r = c.post("/api/v1/app/launch-url").json()
+        self.assertEqual(r["expires_in"], 60)
+        path = r["url"].split(str(app.security.port), 1)[1]
+        self.assertTrue(path.startswith("/auth/launch?code="), r["url"])
+        self.assertEqual(c.get(path, cookie=False).status, 302)
+        self.assertEqual(c.get(path, cookie=False).status, 400)  # 2 回目は使えません
+        self.assertEqual(c.post("/api/v1/app/launch-url", cookie=False).status, 401)
+        r = c.post("/api/v1/app/launch-url", headers={"Host": f"localhost:{app.security.port}"}).json()
+        self.assertTrue(r["url"].startswith("http://localhost:"), r["url"])
+
     def test_offered(self) -> None:
         app, c = self.client(False)
         self.assertFalse(c.get("/api/v1/session").json()["tutorial_offered"])

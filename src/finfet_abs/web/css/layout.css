@@ -72,6 +72,10 @@ main.page {
   min-height: calc(100dvh - var(--topbar-h));
 }
 main.page > * { flex: none; }
+/* 広い画面では、内容の幅を抑えて中央に置きます（v1.7.2。依頼者の依頼: 横に広すぎて視線の移動が大きい）。
+   幅は文字の大きさに合わせて変わるよう、rem で指定します（文字サイズ「大」・画面の大きさに合わせる、でも同じ見え方） */
+main.page { --page-max: 80rem; }
+main.page > :not(.sticky-bottom) { width: 100%; max-width: var(--page-max); margin-inline: auto; }
 
 /* ---- 中くらいの幅: アイコンだけのナビゲーション */
 @media (max-width: 999px) {
@@ -171,7 +175,8 @@ section.part:first-of-type { border-top: 0; }
   gap: var(--sp-2) var(--sp-3);
   /* 内容が短いときも、画面の下端に置きます（main.page の下の余白を打ち消します） */
   margin: auto calc(-1 * var(--sp-6)) calc(-1 * var(--sp-8));
-  padding: var(--sp-2) var(--sp-6);
+  /* 帯は画面の端まで広げ、中の操作は内容と同じ幅に揃えます（% は main.page の内容の幅） */
+  padding: var(--sp-2) max(var(--sp-6), calc((100% - var(--page-max)) / 2 + var(--sp-6)));
   background: var(--bg-raised);
   border-top: 1px solid var(--line);
 }
