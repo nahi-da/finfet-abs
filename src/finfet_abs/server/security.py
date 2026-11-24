@@ -7,7 +7,7 @@ import secrets
 import threading
 import time
 
-SESSION_COOKIE = "finfet_session"
+SESSION_COOKIE = "finfet_session"  # 名前の前半。実際の名前は、ポート番号を付けた Security.cookie_name
 CSRF_HEADER = "x-finfet-csrf"
 INSTANCE_HEADER = "x-finfet-instance"
 LAUNCH_CODE_TTL = 60.0
@@ -100,5 +100,14 @@ class Security:
         """2回目の起動のための秘密の値。"""
         return _eq(header_value, self.instance_secret)
 
+    @property
+    def cookie_name(self) -> str:
+        """セッションの Cookie の名前（v1.7.1 からポート番号を付けます）。
+
+        Cookie はポート番号で区別されないため、同じ 127.0.0.1 で通常のモードとデモモード（チュートリアル）を
+        同時に使うと、同じ名前では後から開いた方の Cookie で上書きされ、もう一方の画面が使えなくなります。
+        """
+        return f"{SESSION_COOKIE}_{self.port}"
+
     def session_cookie_header(self) -> tuple[str, str]:
-        return ("Set-Cookie", f"{SESSION_COOKIE}={self.session_secret}; HttpOnly; SameSite=Strict; Path=/")
+        return ("Set-Cookie", f"{self.cookie_name}={self.session_secret}; HttpOnly; SameSite=Strict; Path=/")

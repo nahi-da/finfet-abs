@@ -30,7 +30,7 @@ def register(router, app) -> None:
         query = {k: req.arg(k) for k in ("code", "state", "session_state", "client_info", "error",
                                          "error_description") if req.arg(k) is not None}
         ok, message = auth().handle_return(query)
-        link = ("/", "本ツールの画面を開く") if app.security.session_ok(req.cookies.get("finfet_session")) else None
+        link = ("/", "本ツールの画面を開く") if app.security.session_ok(req.cookies.get(app.security.cookie_name)) else None
         return simple_page("サインイン" if ok else "サインインできませんでした", message, 200 if ok else 400, link)
 
     s["signin_return"] = signin_return

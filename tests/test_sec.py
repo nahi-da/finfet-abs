@@ -64,11 +64,21 @@ class SecurityTest(TempDirMixin):
         r = self.c.get("/jobs", cookie=False)
         self.assertEqual(r.status, 401)
         self.assertIn("finfet-abs.bat", r.text)
-        r = self.c.get("/api/v1/session", cookie=False, headers={"Cookie": "finfet_session=wrong"})
+        r = self.c.get("/api/v1/session", cookie=False, headers={"Cookie": f"{self.app.security.cookie_name}=wrong"})
+        self.assertEqual(r.status, 401)
+        # ポート番号を付けない以前の名前は使いません
+        r = self.c.get("/api/v1/session", cookie=False, headers={"Cookie": f"finfet_session={self.app.security.session_secret}"})
         self.assertEqual(r.status, 401)
         # 生存確認は Cookie がなくても応答し、何も情報を返しません
         r = self.c.get("/api/v1/health", cookie=False)
         self.assertEqual((r.status, r.json()), (200, {}))
+
+    def test_cookie_name_differs_by_port(self) -> None:
+        """通常のモードとデモモード（チュートリアル）を同時に使っても、Cookie が上書きされないこと（v1.7.1）。"""
+        a, b = Security(), Security()
+        a.port, b.port = 50001, 50002
+        self.assertNotEqual(a.cookie_name, b.cookie_name)
+        self.assertTrue(a.session_cookie_header()[1].startswith("finfet_session_50001="))
 
     # S3
     def test_launch_code_single_use_and_expiry(self) -> None:
@@ -77,6 +87,7 @@ class SecurityTest(TempDirMixin):
         self.assertEqual(r.status, 302)
         self.assertEqual(r.header("Location"), "/")
         cookie = r.header("Set-Cookie")
+        self.assertTrue(cookie.startswith(f"finfet_session_{self.app.security.port}="), cookie)
         self.assertIn("HttpOnly", cookie)
         self.assertIn("SameSite=Strict", cookie)
         self.assertIn("Path=/", cookie)
