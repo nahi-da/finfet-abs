@@ -38,7 +38,7 @@ export async function cancelJobs(ids) {
     if (e.code !== 'CANCEL_CONFIRM') { toastError(e); return false; }
     const ok = await confirmDialog({
       title: 'ジョブを中止しますか',
-      body: `リハイドレートを要求済みの Blob が ${num(e.data.rehydrating)} 件あります。要求は取り消せず、料金はすでに発生しています。完了した Blob は、復元先の層の料金がかかります。`,
+      body: `リハイドレートを要求済みの Blob が ${num(e.data.rehydrating)} 件あります。要求は取り消せず、料金はすでに発生しています。完了した Blob には、復元先の層の料金がかかります。`,
       okText: '中止する', danger: true,
     });
     if (!ok) return false;
@@ -85,10 +85,10 @@ export async function render(ctx) {
 
   const act = async (action) => {
     const ids = [...selected];
-    if (!ids.length) { toast('ジョブを選んでください。'); return; }
+    if (!ids.length) { toast('ジョブを選択してください。'); return; }
     if (action === 'cancel') await cancelJobs(ids);
     else if (action === 'delete') {
-      const ok = await confirmDialog({ title: 'ジョブの記録を削除しますか', body: 'ダウンロードしたファイルは削除しません。削除した記録は元に戻せません。', okText: '削除する', danger: true });
+      const ok = await confirmDialog({ title: 'ジョブの記録を削除しますか', body: 'ダウンロード済みのファイルは削除されません。削除した記録は元に戻せません。', okText: '削除する', danger: true });
       if (!ok) return;
       await api.post('/api/v1/jobs/actions/delete', { ids });
     } else await api.post(`/api/v1/jobs/actions/${action}`, { ids });
@@ -147,7 +147,7 @@ export async function render(ctx) {
 
   const queueCols = [
     { key: 'grip', label: '', width: 32, fixed: true, noResize: true, align: 'center',
-      render: (r) => h('span', { class: 'grip', draggable: 'true', title: 'ドラッグして順番を変える（Alt+↑ / Alt+↓）', 'aria-hidden': 'true',
+      render: (r) => h('span', { class: 'grip', draggable: 'true', title: 'ドラッグで順番を変更（Alt+↑ / Alt+↓）', 'aria-hidden': 'true',
         ondragstart: (e) => { dragId = r.id; e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', r.id); } }, icon('grip')) },
     { key: 'sel', label: '', width: 36, fixed: true, noResize: true, align: 'center', render: check },
     { key: 'name', label: '名前', width: 200, flex: true, fixed: true, render: nameCell },

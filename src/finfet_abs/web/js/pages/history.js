@@ -58,7 +58,7 @@ export async function render(ctx) {
       { key: 'sel', label: '', width: 36, fixed: true, noResize: true, align: 'center',
         render: (r) => h('input', { type: 'checkbox', checked: selected.has(r.id), 'aria-label': '選択', onchange: (e) => { if (e.target.checked) selected.add(r.id); else selected.delete(r.id); } }) },
       { key: 'pin', label: '', width: 36, fixed: true, noResize: true, align: 'center',
-        render: (r) => h('button', { type: 'button', class: 'icon-btn', 'aria-pressed': String(r.pinned), 'aria-label': r.pinned ? 'ピン留めを外す' : 'ピン留め', title: r.pinned ? 'ピン留めを外す' : 'ピン留め', onclick: () => pin(r) }, icon(r.pinned ? 'pin-filled' : 'pin')) },
+        render: (r) => h('button', { type: 'button', class: 'icon-btn', 'aria-pressed': String(r.pinned), 'aria-label': r.pinned ? 'ピン留めを解除' : 'ピン留め', title: r.pinned ? 'ピン留めを解除' : 'ピン留め', onclick: () => pin(r) }, icon(r.pinned ? 'pin-filled' : 'pin')) },
       { key: 'cond', label: '条件', width: 420, flex: true, fixed: true,
         render: (r) => h('a', { class: 'two-line-cell', href: `/search?history=${r.id}` },
           h('span', { class: 'mono ellipsis', text: r.name ? `${r.name}　${r.path_pattern}` : r.path_pattern }),
@@ -69,7 +69,7 @@ export async function render(ctx) {
       { key: 'count', label: '件数', width: 80, align: 'right', render: (r) => (r.last_result_count === null || r.last_result_count === undefined ? '' : num(r.last_result_count)) },
       { key: 'menu', label: '', width: 40, fixed: true, noResize: true, align: 'center',
         render: (r) => iconButton('more', '操作', (e) => openMenu(e.currentTarget, [
-          { text: '検索のページで開く', href: `/search?history=${r.id}` },
+          { text: '検索ページで開く', href: `/search?history=${r.id}` },
           { text: 'エクスポート', onClick: () => openExport({ history_ids: [r.id] }, 1) },
           { text: '削除', onClick: () => remove(r) },
         ])) },

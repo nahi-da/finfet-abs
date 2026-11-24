@@ -90,7 +90,7 @@ class PatternTest(unittest.TestCase):
     def test_mixed_datetime_and_plain(self) -> None:
         with self.assertRaises(PatternError) as cm:
             comp("{{x=YYYY}}/{{x}}")
-        self.assertIn("混ざっています", cm.exception.issues[0].message)
+        self.assertIn("混在しています", cm.exception.issues[0].message)
 
     def test_tokenize_literal_container(self) -> None:
         toks, issues = tokenize("logs-{{n}}.x", literal=True)

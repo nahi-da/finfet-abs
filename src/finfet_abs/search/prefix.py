@@ -33,7 +33,7 @@ def compute(regex: str, flags: int = 0, limit: int = 32) -> list[str]:
     if flags & re.IGNORECASE:
         return [""]
     if _p is None:
-        log.warning("正規表現の解析の機能（re._parser）が使えないため、コンテナー全体を取得します")
+        log.warning("正規表現の解析機能（re._parser）を使用できないため、コンテナー全体を取得します")
         return [""]
     try:
         parsed = _p.parse(regex, flags)

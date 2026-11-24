@@ -183,19 +183,19 @@ def _validate(f: Field, value: Any) -> Any:
         return v
     if f.kind == "choice":
         if value not in f.choices:
-            raise ValueError("選択肢から選んでください。")
+            raise ValueError("選択肢から選択してください。")
         return value
     if f.kind in ("str", "secret"):
         if not isinstance(value, str):
             raise ValueError("文字列で指定してください。")
         if len(value) > (f.max_len if f.kind == "str" else 8192):
-            raise ValueError("長すぎます。")
+            raise ValueError("値が長すぎます。")
         return value
     if f.kind == "dict":
         if not isinstance(value, dict):
             raise ValueError("形式が正しくありません。")
         if len(json.dumps(value)) > 64 * 1024:
-            raise ValueError("大きすぎます。")
+            raise ValueError("値が大きすぎます。")
         return value
     raise ValueError("unknown kind")
 
@@ -255,7 +255,7 @@ class Settings:
                         try:
                             values[key] = _validate(f, flat[key])
                         except ValueError:
-                            log.warning("設定の値が正しくないため、既定値を使います: %s", key)
+                            log.warning("設定の値が正しくないため、既定値を使用します: %s", key)
                             need_write = True
                 except Exception:  # noqa: BLE001
                     backup = self.path.with_name(self.path.name + ".bak")
@@ -263,9 +263,9 @@ class Settings:
                         os.replace(self.path, backup)
                     except OSError:
                         pass
-                    self.load_warning = ("設定のファイルを読み込めなかったため、既定値で起動しました。"
+                    self.load_warning = ("設定ファイルを読み込めなかったため、既定値で起動しました。"
                                          f"元のファイルは {backup.name} に退避しました。")
-                    log.warning("設定のファイルを読み込めないため、退避して既定値で起動します")
+                    log.warning("設定ファイルを読み込めないため、退避して既定値で起動します")
                     values = defaults()
                     need_write = True
             self._values = values
@@ -327,7 +327,7 @@ class Settings:
         for key, value in changes.items():
             f = FIELDS.get(key)
             if f is None:
-                errors[key] = "知らない項目です。"
+                errors[key] = "不明な項目です。"
                 continue
             try:
                 v = _validate(f, value)

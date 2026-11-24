@@ -149,7 +149,7 @@ def diagnose(stored_env: dict, current: Environment, winerror: int | None) -> De
                                "（ポータブルモードのフォルダーを別の PC にコピーした場合など）。"
                                "この PC で接続先を追加し直してください。", winerror)
     return DecryptError(3, "暗号化を解除できませんでした。ファイルの破損、管理者による Windows のパスワードのリセット、"
-                           "ユーザープロファイルの作り直しなどが考えられます。接続先を追加し直してください。", winerror)
+                           "ユーザープロファイルの再作成などが考えられます。接続先を追加し直してください。", winerror)
 
 
 def unseal(text: str, purpose: str) -> Secret:

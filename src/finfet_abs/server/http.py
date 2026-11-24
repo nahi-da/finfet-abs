@@ -96,7 +96,7 @@ class Request:
             return {}
         ctype = (self.header("content-type") or "").split(";")[0].strip().lower()
         if ctype != "application/json":
-            raise AppError("UNSUPPORTED_MEDIA_TYPE", "JSON で送ってください。", status=415)
+            raise AppError("UNSUPPORTED_MEDIA_TYPE", "JSON 形式で送信してください。", status=415)
         try:
             return json.loads(data.decode("utf-8"))
         except (UnicodeDecodeError, json.JSONDecodeError):

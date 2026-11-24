@@ -257,7 +257,7 @@ class DownloadTest(JobTestBase):
             self.run_until(lambda: self.status(jid) in ("completed", "completed_with_errors"))
             it = self.items(jid)[0]
             if expect is None:
-                self.assertEqual((it["status"], it["status_reason"]), ("skipped", "同名のファイルがある"))
+                self.assertEqual((it["status"], it["status_reason"]), ("skipped", "同名のファイルが存在する"))
             else:
                 self.assertEqual(os.path.basename(it["local_path"]), expect)
                 self.assertEqual(os.path.getsize(it["local_path"]), 10 * KB)

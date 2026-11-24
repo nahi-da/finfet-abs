@@ -130,7 +130,7 @@ class AutoExit:
             return False
         with self._lock:
             self._fired = True
-        log.info("画面が閉じられてから %d 分たったため、終了します", int(waited // 60))
+        log.info("画面が閉じられてから %d 分経過したため、終了します", int(waited // 60))
         self._on_exit()
         return True
 

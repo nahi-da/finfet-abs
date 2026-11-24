@@ -58,7 +58,7 @@ class WsgiApp:
                                                extra={"request_id": exc.request_id} if exc.request_id else None))
             else:
                 log.exception("要求の処理でエラーが発生しました: %s %s", req.method, req.path)
-                resp = error_response(AppError("INTERNAL", "内部のエラーが発生しました。詳しくはログを確認してください。",
+                resp = error_response(AppError("INTERNAL", "内部エラーが発生しました。詳細はログを確認してください。",
                                                status=500))
         for name, value in SECURITY_HEADERS:
             resp.set_header(name, value)
@@ -116,7 +116,7 @@ class WsgiApp:
         if not sec.session_ok(req.cookies.get(SESSION_COOKIE)):
             if is_api:
                 return error_response(AppError("UNAUTHORIZED", "本ツールの画面を開き直してください。", status=401))
-            return simple_page("FinFeT", "本ツールの画面を開くには、finfet-abs.bat をもう一度実行してください。", 401)
+            return simple_page("FinFeT", "本ツールの画面を開くには、finfet-abs.bat を再度実行してください。", 401)
 
         # S4: CSRF
         if req.method in UNSAFE_METHODS and not sec.csrf_ok(req.header(CSRF_HEADER)):
@@ -140,12 +140,12 @@ class WsgiApp:
             return file_response(*found)
         if is_page(path) and self.index is not None:
             return file_response(*self.index)
-        return simple_page("見つかりません", "このページはありません。", 404, ("/", "本ツールの画面を開く"))
+        return simple_page("見つかりません", "このページは存在しません。", 404, ("/", "本ツールの画面を開く"))
 
     def _launch(self, req: Request) -> Response:
         """S3: 起動コードを Cookie に交換して `/` にリダイレクトします。"""
         if not self.security.consume_launch_code(req.arg("code")):
-            return simple_page("FinFeT", "このページの URL は無効か、期限が切れています。finfet-abs.bat をもう一度実行してください。", 400)
+            return simple_page("FinFeT", "このページの URL は無効か、有効期限が切れています。finfet-abs.bat を再度実行してください。", 400)
         return redirect("/", [self.security.session_cookie_header()])
 
 

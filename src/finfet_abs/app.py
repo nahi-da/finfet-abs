@@ -102,7 +102,7 @@ class App:
         try:
             self.db.flush(10)
         except Exception:  # noqa: BLE001
-            log.exception("データベースの書き込みを終えられませんでした")
+            log.exception("データベースへの書き込みを完了できませんでした")
         self.db.close()
         self.stopped_event.set()
 
@@ -127,7 +127,7 @@ def run(args) -> int:
     if not lock.acquire():
         url = instance.wait_for_existing(local, demo)
         if url is None:
-            console.error("別の FinFeT が起動していますが、応答がありません。しばらく待ってから、もう一度実行してください。")
+            console.error("別の FinFeT が起動していますが、応答がありません。しばらく待ってから、再度実行してください。")
             return 1
         if args.no_browser:
             console.started_again(url)
@@ -168,7 +168,7 @@ def run(args) -> int:
     console.started(__version__, url, demo)
     # 起動の案内の後から、ログをコンソールにも表示します（案内がログに埋もれないように）
     if app.settings.get("log.console"):
-        console.info("ログ（設定の「データとログ」で、表示の有無とレベルを変えられます）:")
+        console.info("ログ（設定の「データとログ」で、表示の有無とレベルを変更できます）:")
     logs.set_console(app.settings.get("log.console"), app.settings.get("log.console_level"))
 
     def on_console_event(event: int) -> None:

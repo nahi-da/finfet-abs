@@ -33,10 +33,10 @@ export function startSignIn(tenantId, opt = {}) {
     });
     const status = await api.get('/api/v1/auth/status');
     const body = [
-      h('p', { text: 'ブラウザでサインインのページを開きました。開かない場合や、別のブラウザでサインインする場合は、次の URL を開いてください。' }),
+      h('p', { text: 'ブラウザでサインインページを開きました。ページが開かない場合や、別のブラウザでサインインする場合は、次の URL を開いてください。' }),
       h('div', { class: 'inline', style: { flexWrap: 'nowrap', width: '100%' } }, urlEl, copyBtn),
       status.default_client_id ? h('p', { class: 'muted', style: { marginTop: '12px' } },
-        'サインインのページには「Microsoft Azure CLI」と表示されます。本ツールは Azure の開発ツールと同じ方法でサインインします。') : null,
+        'サインインページには「Microsoft Azure CLI」と表示されます。本ツールは、Azure の開発ツールと同じ方法でサインインします。') : null,
     ];
     const off = on('auth.changed', (d) => {
       if (finished || d.signin_pending || !d.signed_in) return;

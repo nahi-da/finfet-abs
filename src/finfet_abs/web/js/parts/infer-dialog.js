@@ -27,21 +27,21 @@ export function openInferDialog(opt) {
       onClose: () => { closed = true; offs.forEach((f) => f()); if (taskId) api.post(`/api/v1/pattern/infer/${taskId}/cancel`, {}).catch(() => {}); resolve(result); },
     });
     if (!targets.length) {
-      d.body.append(h('p', { text: '先に、検索のページで接続先（コンテナー）を選んでください。' }));
+      d.body.append(h('p', { text: '先に、検索ページで接続先（コンテナー）を選択してください。' }));
       d.setFoot(h('span.push'), button('閉じる', () => d.close(true)));
       return;
     }
     const tSel = select(targets.map((t, i) => [String(i), `${t.storage_account} / ${t.container}`]), '0', { 'aria-label': '接続先' });
     // 範囲（v1.5.2: 依頼者の意見で、違いの説明を付け、件数の入力欄を「先頭から指定した件数」の中に置いた）
-    const limitIn = textInput('10000', { width: 'w-num', inputmode: 'numeric', 'aria-label': '集める件数' });
+    const limitIn = textInput('10000', { width: 'w-num', inputmode: 'numeric', 'aria-label': '取得する件数' });
     const modeR = choiceCards('infer-mode', [
-      { value: 'sample', label: '階層をたどって見本を集める', tag: 'おすすめ',
-        desc: '階層（フォルダー）ごとに一部の名前だけを集めます。Blob が多くても短時間で終わります。Blob がある期間は、見本から求めた目安です。' },
+      { value: 'sample', label: '階層ごとに一部を取得', tag: 'おすすめ',
+        desc: '階層ごとに一部の Blob のみを取得します。コンテナー内の Blob が数十万件を超える場合でも、処理時間を短縮できます。ただし、すべての Blob を確認するわけではないため、パスパターンが正確に生成できない場合があります。' },
       { value: 'first', label: '先頭から指定した件数',
-        desc: '名前の順に、先頭から指定した件数を集めます。名前の後ろのほう（新しい日付など）の形式は含まれないことがあります。',
+        desc: '名前順に、先頭から指定した件数の Blob 名を取得します。後半の Blob（日付が新しいものなど）の形式は、生成されるパスパターンに含まれない場合があります。',
         extra: h('span', { class: 'inline choice-extra' }, limitIn, '件') },
       { value: 'all', label: 'すべての Blob',
-        desc: 'すべての名前を集めます。Blob がある期間を正確に求められますが、Blob が多いと、時間と要求の回数がかかります。' },
+        desc: 'すべての Blob 名を取得します。パスパターンを正確に生成できます。ただし、Blob の件数が多い場合は、処理時間と Azure への要求の回数が増えます。' },
     ], 'sample');
     const prefixIn = textInput('', { width: 'w-full', placeholder: '例: logs/2026/', 'aria-label': 'prefix' });
     const status = h('span', { class: 'muted' });
@@ -56,7 +56,7 @@ export function openInferDialog(opt) {
     d.setFoot(h('span.push'), stopBtn, button('閉じる', () => d.close(true)), runBtn);
 
     offs.push(on('infer.progress', (p) => {
-      if (p.id === taskId) status.textContent = `${num(p.names)} 件の名前を取得しました（要求 ${num(p.requests)} 回）`;
+      if (p.id === taskId) status.textContent = `${num(p.names)} 件の Blob 名を取得しました（要求 ${num(p.requests)} 回）`;
     }));
 
     async function run(refresh) {
@@ -89,13 +89,13 @@ export function openInferDialog(opt) {
     }
 
     function draw(r, t) {
-      status.textContent = `${num(r.names)} 件の名前から、${num(r.candidates.length)} 個の候補を作りました（要求 ${num(r.requests)} 回）`
-        + (r.truncated ? '。上限で打ち切ったため、すべての Blob ではありません' : '')
-        + (!r.truncated && !r.complete ? '。見本のため、件数は見本の数です' : '');
+      status.textContent = `${num(r.names)} 件の Blob 名から、${num(r.candidates.length)} 件の候補を生成しました（要求 ${num(r.requests)} 回）`
+        + (r.truncated ? '。件数の上限に達したため、一部の Blob のみを対象にしています' : '')
+        + (!r.truncated && !r.complete ? '。一部の Blob のみを取得したため、件数は取得した Blob の数です' : '');
       if (r.from_cache) {
         // 一度集めた名前は 60 分の間保持し、取得し直さずに使います（依頼者の依頼）
-        cacheInfo.append(h('span', { class: 'muted', text: `${dateShort(r.fetched_at)} に取得した名前を使いました。` }),
-          linkButton('取得し直す', () => run(true)));
+        cacheInfo.append(h('span', { class: 'muted', text: `${dateShort(r.fetched_at)} に取得した Blob 名を使用しました。` }),
+          linkButton('再取得', () => run(true)));
       }
       if (!r.candidates.length) {
         list.append(h('p', { text: 'Blob がありません。' }));

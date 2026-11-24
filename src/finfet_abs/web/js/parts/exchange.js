@@ -6,7 +6,7 @@ import { confirmDialog, infoDialog, openDialog } from './dialog.js';
 import { checkbox, radios } from './form.js';
 import { toast, toastError } from './toast.js';
 
-const WARN = '認証情報は暗号化されずに、そのままファイルに書き込まれます。このファイルを持っている人は、ストレージアカウントにアクセスできます。ファイルの置き場所と渡す相手に注意し、不要になったら削除してください。';
+const WARN = '認証情報は暗号化されずに、そのままファイルに書き込まれます。このファイルを入手した人は、ストレージアカウントにアクセスできます。ファイルの保存場所と共有相手に注意し、不要になった場合は削除してください。';
 
 /**
  * エクスポートのダイアログ。
@@ -18,7 +18,7 @@ export async function openExport(target, count) {
   const counts = h('div', { class: 'muted', hidden: true });
   const warn = h('p', { class: 'danger', text: WARN, hidden: true });
   const saveBtn = button('保存', () => save(), { primary: true });
-  const r = radios('exp-includes', [['condition', '検索条件だけ'], ['targets', '検索条件と接続先'], ['credentials', '検索条件、接続先、認証情報']], includes, async (v) => {
+  const r = radios('exp-includes', [['condition', '検索条件のみ'], ['targets', '検索条件と接続先'], ['credentials', '検索条件、接続先、認証情報']], includes, async (v) => {
     includes = v;
     const cred = v === 'credentials';
     warn.hidden = !cred;
@@ -27,7 +27,7 @@ export async function openExport(target, count) {
     if (cred) {
       try {
         const c = await api.post('/api/v1/history/export/counts', target);
-        counts.textContent = `含める認証情報 ${c.included} 件` + (c.not_included || c.entra ? `、含められないもの ${c.not_included + c.entra} 件（Entra ID ${c.entra} 件、復号できないもの ${c.not_included} 件）` : '');
+        counts.textContent = `含める認証情報 ${c.included} 件` + (c.not_included || c.entra ? `、含められない認証情報 ${c.not_included + c.entra} 件（Entra ID ${c.entra} 件、復号できないもの ${c.not_included} 件）` : '');
       } catch { counts.textContent = ''; }
     }
   });
@@ -64,7 +64,7 @@ export function openImport(opt = {}) {
       input.remove();
       if (!file) return resolve(null);
       if (file.size > 1024 * 1024) {
-        toast('ファイルが大きすぎます（1 MB まで）。', { error: true });
+        toast('ファイルのサイズが上限（1 MB）を超えています。', { error: true });
         return resolve(null);
       }
       const buf = new Uint8Array(await file.arrayBuffer());
@@ -105,9 +105,9 @@ function previewDialog(pv, opt) {
         if (res && res.conflicts) {
           for (const c of res.conflicts) {
             const ok = await confirmDialog({
-              title: '保存した認証情報を置き換えますか',
-              body: `${c.storage_account}${c.scope_container ? ` / ${c.scope_container}` : ''} の認証情報が保存されています。ファイルの認証情報で置き換えます。`,
-              okText: '置き換える', cancelText: '置き換えない',
+              title: '保存した認証情報を上書きしますか',
+              body: `${c.storage_account}${c.scope_container ? ` / ${c.scope_container}` : ''} の認証情報が保存されています。ファイルの認証情報で上書きします。`,
+              okText: '上書きする', cancelText: '上書きしない',
             });
             decisions[c.key] = ok;
           }
@@ -119,7 +119,7 @@ function previewDialog(pv, opt) {
           await infoDialog({ title: '保存できなかった認証情報', body: h('ul', null, res.credential_errors.map((x) => h('li', { text: x }))) });
         }
         if (res.had_credentials) {
-          await infoDialog({ title: '検索条件を読み込みました', body: '取り込んだファイルには認証情報が平文で含まれています。不要であれば削除してください。' });
+          await infoDialog({ title: '検索条件を読み込みました', body: '読み込んだファイルには、認証情報が平文で含まれています。不要な場合は、ファイルを削除してください。' });
         } else if (mode === 'history') {
           toast(`検索履歴に追加しました（${res.added} 件）`, { href: '/history', linkText: '検索履歴を開く' });
         }
@@ -128,7 +128,7 @@ function previewDialog(pv, opt) {
       }
     };
     const foot = [h('span.push'), button('キャンセル', () => d.close(true)), button('検索履歴に追加', () => commit('history'), { primary: !opt.allowLoad || pv.items.length !== 1 })];
-    if (opt.allowLoad && pv.items.length === 1) foot.push(button('検索のページに読み込む', () => commit('load'), { primary: true }));
+    if (opt.allowLoad && pv.items.length === 1) foot.push(button('検索ページに読み込む', () => commit('load'), { primary: true }));
     d.setFoot(...foot);
   });
 }

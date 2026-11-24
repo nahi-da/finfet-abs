@@ -108,7 +108,7 @@ class CredentialStore:
         """保存します。同じ範囲のものがあれば、replace=True のときだけ置き換えます。戻り値は (ID, 置き換えたか)。"""
         existing = self.find_same_scope(c.account, c.suffix, c.scope_container)
         if existing is not None and not replace:
-            raise AppError("CREDENTIAL_EXISTS", "同じ範囲の認証情報が保存されています。置き換えますか。", status=409,
+            raise AppError("CREDENTIAL_EXISTS", "同じ範囲の認証情報が保存されています。上書きしますか。", status=409,
                            extra={"existing": self.public(existing)})
         now = to_iso(self.clock.now())
         sealed = dpapi.seal(c.secret, "credential")
@@ -117,7 +117,7 @@ class CredentialStore:
             self.db.execute("UPDATE credentials SET auth_kind=?, source=?, secret=?, sas_kind=?, permissions=?, "
                             "expires_at=?, updated_at=?, last_test_at=NULL, last_test_ok=NULL, last_test_message=NULL "
                             "WHERE id=?", (c.auth_kind, c.source, sealed, c.sas_kind, c.permissions, c.expires_at, now, cid))
-            log.info("認証情報を置き換えました: %s/%s", c.account, c.scope_container or "")
+            log.info("認証情報を上書きしました: %s/%s", c.account, c.scope_container or "")
             return cid, True
         cid = str(uuid.uuid4())
         self.db.execute("INSERT INTO credentials(id, storage_account, endpoint_suffix, scope_container, auth_kind, source, "
@@ -183,7 +183,7 @@ def new_from_input(source: str, *, value: str = "", account: str = "", suffix: s
         u = parse_sas_url(value)
         if u.level == "blob":
             from .sas import ParseError
-            raise ParseError("Blob の SAS URL は、URL で指定（検索のページの「URL で指定」）で使用してください。")
+            raise ParseError("Blob の SAS URL は、検索ページの「URL で指定」で使用してください。")
         scope = u.container if u.level == "container" else None
         # dfs の URL は blob の URL に読み替えて保存します
         url = value.strip()

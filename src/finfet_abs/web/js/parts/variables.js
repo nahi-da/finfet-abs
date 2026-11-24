@@ -167,7 +167,7 @@ export function variableRow(ctx) {
   }
   side.append(iconButton('more', '変数の操作', (e) => openMenu(e.currentTarget, menuItems)));
   if (!ctx.inPattern) {
-    side.prepend(h('span', { class: 'muted', text: 'パスパターンにありません' }), iconButton('close', '変数を削除', ctx.onRemove));
+    side.prepend(h('span', { class: 'muted', text: 'パスパターンに含まれていません' }), iconButton('close', '変数を削除', ctx.onRemove));
   }
 
   function editLabel() {
@@ -297,7 +297,7 @@ export function variableRow(ctx) {
         list.append(cb);
       }
       if (!v.options.length) list.append(h('div', { class: 'muted choice-empty', text: '選択肢がありません。値を入力して追加してください。' }));
-      else if (!items.length) list.append(h('div', { class: 'muted choice-empty', text: onlySelected && !filter ? '選んだ選択肢はありません。' : '絞り込みに一致する選択肢はありません。' }));
+      else if (!items.length) list.append(h('div', { class: 'muted choice-empty', text: onlySelected && !filter ? '選択されている選択肢はありません。' : '絞り込みに一致する選択肢はありません。' }));
       drawCount();
     };
     const drawCount = () => {
@@ -324,13 +324,13 @@ export function variableRow(ctx) {
       const t = e.clipboardData.getData('text');
       if (t.includes('\n')) { e.preventDefault(); addValues(t.split(/\r?\n/)); }
     });
-    const onlySel = checkbox('選んだものだけ表示', false, (on) => { onlySelected = on; drawList(); });
-    body.append(h('div', { class: 'line' }, typeSel, filterIn, linkButton('表示中をすべて選ぶ', () => setShown(true)),
-      linkButton('表示中の選択を外す', () => setShown(false)), onlySel, count));
+    const onlySel = checkbox('選択した項目のみ表示', false, (on) => { onlySelected = on; drawList(); });
+    body.append(h('div', { class: 'line' }, typeSel, filterIn, linkButton('表示中の項目をすべて選択', () => setShown(true)),
+      linkButton('表示中の項目の選択を解除', () => setShown(false)), onlySel, count));
     body.append(list);
     const foot = h('div', { class: 'line' }, addIn);
     if (ctx.fetchCandidates) foot.append(linkButton('Azure から候補を取得', () => candidates(addValues)));
-    if (d.from_sample) foot.append(h('span', { class: 'muted', text: '見本の Blob 名から作った選択肢です。ほかの値は、追加するか Azure から取得してください。' }));
+    if (d.from_sample) foot.append(h('span', { class: 'muted', text: '一部の Blob 名から作成した選択肢です。ほかの値は、手動で追加するか、Azure から取得してください。' }));
     body.append(foot);
     drawList();
   }
@@ -343,7 +343,7 @@ export function variableRow(ctx) {
     try {
       const vals = await ctx.fetchCandidates();
       clear(box);
-      if (!vals.length) box.append(h('div', { class: 'group', text: '候補はありません。' }));
+      if (!vals.length) box.append(h('div', { class: 'group', text: '候補が見つかりませんでした。' }));
       for (const x of vals) {
         const cb = checkbox(x, false, (on) => { if (on) picked.add(x); else picked.delete(x); });
         cb.classList.add('folder-check');
@@ -398,7 +398,7 @@ export function variableRow(ctx) {
     if (v.mode === 'period') drawPeriod(v, kind, found, tz);
     else if (v.mode === 'relative') drawRelative(v);
     else if (v.mode === 'units') drawUnits(v, units, found);
-    else body.append(h('div', { class: 'muted', text: '日時を限定しません。パスパターンに合うすべての Blob を検索します。' }));
+    else body.append(h('div', { class: 'muted', text: '日時で絞り込みません。パスパターンに一致するすべての Blob を検索します。' }));
 
     if (v.mode !== 'any') drawSummary(v, found, tz);
     if (v.mode === 'period' || v.mode === 'relative') drawStep(v);
@@ -413,7 +413,7 @@ export function variableRow(ctx) {
     const ym = (o) => { const x = new Date(Date.UTC(now.y, now.mo - 1 + o, 1)); return `${x.getUTCFullYear()}-${pad2(x.getUTCMonth() + 1)}`; };
     const presets = [['今日', () => setPeriod(ymd(0), ymd(0))], ['昨日', () => setPeriod(ymd(-1), ymd(-1))],
       ['直近 7 日', () => setPeriod(ymd(-6), ymd(0))], ['今月', () => setPeriod(ym(0), ym(0))], ['先月', () => setPeriod(ym(-1), ym(-1))]];
-    if (found) presets.push(['Blob がある期間', () => setPeriod(found.start, found.end)]);
+    if (found) presets.push(['Blob が存在する期間', () => setPeriod(found.start, found.end)]);
     for (const [t, fn] of presets) quick.append(h('button', { type: 'button', class: 'quick-btn', text: t, onclick: fn }));
     if (ctx.shiftHint) quick.append(h('button', { type: 'button', class: 'quick-btn', text: '今日に合わせて移動', onclick: ctx.shiftHint }));
     body.append(h('div', { class: 'field' }, h('span', { class: 'field-label', text: 'すぐに入力' }), quick));
@@ -455,7 +455,7 @@ export function variableRow(ctx) {
     });
     if (more.length < 19) {
       body.append(h('div', { class: 'line' }, addButton('期間を追加', () => { v.more = [...more, { start: '', end: '' }]; changed(); }),
-        more.length ? h('span', { class: 'muted', text: 'どれかの期間に入る Blob を検索します。' }) : null));
+        more.length ? h('span', { class: 'muted', text: 'いずれかの期間に含まれる Blob を検索します。' }) : null));
     }
     if (found) {
       const sels = [[v.start, v.end], ...more.map((p) => [p.start, p.end])].filter(([a, b]) => a && b).map(([a, b]) => [normPoint(a, false), normPoint(b, true)]);
@@ -473,7 +473,7 @@ export function variableRow(ctx) {
         onclick: () => { v.kind = k; if ((k === 'last_days' || k === 'last_hours') && !v.n) v.n = 7; if (k === 'days_ago') { v.from = v.from ?? 7; v.to = v.to ?? 1; } changed(); },
       }));
     }
-    body.append(h('div', { class: 'field' }, h('span', { class: 'field-label', text: '期間（検索するたびに、その日時を基準に計算します）' }), quick));
+    body.append(h('div', { class: 'field' }, h('span', { class: 'field-label', text: '期間（検索のたびに、検索時点の日時を基準に計算します）' }), quick));
     if (v.kind === 'last_days' || v.kind === 'last_hours') {
       body.append(h('div', { class: 'field' }, h('span', { class: 'field-label', text: v.kind === 'last_days' ? '日数' : '時間数' }),
         stepper(v.n ?? 7, 1, v.kind === 'last_days' ? 3660 : 87840, v.kind === 'last_days' ? '日数' : '時間数', (n) => { v.n = n; changed(); })));
@@ -524,13 +524,13 @@ export function variableRow(ctx) {
         }
       }
       let hint = '';
-      if (u === 'year' && fa) hint = `Blob がある年: ${fa[0] === fb[0] ? fa[0] : `${fa[0]}〜${fb[0]}`}`;
-      else if (u === 'month' && fa && fa[0] === fb[0]) hint = `Blob がある月: ${fa[1]}〜${fb[1]}`;
-      if (on && spec.mode === 'fixed') hint = `${hint ? `${hint}。` : ''}同じ値を選ぶと固定、違う値を選ぶと範囲になります`;
+      if (u === 'year' && fa) hint = `Blob が存在する年: ${fa[0] === fb[0] ? fa[0] : `${fa[0]}〜${fb[0]}`}`;
+      else if (u === 'month' && fa && fa[0] === fb[0]) hint = `Blob が存在する月: ${fa[1]}〜${fb[1]}`;
+      if (on && spec.mode === 'fixed') hint = `${hint ? `${hint}。` : ''}同じ値を選択すると固定値、異なる値を選択すると範囲になります`;
       if (hint) card.append(h('span', { class: 'muted small', text: hint }));
       grid.append(card);
     }
-    if (!units.length) grid.append(h('span', { class: 'muted', text: 'パスパターンの書式に、年・月・日などの単位がありません。' }));
+    if (!units.length) grid.append(h('span', { class: 'muted', text: 'パスパターンの書式に、年・月・日などの単位が含まれていません。' }));
     body.append(grid);
   }
 
@@ -548,18 +548,18 @@ export function variableRow(ctx) {
       });
       box.append(h('strong', { text: `${parts.join('・')}（${tzName}）` }));
     } else {
-      box.append(h('span', { class: 'muted', text: '期間を確かめています…' }));
+      box.append(h('span', { class: 'muted', text: '期間を確認しています…' }));
     }
     if (v.mode === 'period' && found && found.complete !== false && v.start && v.end) {
       const s = normPoint(v.start, false);
       const e = normPoint(v.end, true);
       const fs = normPoint(found.start, false);
       const fe = normPoint(found.end, true);
-      if (e < fs || s > fe) box.append(h('span', { class: 'warn-text', text: 'Blob がある期間の外です。一致する Blob はありません。' }));
-      else if (s < fs || e > fe) box.append(h('span', { class: 'warn-text', text: '一部が Blob がある期間の外です。' }));
+      if (e < fs || s > fe) box.append(h('span', { class: 'warn-text', text: '指定した期間は、Blob が存在する期間の範囲外です。この期間に一致する Blob はありません。' }));
+      else if (s < fs || e > fe) box.append(h('span', { class: 'warn-text', text: '期間の一部が、Blob が存在する期間の範囲外です。' }));
     }
     if (found && v.mode !== 'period') {
-      box.append(h('span', { class: 'muted', text: `Blob がある期間（${tzName}）: ${found.start} 〜 ${found.end}${d.found.complete ? '' : '（見本の Blob 名から）'}` }));
+      box.append(h('span', { class: 'muted', text: `Blob が存在する期間（${tzName}）: ${found.start} 〜 ${found.end}${d.found.complete ? '' : '（一部の Blob 名から算出）'}` }));
     }
     body.append(box);
   }
@@ -574,7 +574,7 @@ export function variableRow(ctx) {
       changed();
     });
     const stepU = select([['day', '日'], ['hour', '時間'], ['month', 'か月'], ['year', '年'], ['minute', '分']], v.step_unit || 'day', { 'aria-label': '間隔の単位', onchange: (ev) => { v.step_unit = ev.target.value; changed(); } });
-    det.append(h('div', { class: 'field' }, h('span', { class: 'field-label', text: '間隔（0 は間隔なし。指定すると、開始から指定した間隔ごとの日時だけを検索します）' }),
+    det.append(h('div', { class: 'field' }, h('span', { class: 'field-label', text: '間隔（0 の場合は指定なし。指定すると、開始日時から一定の間隔ごとの日時のみを検索します）' }),
       h('div', { class: 'pair' }, stepN, stepU)));
     body.append(det);
   }
@@ -601,7 +601,7 @@ export function variableRow(ctx) {
       h('span', { class: 'rb-tick l', style: { left: pct(f0) }, text: md(found.start) }),
       h('span', { class: 'rb-tick r', style: { left: pct(f1) }, text: md(found.end) }));
     const legend = h('div', { class: 'rb-legend' },
-      h('span', {}, h('i', { class: 'rb-key found' }), `Blob がある期間（${tz === 'utc' ? 'UTC' : 'ローカル時刻'}）: ${found.start} 〜 ${found.end}${found.complete === false ? '（見本の Blob 名から）' : ''}`),
+      h('span', {}, h('i', { class: 'rb-key found' }), `Blob が存在する期間（${tz === 'utc' ? 'UTC' : 'ローカル時刻'}）: ${found.start} 〜 ${found.end}${found.complete === false ? '（一部の Blob 名から算出）' : ''}`),
       h('span', {}, h('i', { class: 'rb-key sel' }), '検索する期間'));
     return h('div', { class: 'rangebar-wrap' }, bar, legend);
   }

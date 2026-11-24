@@ -98,7 +98,7 @@ class TargetService:
         if cred_id.startswith("tmp:"):
             c = self.temp.get(cred_id)
             if c is None:
-                raise BackendError("NO_CREDENTIAL", "入力した認証情報の有効時間が過ぎました。もう一度入力してください。")
+                raise BackendError("NO_CREDENTIAL", "入力した認証情報の有効時間を過ぎました。再度入力してください。")
             return c.source, c.secret
         row = self.credstore.get(cred_id)
         if row is None:
@@ -125,7 +125,7 @@ class TargetService:
             return {"containers": [new.scope_container], "fixed_container": new.scope_container, "list_error": None,
                     "auth_kind": ref.kind}
         if new is not None and (new.account != account or new.suffix != suffix):
-            raise AppError("ACCOUNT_MISMATCH", "入力した認証情報は、このストレージアカウントのものではありません。")
+            raise AppError("ACCOUNT_MISMATCH", "入力した認証情報は、このストレージアカウント用ではありません。")
         a = AccountRef(account, suffix, ref)
         names: list[str] | None = None
         if ref.kind in ("entra_user", "entra_key") and self.arm is not None:
@@ -158,7 +158,7 @@ class TargetService:
         suffix = validate_suffix(suffix or DEFAULT_SUFFIX)
         containers = [c.strip() for c in containers if c and c.strip()]
         if not containers:
-            raise AppError("NO_CONTAINER", "コンテナーを1つ以上選んでください。")
+            raise AppError("NO_CONTAINER", "コンテナーを 1 つ以上選択してください。")
         cred_id = None
         if auth.get("input"):
             c, _info = self.parse_input(auth["input"])

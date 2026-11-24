@@ -139,7 +139,7 @@ class SearchService:
                     if run.cancel.is_set():
                         break
                     if run.limit_hit:
-                        self._set_target(run, no, status="skipped", error={"message": "上限件数に達したため、取得しませんでした。"})
+                        self._set_target(run, no, status="skipped", error={"message": "上限件数に達したため、取得を中止しました。"})
                         continue
                     self._run_target(run, no)
             except Exception:  # noqa: BLE001
@@ -219,7 +219,7 @@ class SearchService:
             self._set_target(run, no, status="error", error=self._err(exc))
             return
         if not containers:
-            self._set_target(run, no, status="completed", error={"message": "一致するコンテナーがありません。"})
+            self._set_target(run, no, status="completed", error={"message": "一致するコンテナーが見つかりません。"})
             return
         # 展開したコンテナーごとに、接続先の行を加えます（最初のものは元の行を使います）
         rows = []
@@ -400,7 +400,7 @@ class SearchService:
             return {"code": exc.code, "message": exc.message}
         if isinstance(exc, PatternError):
             return {"code": "PATTERN_INVALID", "message": exc.issues[0].message}
-        return {"code": "INTERNAL", "message": "内部のエラーが発生しました。詳しくはログを確認してください。"}
+        return {"code": "INTERNAL", "message": "内部エラーが発生しました。詳細はログを確認してください。"}
 
     def _finish(self, run: SearchRun) -> None:
         with run.lock:
@@ -434,17 +434,17 @@ class SearchService:
         self.events.flush()
         self.events.publish("search.done", {"id": run.id, "status": status, "matched": count, "truncated": run.limit_hit,
                                             "elapsed_ms": elapsed})
-        log.info("検索が終わりました（%s・一致 %s 件・%.1f 秒）", status, count, elapsed / 1000)
+        log.info("検索が終了しました（%s・一致 %s 件・%.1f 秒）", status, count, elapsed / 1000)
         # お知らせ（v1.5.0。画面はポップアップでも表示します。見ている検索結果のページでは出しません）
         n_err = sum(1 for t in targets if t["status"] == "error")
         if status == "completed" and n_err:
-            self.events.publish("notify", {"level": "warn", "text": f"検索が終わりました（一致 {count:,} 件）。{n_err} 個の接続先でエラーがありました",
+            self.events.publish("notify", {"level": "warn", "text": f"検索が終了しました（一致 {count:,} 件）。{n_err} 件の接続先でエラーが発生しました",
                                            "url": f"/searches/{run.id}"})
         elif status == "completed":
-            self.events.publish("notify", {"level": "ok", "text": f"検索が終わりました（一致 {count:,} 件）",
+            self.events.publish("notify", {"level": "ok", "text": f"検索が終了しました（一致 {count:,} 件）",
                                            "url": f"/searches/{run.id}"})
         elif status == "failed":
-            self.events.publish("notify", {"level": "error", "text": "検索に失敗しました。検索結果のページで、接続先ごとのエラーを確かめてください",
+            self.events.publish("notify", {"level": "error", "text": "検索に失敗しました。検索結果ページで、接続先ごとのエラーを確認してください",
                                            "url": f"/searches/{run.id}"})
         with self._lock:
             self._runs.pop(run.id, None)
@@ -531,7 +531,7 @@ class SearchService:
             with run.lock:
                 t = run.targets.get(no)
                 if t is not None and t["status"] in ("listing", "waiting"):
-                    raise AppError("TARGET_RUNNING", "取得中の接続先は除けません。", status=409)
+                    raise AppError("TARGET_RUNNING", "取得中の接続先は除外できません。", status=409)
                 if t is not None:
                     run.matched -= t["matched"]
                     t.update(status="skipped", matched=0)

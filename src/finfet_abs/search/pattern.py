@@ -91,7 +91,7 @@ def tokenize(pattern: str, *, literal: bool = False) -> tuple[list[Token], list[
             name, fmt = (inner.split("=", 1) + [None])[:2] if "=" in inner else (inner, None)
             items = None
             if not NAME_RE.match(name):
-                issues.append(Issue(offset + i + 2, f"変数の名前「{name}」は使えません（英字か _ で始まる英数字と _、32 文字まで）。"))
+                issues.append(Issue(offset + i + 2, f"変数名「{name}」は使用できません（英字か _ で始まる英数字と _ で、32 文字以内）。"))
             elif fmt is not None:
                 try:
                     items = dtv.parse_format(fmt)
@@ -110,7 +110,7 @@ def tokenize(pattern: str, *, literal: bool = False) -> tuple[list[Token], list[
         for t in tokens:
             if t.kind == "re":
                 for m in re.finditer(r"\(\?P[<=]", t.text):
-                    issues.append(Issue(t.start + m.start(), "正規表現の名前付きグループ（(?P<名前>…)）は使えません。"))
+                    issues.append(Issue(t.start + m.start(), "正規表現の名前付きグループ（(?P<名前>…)）は使用できません。"))
     return tokens, issues
 
 
@@ -307,7 +307,7 @@ def compile_path(pattern: str, variables: dict, *, ignore_case: bool = False, in
         is_dt = [tokens[i].fmt is not None for i in idxs]
         defn = variables.get(name) or {}
         if any(is_dt) and not all(is_dt):
-            issues.append(Issue(tokens[idxs[0]].start, f"変数「{name}」に、日時の書式があるもの（{{{{{name}=…}}}}）とないものが混ざっています。", name))
+            issues.append(Issue(tokens[idxs[0]].start, f"変数「{name}」に、日時の書式があるもの（{{{{{name}=…}}}}）とないものが混在しています。", name))
             continue
         try:
             if all(is_dt):
@@ -316,7 +316,7 @@ def compile_path(pattern: str, variables: dict, *, ignore_case: bool = False, in
             else:
                 vtype = defn.get("type", "string")
                 if vtype == "datetime":
-                    raise VariableError(name, f"日時の変数は {{{{{name}=YYYY}}}} のように書式を付けて書きます。")
+                    raise VariableError(name, f"日時の変数は {{{{{name}=YYYY}}}} のように書式を付けて記述してください。")
                 if name in fixed:
                     frags[name] = re.escape(str(fixed[name]))
                 elif vtype == "number":

@@ -140,7 +140,7 @@ class ConsoleHandler(logging.Handler):
             try:
                 if self.dropped:
                     n, self.dropped = self.dropped, 0
-                    stream.write(f"（コンソールへの表示が追いつかず、ログを {n} 行省きました。すべてのログはファイルにあります）\n")
+                    stream.write(f"（コンソールへの表示が追いつかないため、ログを {n} 行省略しました。すべてのログはファイルに記録されています）\n")
                 stream.write(line + "\n")
                 stream.flush()
             except (OSError, ValueError, UnicodeEncodeError):

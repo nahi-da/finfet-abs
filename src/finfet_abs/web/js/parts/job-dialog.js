@@ -62,8 +62,8 @@ export async function openCreateJobDialog(opt) {
       const r = await pickFolder({ title: '保存先を選択', initial: dirIn.value });
       if (r) { dirIn.value = r.path; freeEl.textContent = `保存先の空き ${size(r.free_bytes)}`; recheck(); }
     });
-    const folderChk = checkbox('ジョブのフォルダーを作る', init.job_folder, () => recheck());
-    const structSel = select([['preserve', '階層を保つ'], ['flatten', '階層を名前にする'], ['name_only', 'ファイル名だけ'], ['template', '指定する']], init.path_structure, { 'aria-label': 'パス構造', onchange: () => { update(); recheck(); } });
+    const folderChk = checkbox('ジョブのフォルダーを作成する', init.job_folder, () => recheck());
+    const structSel = select([['preserve', '階層を保つ'], ['flatten', '階層を名前にする'], ['name_only', 'ファイル名のみ'], ['template', '指定する']], init.path_structure, { 'aria-label': 'パス構造', onchange: () => { update(); recheck(); } });
     const conflictSel = select([['number', '番号を付ける'], ['skip', 'スキップ'], ['overwrite', '上書き']], init.conflict, { 'aria-label': '同名のファイル' });
     const tmplIn = textInput(init.path_template, { width: 'w-full', mono: true, 'aria-label': '保存するパス', list: 'job-tmpl-list', oninput: () => recheck() });
     const tmplList = h('datalist', { id: 'job-tmpl-list' });
@@ -82,12 +82,12 @@ export async function openCreateJobDialog(opt) {
     const tmplRows = row('保存するパス', h('div', { class: 'tmpl-field' }, blocks, tmplIn, tmplList, examples));
     const checkRows = row('', h('div', null, dupLine, existLine, h('div', { class: 'line' }, mtimeChk, md5Chk), h('div', { class: 'line' }, extractChk)));
     const sasRows = row('認証', h('div', { class: 'status-warn' }, (pv.sas_warnings || []).map((w) => h('div', {
-      text: `${w.storage_account} の SAS は ${dateShort(w.expires_at)} に期限が切れます。` + (w.before_rehydrate ? 'リハイドレートの完了の前に切れるおそれがあります。' : ''),
+      text: `${w.storage_account} の SAS は ${dateShort(w.expires_at)} に期限が切れます。` + (w.before_rehydrate ? 'リハイドレートの完了前に有効期限が切れる可能性があります。' : ''),
     }))));
     showRow(sasRows, (pv.sas_warnings || []).length > 0);
 
     // ---------------------------------------------------------------- リハイドレートの注意
-    const earlyText = pv.early_delete_count ? `Archive に置いてから 180 日未満の Blob が ${num(pv.early_delete_count)} 件あり、早期削除の料金がかかります。` : '';
+    const earlyText = pv.early_delete_count ? `Archive 層に移動してから 180 日未満の Blob が ${num(pv.early_delete_count)} 件あるため、早期削除の料金が発生します。` : '';
     const noteText = h('p');
     const confirmChk = checkbox('上の内容を確認しました', false, () => update());
     const rehydSec = h('div', { class: 'part rehydrate-note' }, noteText, confirmChk);
@@ -121,8 +121,8 @@ export async function openCreateJobDialog(opt) {
       showRow(tmplRows, structSel.value === 'template');
       rehydSec.hidden = !needsRehydrate();
       const tier = tierSel.value;
-      noteText.textContent = `リハイドレートは取り消せません。料金は要求した時点で発生します。復元した Blob は ${tier} 層の料金がかかり、Archive には自動で戻りません。`
-        + (prioSel.value === 'High' ? '優先度「高」は料金が高くなります。' : '優先度「標準」は最大15時間程度かかります。') + earlyText;
+      noteText.textContent = `リハイドレートは取り消せません。料金は要求した時点で発生します。復元した Blob には ${tier} 層の料金がかかり、Archive 層には自動で戻りません。`
+        + (prioSel.value === 'High' ? '優先度「高」は料金が高くなります。' : '優先度「標準」では、完了まで最大で 15 時間程度かかります。') + earlyText;
       addBtn.disabled = needsRehydrate() && !checkInput(confirmChk).checked;
     }
     tierSel.addEventListener('change', update);
@@ -160,7 +160,7 @@ export async function openCreateJobDialog(opt) {
       if (!dup && !dupChoice) return;
       if (dupChoice) {
         dupLine.className = 'line';
-        dupLine.append(h('span', { text: `重複は解決しました（${{ suggest: '提案したパスに変更', number: '番号を付ける', skip: '2件目以降を取得しない' }[dupChoice]}）` }));
+        dupLine.append(h('span', { text: `重複は解決しました（${{ suggest: '提案したパスに変更', number: '番号を付ける', skip: '2 件目以降を取得しない' }[dupChoice]}）` }));
         return;
       }
       dupLine.className = 'line status-warn';
@@ -257,13 +257,13 @@ export function openDuplicateDialog({ source, options, check }) {
       bottomReserve: 320,
     });
     const opts = [];
-    if (check.suggestion) opts.push(['suggest', '提案したパスに変える']);
-    opts.push(['number', '番号を付ける'], ['skip', '2件目以降を取得しない']);
+    if (check.suggestion) opts.push(['suggest', '提案したパスに変更']);
+    opts.push(['number', '番号を付ける'], ['skip', '2 件目以降を取得しない']);
     const choice = radios('dup-choice', opts, opts[0][0], () => {});
     const notes = h('div', { class: 'kv' },
       check.suggestion ? [h('span', { class: 'muted', text: '提案' }), h('span', { class: 'mono', text: `${check.suggestion}   例: ${(check.suggestion_examples || []).join('、')}` })] : null,
       h('span', { class: 'muted', text: '番号' }), h('span', { class: 'mono', text: `例: ${(check.number_examples || []).join('、')}` }),
-      h('span', { class: 'muted', text: '取得しない' }), h('span', { text: `${num(dup.skip_count)} 件を取得しません` }));
+      h('span', { class: 'muted', text: '取得しない' }), h('span', { text: `${num(dup.skip_count)} 件は取得しません` }));
     const d = openDialog({
       title: '保存するパスの重複',
       width: 960,
@@ -271,7 +271,7 @@ export function openDuplicateDialog({ source, options, check }) {
         h('h3', { text: '解決の方法' }), choice, notes],
       onClose: () => { table.destroy(); resolve(result); },
     });
-    d.setFoot(h('span.push'), button('パスを自分で直す', () => { result = { action: 'edit' }; d.close(true); }),
+    d.setFoot(h('span.push'), button('パスを手動で修正', () => { result = { action: 'edit' }; d.close(true); }),
       button('決定', () => { result = { action: radioValue(choice) }; d.close(true); }, { primary: true }));
     table.reload();
   });

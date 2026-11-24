@@ -36,7 +36,7 @@ class TaskRunner:
                     err = {"code": exc.code, "message": exc.message, "detail": exc.detail}
                 else:
                     log.exception("処理でエラーが発生しました（%s）", kind)
-                    err = {"code": "INTERNAL", "message": "内部のエラーが発生しました。詳しくはログを確認してください。"}
+                    err = {"code": "INTERNAL", "message": "内部エラーが発生しました。詳細はログを確認してください。"}
                 self.events.publish("task.done", {"id": tid, "kind": kind, "ok": False, "error": err})
 
         self._pool.submit(run)

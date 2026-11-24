@@ -39,7 +39,7 @@ def build_class(classes: list[str], extra: str = "", allow_slash: bool = False) 
     parts = []
     for c in classes:
         if c not in CLASSES:
-            raise ValueError(f"知らない文字の種類です: {c}")
+            raise ValueError(f"不明な文字の種類です: {c}")
         parts.append(CLASSES[c])
     extra_chars = "".join(dict.fromkeys(ch for ch in (extra or "") if ch != "/"))
     if extra_chars:
@@ -47,7 +47,7 @@ def build_class(classes: list[str], extra: str = "", allow_slash: bool = False) 
     if "/" in (extra or ""):
         allow_slash = True
     if not parts:
-        raise ValueError("文字の種類を1つ以上選んでください。")
+        raise ValueError("文字の種類を 1 つ以上選択してください。")
     if allow_slash:
         parts.append("/")
     return "[" + "".join(parts) + "]"
@@ -57,12 +57,12 @@ def length_quantifier(min_len: int | None, max_len: int | None) -> str:
     """長さの量指定子（`{1,}`、`{8,36}`、`{4}`）。"""
     lo = 1 if min_len is None else int(min_len)
     if lo < 1:
-        raise ValueError("最小の長さは 1 以上にしてください。")
+        raise ValueError("最小の長さは 1 以上で指定してください。")
     if max_len is None or max_len == "":
         return "+" if lo == 1 else f"{{{lo},}}"
     hi = int(max_len)
     if hi < lo:
-        raise ValueError("最大の長さは最小の長さ以上にしてください。")
+        raise ValueError("最大の長さは、最小の長さ以上で指定してください。")
     if hi == lo:
         return f"{{{lo}}}"
     return f"{{{lo},{hi}}}"

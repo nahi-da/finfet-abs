@@ -51,7 +51,7 @@ export async function request(method, url, body, opt = {}) {
     res = await fetch(url, init);
   } catch (e) {
     if (e.name === 'AbortError') throw e;
-    throw new ApiError(0, { code: 'NETWORK', message: '本ツールに接続できません（終了した可能性があります）。' });
+    throw new ApiError(0, { code: 'NETWORK', message: '本ツールに接続できません（本ツールが終了した可能性があります）。' });
   }
   if (opt.raw) {
     if (!res.ok) throw await toError(res);

@@ -1,12 +1,12 @@
 {
   "version": 1,
-  "notes": "Azure のサービスがストレージアカウントに書き出すログ・データのパス構造（7.2）。{名前} は入力した値（空なら文字列の変数）、{{…}} は変数です。パスパターンのひな形は正規表現です。",
+  "notes": "Azure のサービスがストレージアカウントに出力するログ・データのパス構造（7.2）。{名前} は入力した値（空の場合は文字列の変数）、{{…}} は変数です。パスパターンのひな形は正規表現です。",
   "formats": [
     {
       "id": "resource-logs",
       "group": "Azure Monitor",
       "name": "リソースログ（診断設定）",
-      "description": "診断設定でストレージアカウントに送ったリソースログ。1時間ごとの PT1H.json です。",
+      "description": "診断設定でストレージアカウントに送信したリソースログ。1 時間ごとの PT1H.json です。",
       "container_regex": "^insights-logs-[a-z0-9]+$",
       "container_template": "insights-logs-{category}",
       "path_template": "resourceId=/(?i:subscriptions/{sub}/resourceGroups/{rg}/providers/{rtype}/)y={{dt=YYYY}}/m={{dt=MM}}/d={{dt=DD}}/h={{dt=hh}}/m=00/PT1H\\.json",
@@ -29,9 +29,9 @@
         {"name": "resource", "label": "リソース名", "check": "^[-\\w.]{1,80}$"}
       ],
       "path_timezone": "utc",
-      "notes": ["リソース ID の部分は、大文字・小文字を区別せずに照合します（Azure が書き出す表記は、リソースの種類や作られた時期によって、すべて大文字のものと混ざったものがあります）。検索のときに、実際の表記を調べて取得します。", "現在の時間の Blob は書き込み中です。"],
+      "notes": ["リソース ID の部分は、大文字・小文字を区別せずに照合します（Azure が出力する表記は、リソースの種類や作成された時期によって、すべて大文字の場合と大文字・小文字が混在する場合があります）。検索時に実際の表記を確認して取得します。", "現在の時間の Blob は書き込み中です。"],
       "verified": true,
-      "verified_note": "構造は確認済み。リソースの種類ごとの子の階層は未確認です。",
+      "verified_note": "構造は確認済みです。リソースの種類ごとの下位の階層は未確認です。",
       "examples": [
         {"inputs": {"category": "StorageRead", "sub": "00000000-0000-0000-0000-000000000000", "rg": "rg-example", "rtype": "storage-blob", "resource": "stexample01"},
          "container": "insights-logs-storageread",
@@ -48,7 +48,7 @@
       "id": "activity-logs",
       "group": "Azure Monitor",
       "name": "アクティビティログ",
-      "description": "診断設定でストレージアカウントに送ったアクティビティログ。",
+      "description": "診断設定でストレージアカウントに送信したアクティビティログ。",
       "container_regex": "^insights-activity-logs$",
       "container_template": "insights-activity-logs",
       "path_template": "resourceId=/(?i:subscriptions/{sub}/)y={{dt=YYYY}}/m={{dt=MM}}/d={{dt=DD}}/h={{dt=hh}}/m=00/PT1H\\.json",
@@ -56,7 +56,7 @@
         {"name": "sub", "label": "サブスクリプション ID", "check": "^[0-9A-Fa-f-]{36}$"}
       ],
       "path_timezone": "utc",
-      "notes": ["リソース ID の部分は、大文字・小文字を区別せずに照合します（Azure が書き出す表記は、リソースの種類や作られた時期によって、すべて大文字のものと混ざったものがあります）。検索のときに、実際の表記を調べて取得します。", "現在の時間の Blob は書き込み中です。"],
+      "notes": ["リソース ID の部分は、大文字・小文字を区別せずに照合します（Azure が出力する表記は、リソースの種類や作成された時期によって、すべて大文字の場合と大文字・小文字が混在する場合があります）。検索時に実際の表記を確認して取得します。", "現在の時間の Blob は書き込み中です。"],
       "verified": false,
       "examples": [
         {"inputs": {}, "container": "insights-activity-logs",
@@ -67,7 +67,7 @@
       "id": "metrics",
       "group": "Azure Monitor",
       "name": "メトリック（診断設定）",
-      "description": "診断設定でストレージアカウントに送ったメトリック。",
+      "description": "診断設定でストレージアカウントに送信したメトリック。",
       "container_regex": "^insights-metrics-[a-z0-9]+$",
       "container_template": "insights-metrics-pt1m",
       "path_template": "resourceId=/(?i:subscriptions/{sub}/resourceGroups/{rg}/providers/[^/]+/[^/]+/{resource}(?:/[^/]+/[^/]+)*/)y={{dt=YYYY}}/m={{dt=MM}}/d={{dt=DD}}/h={{dt=hh}}/m=00/PT1H\\.json",
@@ -77,7 +77,7 @@
         {"name": "resource", "label": "リソース名", "check": "^[-\\w.]{1,80}$"}
       ],
       "path_timezone": "utc",
-      "notes": ["リソース ID の部分は、大文字・小文字を区別せずに照合します（Azure が書き出す表記は、リソースの種類や作られた時期によって、すべて大文字のものと混ざったものがあります）。検索のときに、実際の表記を調べて取得します。", "現在の時間の Blob は書き込み中です。"],
+      "notes": ["リソース ID の部分は、大文字・小文字を区別せずに照合します（Azure が出力する表記は、リソースの種類や作成された時期によって、すべて大文字の場合と大文字・小文字が混在する場合があります）。検索時に実際の表記を確認して取得します。", "現在の時間の Blob は書き込み中です。"],
       "verified": false,
       "examples": [
         {"inputs": {"resource": "kv-example"}, "container": "insights-metrics-pt1m",
@@ -88,7 +88,7 @@
       "id": "log-analytics-export",
       "group": "Azure Monitor",
       "name": "Log Analytics のエクスポート",
-      "description": "Log Analytics ワークスペースのデータのエクスポート。5 分ごとのフォルダーに PT05M.json が増えます。",
+      "description": "Log Analytics ワークスペースのデータのエクスポート。5 分ごとのフォルダーに PT05M.json が作成されます。",
       "container_regex": "^am-[a-z0-9]+$",
       "container_template": "am-{table}",
       "path_template": "WorkspaceResourceId=/(?i:subscriptions/{sub}/resourcegroups/{rg}/providers/microsoft\\.operationalinsights/workspaces/{ws}/)y={{dt=YYYY}}/m={{dt=MM}}/d={{dt=DD}}/h={{dt=hh}}/m={{dt=mm}}/PT05M(?:_\\d+)?\\.json",
@@ -99,9 +99,9 @@
         {"name": "ws", "label": "ワークスペース名", "check": "^[-\\w]{1,63}$"}
       ],
       "path_timezone": "utc",
-      "notes": ["リソース ID の部分は、大文字・小文字を区別せずに照合します（Azure が書き出す表記は、リソースの種類や作られた時期によって、すべて大文字のものと混ざったものがあります）。検索のときに、実際の表記を調べて取得します。", "現在の時間の Blob は書き込み中です。"],
+      "notes": ["リソース ID の部分は、大文字・小文字を区別せずに照合します（Azure が出力する表記は、リソースの種類や作成された時期によって、すべて大文字の場合と大文字・小文字が混在する場合があります）。検索時に実際の表記を確認して取得します。", "現在の時間の Blob は書き込み中です。"],
       "verified": true,
-      "verified_note": "構造は確認済み。リソース ID の部分の大文字・小文字は未確認です。",
+      "verified_note": "構造は確認済みです。リソース ID の部分の大文字・小文字は未確認です。",
       "examples": [
         {"inputs": {"table": "SecurityEvent", "ws": "law-example"}, "container": "am-securityevent",
          "blob": "WorkspaceResourceId=/subscriptions/00000000-0000-0000-0000-000000000000/resourcegroups/rg-example/providers/microsoft.operationalinsights/workspaces/law-example/y=2026/m=11/d=20/h=09/m=05/PT05M_1.json"}
@@ -111,7 +111,7 @@
       "id": "entra-logs",
       "group": "Microsoft Entra ID",
       "name": "サインインログ・監査ログ",
-      "description": "Microsoft Entra ID の診断設定でストレージアカウントに送ったログ。",
+      "description": "Microsoft Entra ID の診断設定でストレージアカウントに送信したログ。",
       "container_regex": "^insights-logs-(?:auditlogs|signinlogs|noninteractiveusersigninlogs|serviceprincipalsigninlogs|managedidentitysigninlogs|provisioninglogs|adfssigninlogs|riskyusers|userriskevents|microsoftgraphactivitylogs)$",
       "container_template": "insights-logs-{category}",
       "path_template": "tenantId={tenant}/y={{dt=YYYY}}/m={{dt=MM}}/d={{dt=DD}}/h={{dt=hh}}/m=00/PT1H\\.json",
@@ -121,7 +121,7 @@
         {"name": "tenant", "label": "テナント ID", "check": "^[0-9A-Fa-f-]{36}$"}
       ],
       "path_timezone": "utc",
-      "notes": ["パスの形は未確認です。見つからない場合は、パスパターンを直してください。"],
+      "notes": ["パスの形式は未確認です。Blob が見つからない場合は、パスパターンを修正してください。"],
       "verified": false,
       "examples": [
         {"inputs": {"category": "SignInLogs"}, "container": "insights-logs-signinlogs",
@@ -142,7 +142,7 @@
         {"name": "flowlog", "label": "フローログの名前", "check": "^[-\\w.]{1,80}$"}
       ],
       "path_timezone": "utc",
-      "notes": ["パスの形は未確認です（ドキュメントによって flowLogResourceID= の後の形が異なります）。"],
+      "notes": ["パスの形式は未確認です（ドキュメントによって flowLogResourceID= 以降の形式が異なります）。"],
       "verified": false,
       "examples": [
         {"inputs": {"region": "japaneast"}, "container": "insights-logs-flowlogflowevent",
@@ -163,7 +163,7 @@
         {"name": "nsg", "label": "NSG の名前", "check": "^[-\\w.]{1,80}$"}
       ],
       "path_timezone": "utc",
-      "notes": ["リソース ID の部分は、大文字・小文字を区別せずに照合します（Azure が書き出す表記は、リソースの種類や作られた時期によって、すべて大文字のものと混ざったものがあります）。検索のときに、実際の表記を調べて取得します。"],
+      "notes": ["リソース ID の部分は、大文字・小文字を区別せずに照合します（Azure が出力する表記は、リソースの種類や作成された時期によって、すべて大文字の場合と大文字・小文字が混在する場合があります）。検索時に実際の表記を確認して取得します。"],
       "verified": false,
       "examples": [
         {"inputs": {"nsg": "nsg-example"}, "container": "insights-logs-networksecuritygroupflowevent",
@@ -187,7 +187,7 @@
         ]}
       ],
       "path_timezone": "utc",
-      "notes": ["$logs はコンテナーの一覧に現れません。", "ログの時刻は、その時間に完了した要求の時刻です。書き込まれるまで最大 1 時間程度の遅れがあります。"],
+      "notes": ["$logs はコンテナーの一覧に表示されません。", "ログの時刻は、その時間帯に完了した要求の時刻です。書き込まれるまでに最大で 1 時間程度の遅れがあります。"],
       "verified": true,
       "examples": [
         {"inputs": {}, "container": "$logs", "blob": "blob/2026/11/20/0900/000001.log"},
@@ -239,7 +239,7 @@
         {"name": "rule", "label": "規則の名前", "check": "^[-\\w]{1,256}$"}
       ],
       "path_timezone": "utc",
-      "notes": ["ファイル名の番号の形は未確認です。"],
+      "notes": ["ファイル名の番号の形式は未確認です。"],
       "verified": true,
       "examples": [
         {"inputs": {"container": "inventory"}, "container": "inventory", "blob": "2026/11/20/01-23-45/daily-rule/daily-rule_1.csv"},
@@ -279,9 +279,9 @@
         {"name": "eventhub", "label": "イベントハブ", "check": "^[-\\w.]{1,256}$"}
       ],
       "path_timezone": "utc",
-      "notes": ["キャプチャの名前の形式を変えている場合は、作成の後でパスパターンを直してください。"],
+      "notes": ["キャプチャの名前の形式を変更している場合は、作成後にパスパターンを修正してください。"],
       "verified": true,
-      "verified_note": "要素は確認済み。名前空間・イベントハブの名前の大文字・小文字は未確認です。",
+      "verified_note": "要素は確認済みです。名前空間・イベントハブの名前の大文字・小文字は未確認です。",
       "examples": [
         {"inputs": {"namespace": "ehns-example"}, "container": "", "blob": "ehns-example/eh-example/0/2026/11/20/09/15/00.avro"}
       ]
@@ -301,7 +301,7 @@
       "path_timezone": "utc",
       "notes": ["サーバーの監査は、新しい形式ではデータベースの部分が master になります。"],
       "verified": true,
-      "verified_note": "構造は確認済み。ファイル名の形は未確認です。",
+      "verified_note": "構造は確認済みです。ファイル名の形式は未確認です。",
       "examples": [
         {"inputs": {"server": "sql-example"}, "container": "sqldbauditlogs", "blob": "sql-example/db-example/SqlDbAuditing_Audit/2026-11-20/09_15_00_123_0.xel"}
       ]

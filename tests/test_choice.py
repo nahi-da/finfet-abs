@@ -34,7 +34,7 @@ class ChoiceTest(unittest.TestCase):
     def test_nothing_selected_is_an_error(self) -> None:
         with self.assertRaises(PatternError) as cm:
             compile_path(r"{{vm}}/a\.log", {"vm": choice(["web01"], [])}, ctx=CTX)
-        self.assertIn("1つ以上選んでください", str(cm.exception.issues[0].message))
+        self.assertIn("1 つ以上選択してください", str(cm.exception.issues[0].message))
 
     def test_prefixes_from_selected_values(self) -> None:
         cp = compile_path(r"vm-logs/{{vm}}/{{dt=YYYY}}/app\.log", {"vm": choice(["web01", "db01"]),

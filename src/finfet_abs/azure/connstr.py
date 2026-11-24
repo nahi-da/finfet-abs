@@ -56,10 +56,10 @@ def parse_connection_string(text: str, *, allow_development: bool = False) -> Co
     pairs = split_pairs(text)
     if pairs.get("usedevelopmentstorage", "").lower() == "true":
         if not allow_development:
-            raise ParseError("開発用のストレージ（UseDevelopmentStorage=true）は使えません。")
+            raise ParseError("開発用のストレージ（UseDevelopmentStorage=true）は使用できません。")
         return ConnInfo("development", "devstoreaccount1", "localhost", "http://127.0.0.1:10000/devstoreaccount1")
     if pairs.get("defaultendpointsprotocol", "https").lower() != "https":
-        raise ParseError("HTTP の接続文字列は使えません（DefaultEndpointsProtocol=https にしてください）。")
+        raise ParseError("HTTP の接続文字列は使用できません（DefaultEndpointsProtocol=https を指定してください）。")
     endpoint = pairs.get("blobendpoint")
     account = pairs.get("accountname")
     suffix = pairs.get("endpointsuffix")
@@ -68,14 +68,14 @@ def parse_connection_string(text: str, *, allow_development: bool = False) -> Co
     if endpoint:
         parts = urlsplit(endpoint)
         if parts.scheme.lower() != "https":
-            raise ParseError("BlobEndpoint が HTTPS ではありません。HTTP の接続文字列は使えません。")
+            raise ParseError("BlobEndpoint が HTTPS ではありません。HTTP の接続文字列は使用できません。")
         ep_account, ep_suffix, _dfs = parse_blob_host(parts.hostname or "")
         if account and account.lower() != ep_account:
             raise ParseError("AccountName と BlobEndpoint のストレージアカウントが一致しません。")
         account = ep_account
         suffix = ep_suffix
     if not account:
-        raise ParseError("ストレージアカウント名が分かりません（AccountName か BlobEndpoint が必要です）。")
+        raise ParseError("ストレージアカウント名を特定できません（AccountName または BlobEndpoint が必要です）。")
     account = validate_account(account.lower())
     suffix = suffix or DEFAULT_SUFFIX
     blob_endpoint = f"https://{account}.blob.{suffix}"
@@ -84,7 +84,7 @@ def parse_connection_string(text: str, *, allow_development: bool = False) -> Co
         return ConnInfo("account_key", account, suffix, blob_endpoint)
     if pairs.get("sharedaccesssignature"):
         return ConnInfo("sas", account, suffix, blob_endpoint, parse_sas_token(pairs["sharedaccesssignature"]))
-    raise ParseError("接続文字列に AccountKey も SharedAccessSignature もありません。")
+    raise ParseError("接続文字列に AccountKey と SharedAccessSignature のいずれも含まれていません。")
 
 
 def connection_parts(text: str) -> dict[str, str]:

@@ -110,7 +110,7 @@ export async function render(ctx) {
     h('div', { class: 'actions' },
       linkButton('新しい条件', async () => {
         if (state.path_pattern || state.targets.length) {
-          const ok = await confirmDialog({ title: '入力を消しますか', body: '接続先・パスパターン・変数の入力を消して、新しい条件にします。', okText: '消す' });
+          const ok = await confirmDialog({ title: '入力内容を消去しますか', body: '接続先・パスパターン・変数の入力内容を消去し、新しい条件にします。', okText: '消去' });
           if (!ok) return;
         }
         state = emptyState(settings['search.input_timezone']);
@@ -218,7 +218,7 @@ export async function render(ctx) {
     for (const w of t.warnings || []) extra.push(h('div', { class: 'warn', text: w }));
     const fs = (analysis?.formats || []).find((f) => f.container === t.container);
     if (fs && !state.path_pattern) {
-      extra.push(h('div', { class: 'line' }, h('span', { text: `${fs.name}の形式です。` }), linkButton('パスパターンを入れる', () => fromKnown(fs.id, t.container))));
+      extra.push(h('div', { class: 'line' }, h('span', { text: `${fs.name}の形式です。` }), linkButton('パスパターンを入力', () => fromKnown(fs.id, t.container))));
     }
     if (extra.length) out.push(h('div', { class: 'targets-note' }, ...extra));
     return out;
@@ -308,7 +308,7 @@ export async function render(ctx) {
   const patternErr = h('div', { class: 'field-error', hidden: true, role: 'alert' });
   const hint = h('div', { class: 'line', hidden: true });
   const prefixLine = h('div', { class: 'muted' });
-  const icWarn = h('span', { class: 'warn', text: '一覧の取得を絞り込めないため、件数が多いと遅くなります', hidden: !state.ignore_case });
+  const icWarn = h('span', { class: 'warn', text: '一覧の取得範囲を絞り込めないため、Blob の件数が多い場合は時間がかかります', hidden: !state.ignore_case });
   const ic = checkbox('大文字・小文字を区別しない', state.ignore_case, (on) => { state.ignore_case = on; icWarn.hidden = !on; save(); analyze(); });
   patternSec.append(h('h2', { text: 'パスパターン' }), pi.el, patternErr, hint,
     h('div', { class: 'line' }, linkButton('既知の形式から作成', () => fromKnown(null)), linkButton('パスパターンを自動生成', () => fromNames()), menuButton('履歴から', (e) => historyMenu(e.currentTarget)), ic, icWarn),
@@ -373,7 +373,7 @@ export async function render(ctx) {
     clear(varsSec);
     const headRow = h('div', { class: 'line' }, h('h2', { text: '変数' }));
     if (analysis?.merge) {
-      headRow.append(h('span', { class: 'merge-hint' }, `${analysis.merge.names.join('・')} を1つの日時の変数にまとめられます。`,
+      headRow.append(h('span', { class: 'merge-hint' }, `${analysis.merge.names.join('・')} を 1 つの日時の変数にまとめられます。`,
         linkButton('まとめる', () => {
           state.path_pattern = analysis.merge.pattern;
           for (const n of analysis.merge.names) delete state.variables[n];
@@ -385,7 +385,7 @@ export async function render(ctx) {
     varsSec.append(headRow);
     const names = Object.keys(state.variables);
     if (!names.length) {
-      varsSec.append(h('p', { class: 'muted', text: 'パスパターンに {{名前}} を書くと、変数を指定できます。' }));
+      varsSec.append(h('p', { class: 'muted', text: 'パスパターンに {{名前}} と記述すると、変数を指定できます。' }));
       return;
     }
     const inPattern = new Set((analysis?.variables || []).filter((v) => v.in_pattern).map((v) => v.name));
@@ -469,9 +469,9 @@ export async function render(ctx) {
     if (res.url_hint) {
       hint.hidden = false;
       const u = res.url_hint;
-      hint.append(h('span', { text: 'Blob の URL です。' }), linkButton('ストレージアカウント・コンテナー・パスに分けて入れる', async () => {
+      hint.append(h('span', { text: 'Blob の URL です。' }), linkButton('ストレージアカウント・コンテナー・パスに分けて入力', async () => {
         if (u.has_sas) {
-          toast('URL に SAS が含まれています。接続先の追加の「SAS URL」で追加してください。');
+          toast('URL に SAS が含まれています。接続先の追加画面の「SAS URL」から追加してください。');
         }
         state.path_pattern = (u.path || '').replace(/[.^$*+?()[\]\\|{}]/g, '\\$&');
         if (!state.targets.some((t) => t.storage_account === u.storage_account && t.container === u.container)) {

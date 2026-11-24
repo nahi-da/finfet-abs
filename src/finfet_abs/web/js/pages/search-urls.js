@@ -12,7 +12,7 @@ let saved = { text: '', auth: {} };
 
 export async function renderUrlsTab(ctx) {
   const { root } = ctx;
-  const ta = h('textarea', { class: 'input mono w-full', rows: '6', spellcheck: 'false', 'aria-label': 'Blob の URL（1行に1つ）', placeholder: 'https://stexample01.blob.core.windows.net/logs/app/2026/11/20/web.log?sv=…&sig=…' });
+  const ta = h('textarea', { class: 'input mono w-full', rows: '6', spellcheck: 'false', 'aria-label': 'Blob の URL（1 行に 1 つ）', placeholder: 'https://stexample01.blob.core.windows.net/logs/app/2026/11/20/web.log?sv=…&sig=…' });
   ta.value = saved.text;
   const info = h('div', { class: 'muted' });
   const authSec = h('div');
@@ -31,7 +31,7 @@ export async function renderUrlsTab(ctx) {
       { key: 'sas', label: 'SAS', width: 60, render: (r) => (r.sas ? 'あり' : r.error ? '' : 'なし') },
       { key: 'perm', label: '権限', width: 80, render: (r) => (r.sas ? (r.sas.permission_labels.join('・') || '—') : '') },
       { key: 'exp', label: '期限', width: 110, render: (r) => (r.sas && r.sas.expiry ? dateShort(r.sas.expiry) : '') },
-      { key: 'error', label: '誤り', width: 180, render: (r) => (r.error ? h('span', { class: 'danger', text: r.error }) : r.duplicate ? h('span', { class: 'muted', text: '重複（1件にまとめます）' }) : '') },
+      { key: 'error', label: '誤り', width: 180, render: (r) => (r.error ? h('span', { class: 'danger', text: r.error }) : r.duplicate ? h('span', { class: 'muted', text: '重複（1 件にまとめます）' }) : '') },
     ],
     fetch: async (offset, limit) => ({ total: rows.length, items: rows.slice(offset, offset + limit) }),
     empty: 'URL を貼り付けてください。',
@@ -54,7 +54,7 @@ export async function renderUrlsTab(ctx) {
       return;
     }
     rows = parsed.rows;
-    info.textContent = `${num(parsed.count)} 件` + (parsed.errors ? `・誤り ${num(parsed.errors)} 件（除いて追加します）` : '') + (parsed.duplicates ? `・重複 ${num(parsed.duplicates)} 件` : '');
+    info.textContent = `${num(parsed.count)} 件` + (parsed.errors ? `・誤り ${num(parsed.errors)} 件（除外して追加します）` : '') + (parsed.duplicates ? `・重複 ${num(parsed.duplicates)} 件` : '');
     drawAuth();
     await table.reload(false);
   };
@@ -73,7 +73,7 @@ export async function renderUrlsTab(ctx) {
         if (!saved.auth[key]) saved.auth[key] = opts.find((o) => o[0].startsWith('cred:'))?.[0] || opts[0][0];
         line.append(select(opts, saved.auth[key], { 'aria-label': `${a.storage_account} の認証`, onchange: (e) => { saved.auth[key] = e.target.value; } }));
       } else {
-        line.append(h('span', { class: 'warn', text: '使える認証がありません。' }), addButton('接続先を追加', async () => { await openAddTargetDialog(); parse(); }));
+        line.append(h('span', { class: 'warn', text: '使用できる認証がありません。' }), addButton('接続先を追加', async () => { await openAddTargetDialog(); parse(); }));
       }
       authSec.append(line);
     }

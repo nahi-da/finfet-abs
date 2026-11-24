@@ -18,15 +18,15 @@ const DOC_RESOURCE_LOGS = 'https://learn.microsoft.com/azure/azure-monitor/platf
 const DOC_REHYDRATE = 'https://learn.microsoft.com/azure/storage/blobs/archive-rehydrate-overview';
 const NOTE_HELP = {
   writing: () => [
-    h('p', null, h('strong', { text: '更新中の可能性' }), '：最終更新日時が 1 時間以内の Blob です。まだ書き込みが続いている可能性があります。'),
-    h('p', { text: '診断設定（リソースログ）をストレージに送る場合、ログは 1 時間ごとの Blob（PT1H.json など）に追記され、その時間が終わるまで書き込みが続きます。今ダウンロードすると、後から追記された分が含まれません。時間をおいてから取得し直してください。' }),
+    h('p', null, h('strong', { text: '更新中の可能性' }), '：最終更新日時が 1 時間以内の Blob です。書き込みが続いている可能性があります。'),
+    h('p', { text: '診断設定（リソースログ）をストレージに送信する場合、ログは 1 時間ごとの Blob（PT1H.json など）に追記され、その時間帯が終わるまで書き込みが続きます。現時点でダウンロードすると、後から追記された分は含まれません。時間をおいてから再取得してください。' }),
     h('p', null, externalLink(DOC_RESOURCE_LOGS, 'Microsoft のドキュメント: リソースログをストレージに送る')),
   ],
   rehydrating: () => [
-    h('p', null, h('strong', { text: 'リハイドレート中' }), '：Archive の層から戻す処理（リハイドレート）が、すでに進んでいる Blob です。ジョブではリハイドレートを要求し直さず、完了を待ってダウンロードします。'),
+    h('p', null, h('strong', { text: 'リハイドレート中' }), '：Archive 層からの復元（リハイドレート）が、すでに進行中の Blob です。ジョブではリハイドレートを再要求せず、完了を待ってダウンロードします。'),
     h('p', null, externalLink(DOC_REHYDRATE, 'Microsoft のドキュメント: Archive の層からのリハイドレート')),
   ],
-  downloaded: () => [h('p', null, h('strong', { text: 'ダウンロード済み' }), '：過去のジョブでダウンロードしたことがある Blob です（同じ接続先・同じ名前）。もう一度取得する必要があるかを確かめてください。')],
+  downloaded: () => [h('p', null, h('strong', { text: 'ダウンロード済み' }), '：過去のジョブでダウンロードしたことがある Blob です（同じ接続先・同じ名前）。再取得が必要かどうかを確認してください。')],
 };
 const notesHelp = (codes) => () => codes.flatMap((c) => (NOTE_HELP[c] ? NOTE_HELP[c]() : []));
 
@@ -99,7 +99,7 @@ export async function render(ctx) {
     const hasError = targets.some((t) => t.status === 'error');
     const head = h('div', { class: 'line' });
     if (running) {
-      head.append(h('strong', { text: 'Blob を取得しています…' }), h('span', { text: `取得 ${num(listed)} 件・一致 ${num(p.matched_count ?? p.matched)} 件。終わるまで、一覧は操作できません` }), h('span.push'),
+      head.append(h('strong', { text: 'Blob を取得しています…' }), h('span', { text: `取得 ${num(listed)} 件・一致 ${num(p.matched_count ?? p.matched)} 件。検索が終わるまで、一覧は操作できません` }), h('span.push'),
         button('中止', async () => {
           try { await api.post(`/api/v1/searches/${sid}/cancel`, {}); } catch (e) { toastError(e); }
         }));
@@ -113,8 +113,8 @@ export async function render(ctx) {
     }
     progress.append(head);
     if (running) progress.append(h('div', { class: 'busy-bar', role: 'progressbar', 'aria-label': '検索中' }));
-    if (p.status === 'cancelled') progress.append(h('div', { class: 'warn', text: '中止したため、結果は不完全です。' }));
-    if (p.truncated) progress.append(h('div', { class: 'warn', text: '上限で打ち切りました。条件を絞ってください。' }));
+    if (p.status === 'cancelled') progress.append(h('div', { class: 'warn', text: '検索を中止したため、結果は一部のみです。' }));
+    if (p.truncated) progress.append(h('div', { class: 'warn', text: '件数の上限に達したため、検索を打ち切りました。条件を絞り込んでください。' }));
     if (running || expanded || hasError) {
       const grid = h('div', { class: 'progress-grid' });
       for (const t of targets) {
@@ -128,7 +128,7 @@ export async function render(ctx) {
           if (t.status === 'error' && !running) {
             line.append(linkButton('再試行', async () => {
               try { await api.post(`/api/v1/searches/${sid}/targets/${t.no}/retry`, {}); poll(); } catch (e) { toastError(e); }
-            }), removeButton('この接続先を除く', async () => {
+            }), removeButton('この接続先を除外', async () => {
               await api.post(`/api/v1/searches/${sid}/targets/${t.no}/skip`, {});
               poll();
             }));
@@ -285,12 +285,12 @@ export async function render(ctx) {
       // 「すべて選択」は表示中（絞り込みに一致する）の行が対象。「すべての選択を解除」は、絞り込みで隠れた行の選択も外す
       const filteredOn = s.filtered.count !== s.all.count;
       selAll.textContent = filteredOn ? `すべて選択（絞り込みに一致する ${num(s.filtered.count)} 件）` : `すべて選択（${num(s.all.count)} 件）`;
-      selAll.title = '見えていない行も含めて、絞り込みに一致するすべての行を選びます（見出しのチェックボックスと同じ）';
-      clearSel.title = '絞り込みで隠れている行も含めて、すべての選択を外します';
+      selAll.title = '画面に表示されていない行も含めて、絞り込みに一致するすべての行を選択します（見出しのチェックボックスと同じ動作です）';
+      clearSel.title = '絞り込みで非表示の行も含めて、すべての選択を解除します';
       const inFilter = sel.count - (s.hidden_selected || 0);
       headCheck.checked = s.filtered.count > 0 && inFilter >= s.filtered.count;
       headCheck.indeterminate = inFilter > 0 && inFilter < s.filtered.count;
-      headCheck.title = headCheck.checked ? 'すべての選択を外す' : `絞り込みに一致する ${num(s.filtered.count)} 件をすべて選択`;
+      headCheck.title = headCheck.checked ? 'すべての選択を解除' : `絞り込みに一致する ${num(s.filtered.count)} 件をすべて選択`;
       clearSel.disabled = searching || sel.count === 0;
       selAll.disabled = searching || s.filtered.count === 0;
       jobBtn.disabled = sel.count === 0 || searching;
@@ -309,8 +309,8 @@ export async function render(ctx) {
     let onlyVisible = false;
     if (hidden > 0) {
       const ok = await confirmDialog({
-        title: '絞り込みで隠れた Blob を含めますか',
-        body: `チェックした Blob のうち ${num(hidden)} 件は、絞り込みで表示されていません。含めない場合は、表示中の Blob だけでジョブを作ります。`,
+        title: '絞り込みで非表示の Blob を含めますか',
+        body: `選択した Blob のうち ${num(hidden)} 件は、絞り込みにより表示されていません。含めない場合は、表示中の Blob のみでジョブを作成します。`,
         okText: '含める', cancelText: '含めない',
       });
       onlyVisible = !ok;
