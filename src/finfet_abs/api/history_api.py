@@ -113,7 +113,7 @@ def register(router, app) -> None:
         valid = [c for c, it in zip(conds, [i for i in parsed["items"] if "condition" in i]) if not it.get("error")]
         if mode == "load":
             if len(conds) != 1:
-                raise AppError("IMPORT_LOAD_ONE", "検索のページに読み込めるのは、検索条件が1件のファイルだけです。")
+                raise AppError("IMPORT_LOAD_ONE", "検索ページに読み込めるのは、検索条件が 1 件のファイルのみです。")
             s["import_sessions"].drop(token)
             return json_response({"condition": conds[0], "credential_errors": errors,
                                   "had_credentials": parsed["credentials"] > 0})

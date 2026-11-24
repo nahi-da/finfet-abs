@@ -29,10 +29,10 @@ def string_fragment(name: str, value: dict) -> str:
         vals = [str(v.get("value", "")) for v in value.get("values") or [] if v.get("enabled", True)]
         vals = [v for v in vals if v != ""]
         if not vals:
-            raise VariableError(name, f"変数「{name}」の値を1つ以上指定してください。")
+            raise VariableError(name, f"変数「{name}」の値を 1 つ以上指定してください。")
         for v in vals:
             if "/" in v:
-                raise VariableError(name, f"変数「{name}」の値に / は使えません（値は1階層の中だけで照合します）。")
+                raise VariableError(name, f"変数「{name}」の値に / は使用できません（値は 1 つの階層の中でのみ照合します）。")
         # 長い値を先に並べます（前方一致・部分一致で短い値が先に一致して終わらないように）
         alts = "|".join(re.escape(v) for v in sorted(dict.fromkeys(vals), key=lambda s: (-len(s), s)))
         match = value.get("match", "exact")
@@ -68,7 +68,7 @@ def choice_as_string(name: str, value: dict) -> dict:
     """
     sel = [str(x) for x in (value or {}).get("selected") or [] if str(x) != ""]
     if not sel:
-        raise VariableError(name, f"変数「{name}」の値を1つ以上選んでください。")
+        raise VariableError(name, f"変数「{name}」の値を 1 つ以上選択してください。")
     return {"mode": "one_of", "match": "exact", "values": [{"value": x, "enabled": True} for x in dict.fromkeys(sel)]}
 
 
@@ -96,7 +96,7 @@ def number_fragment(name: str, value: dict, padding: int | None) -> tuple[str, C
     if padding is not None:
         padding = int(padding)
         if padding < 1 or padding > 18:
-            raise VariableError(name, f"変数「{name}」の桁数は 1〜18 にしてください。")
+            raise VariableError(name, f"変数「{name}」の桁数は 1〜18 の範囲で指定してください。")
     shape = rf"\d{{{padding}}}" if padding else r"\d+"
     try:
         if mode == "any":
@@ -111,7 +111,7 @@ def number_fragment(name: str, value: dict, padding: int | None) -> tuple[str, C
             if start < 0 or end < start:
                 raise VariableError(name, f"変数「{name}」の範囲の終了が開始より前です。")
             if step < 1:
-                raise VariableError(name, f"変数「{name}」の間隔は 1 以上にしてください。")
+                raise VariableError(name, f"変数「{name}」の間隔は 1 以上で指定してください。")
             vals = number_values(value, padding)
             if vals is not None:
                 return "(?:" + "|".join(re.escape(v) for v in vals) + ")", None

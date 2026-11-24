@@ -18,7 +18,7 @@ _ERRORS = [
     ("ServerBusy", "サーバーが混雑しています。", 503),
     ("OperationTimedOut", "操作がタイムアウトしました。", 500),
     ("AuthorizationPermissionMismatch", "この操作に必要な権限がありません。", 403),
-    ("CONNECTION_RESET", "接続が途中で切れました。", None),
+    ("CONNECTION_RESET", "接続が途中で切断されました。", None),
 ]
 
 

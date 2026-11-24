@@ -90,7 +90,7 @@ def clean_options(raw: dict | None, settings) -> dict:
         except (TypeError, ValueError):
             raise AppError("OPTION_INVALID", f"取得の設定「{k}」の値が正しくありません。", extra={"field": k}) from None
         if not lo <= o[k] <= hi:
-            raise AppError("OPTION_INVALID", f"取得の設定「{k}」は {lo}〜{hi} にしてください。", extra={"field": k})
+            raise AppError("OPTION_INVALID", f"取得の設定「{k}」は {lo}〜{hi} の範囲で指定してください。", extra={"field": k})
     for k in ("job_folder", "set_mtime", "verify_md5", "extract"):
         o[k] = bool(o[k])
     o["directory"] = str(o["directory"] or "").strip()
@@ -136,7 +136,7 @@ class JobService:
         sid = source.get("search_id") or ""
         srow = self.db.query_one("SELECT * FROM searches WHERE id=?", (sid,))
         if srow is None:
-            raise NotFound("検索結果が見つかりません（古い検索結果は削除されます）。")
+            raise NotFound("検索結果が見つかりません（古い検索結果は自動で削除されます）。")
         targets = {r["target_no"]: r for r in self.db.query("SELECT * FROM search_targets WHERE search_id=?", (sid,))}
         sql = ("SELECT r.* FROM search_selection s JOIN search_results r ON r.id=s.result_id WHERE s.search_id=?")
         params: list = [sid]
@@ -146,7 +146,7 @@ class JobService:
             params += p2
         rows = self.db.query(sql + " ORDER BY r.sort_key", params)
         if not rows:
-            raise AppError("NO_ITEMS", "Blob を選んでください。")
+            raise AppError("NO_ITEMS", "Blob を選択してください。")
         out = []
         for r in rows:
             t = targets.get(r["target_no"])
@@ -166,7 +166,7 @@ class JobService:
     def _collect_urls(self, source: dict) -> tuple[list[dict], dict]:
         rows = self.url_sessions.get(source.get("token") or "") if self.url_sessions else None
         if rows is None:
-            raise AppError("URLS_EXPIRED", "URL の解析からの時間が経ちすぎました。もう一度 [解析] を押してください。")
+            raise AppError("URLS_EXPIRED", "URL の解析から時間が経過しすぎています。もう一度 [解析] を押してください。")
         auth = source.get("auth") or {}
         out = []
         accounts: set[str] = set()
@@ -187,13 +187,13 @@ class JobService:
                     kind = self.db.scalar("SELECT auth_kind FROM credentials WHERE id=?", (a["credential_id"],))
                     a = {**a, "auth_kind": kind}
                 if not a.get("auth_kind"):
-                    raise AppError("AUTH_REQUIRED", f"ストレージアカウント「{r['storage_account']}」の認証方式を選んでください。")
+                    raise AppError("AUTH_REQUIRED", f"ストレージアカウント「{r['storage_account']}」の認証方式を選択してください。")
                 item.update(auth_kind=a["auth_kind"], credential_id=a.get("credential_id"), tenant_id=a.get("tenant"),
                             account=(a.get("account") or "").lower() or None)
             out.append(item)
             accounts.add(r["storage_account"])
         if not out:
-            raise AppError("NO_ITEMS", "ジョブにできる URL がありません。")
+            raise AppError("NO_ITEMS", "ジョブにできる有効な URL がありません。")
         out.sort(key=lambda x: x["sort_key"])
         return out, {"source": "urls", "urls_summary": {"count": len(out), "accounts": sorted(accounts)}}
 
@@ -208,7 +208,7 @@ class JobService:
             params += [int(i) for i in ids]
         rows = self.db.query(sql + " ORDER BY sort_key", params)
         if not rows:
-            raise AppError("NO_ITEMS", "Blob を選んでください。")
+            raise AppError("NO_ITEMS", "Blob を選択してください。")
         out = []
         for r in rows:
             out.append({
@@ -619,7 +619,7 @@ class JobService:
         """取得の設定の変更（未開始・開始待ち・一時停止・ダウンロード待ちのとき。4.6.4）。"""
         row = self._job(job_id)
         if row["status"] not in ("held", "queued", "paused", "waiting_download"):
-            raise AppError("JOB_BUSY", "実行中のジョブの取得の設定は変更できません（帯域の上限はジョブの詳細で変えられます）。",
+            raise AppError("JOB_BUSY", "実行中のジョブの取得の設定は変更できません（帯域の上限は、ジョブの詳細で変更できます）。",
                            status=409)
         cur = json.loads(row["options_json"])
         fixed = {k: cur[k] for k in ("path_structure", "path_template", "directory", "job_folder") if k in cur}
@@ -638,7 +638,7 @@ class JobService:
             if row is None:
                 continue
             if row["status"] not in ENDED:
-                raise AppError("JOB_NOT_ENDED", "キューのジョブは、先に中止してください。", status=409)
+                raise AppError("JOB_NOT_ENDED", "キュー内のジョブは、先に中止してください。", status=409)
             if remove_parts:
                 for r in self.db.query("SELECT part_path FROM job_items WHERE job_id=? AND part_path IS NOT NULL", (jid,)):
                     try:

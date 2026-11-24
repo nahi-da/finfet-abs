@@ -99,12 +99,12 @@ class _Budget:
     def add_file(self) -> None:
         self.files += 1
         if self.files > MAX_FILES:
-            raise ExtractError(f"ファイルの数が上限（{MAX_FILES:,}）を超えるため、展開を止めました。")
+            raise ExtractError(f"ファイル数が上限（{MAX_FILES:,}）を超えたため、展開を中止しました。")
 
     def add_bytes(self, n: int) -> None:
         self.bytes += n
         if self.bytes > self.max_bytes:
-            raise ExtractError(f"展開した大きさが上限（{self.max_bytes / 1024 ** 3:g} GiB）を超えるため、展開を止めました。")
+            raise ExtractError(f"展開後のサイズが上限（{self.max_bytes / 1024 ** 3:g} GiB）を超えたため、展開を中止しました。")
         if self.stop is not None and self.stop.is_set():
             raise ExtractCancelled()
 
@@ -156,7 +156,7 @@ def _extract_zip(path: str, root: str, budget: _Budget, skipped: list[str]) -> N
     try:
         zf = zipfile.ZipFile(paths.long_path(path))
     except zipfile.BadZipFile as exc:
-        raise ExtractError(f"ZIP ファイルとして読めません（{exc}）。") from None
+        raise ExtractError(f"ZIP ファイルとして読み込めません（{exc}）。") from None
     with zf:
         for info in zf.infolist():
             name = _zip_name(info)
@@ -187,7 +187,7 @@ def _extract_tar(path: str, root: str, budget: _Budget, skipped: list[str]) -> N
     try:
         tf = tarfile.open(paths.long_path(path), mode="r:*")
     except (tarfile.TarError, EOFError, OSError, lzma.LZMAError) as exc:
-        raise ExtractError(f"tar ファイルとして読めません（{exc}）。") from None
+        raise ExtractError(f"tar ファイルとして読み込めません（{exc}）。") from None
     with tf:
         try:
             for m in tf:
@@ -209,7 +209,7 @@ def _extract_tar(path: str, root: str, budget: _Budget, skipped: list[str]) -> N
                     except FileExistsError:
                         skipped.append(m.name)
         except (tarfile.TarError, EOFError, zlib_errors(), lzma.LZMAError) as exc:
-            raise ExtractError(f"tar ファイルが壊れています（{exc}）。") from None
+            raise ExtractError(f"tar ファイルが破損しています（{exc}）。") from None
 
 
 def zlib_errors():
@@ -227,7 +227,7 @@ def _extract_single(kind: str, path: str, dst: str, budget: _Budget) -> None:
     except (OSError, EOFError, lzma.LZMAError, zlib_errors()) as exc:
         if isinstance(exc, OSError) and exc.errno is not None:
             raise
-        raise ExtractError(f"{kind} ファイルとして読めません（{exc}）。") from None
+        raise ExtractError(f"{kind} ファイルとして読み込めません（{exc}）。") from None
 
 
 def _expand_tree(root: str, budget: _Budget, skipped: list[str]) -> None:
@@ -258,7 +258,7 @@ def _expand_tree(root: str, budget: _Budget, skipped: list[str]) -> None:
             budget.files -= 1
             if same:
                 os.replace(dest, want)
-    raise ExtractError(f"圧縮ファイルの入れ子が深すぎます（{MAX_DEPTH} 段まで）。")
+    raise ExtractError(f"圧縮ファイルの多重の圧縮が深すぎます（{MAX_DEPTH} 段まで）。")
 
 
 def _unique(path: str) -> str:
@@ -284,7 +284,7 @@ def extract(path: str, *, max_bytes: int, stop: threading.Event | None = None) -
         return None
     kind, base = k
     if not _looks_like(kind, path):
-        raise ExtractError("名前は圧縮ファイルですが、中身が圧縮ファイルの形式ではありません。")
+        raise ExtractError("ファイル名は圧縮ファイルの形式ですが、内容が圧縮ファイルの形式ではありません。")
     parent = os.path.dirname(path)
     work = os.path.join(parent, f".{base}.extracting-{uuid.uuid4().hex[:8]}")
     os.makedirs(paths.long_path(work))
@@ -297,7 +297,7 @@ def extract(path: str, *, max_bytes: int, stop: threading.Event | None = None) -
             _extract_single(kind, path, os.path.join(work, paths.sanitize_segment(base)), budget)
         _expand_tree(work, budget, skipped)
         if budget.files == 0:
-            raise ExtractError("展開できるファイルがありませんでした（保存先の外を指す名前やリンクだけ、または空の圧縮ファイルです）。")
+            raise ExtractError("展開できるファイルがありませんでした（保存先の外を指す名前やリンクのみ、または空の圧縮ファイルです）。")
         entries = os.listdir(paths.long_path(work))
         if kind not in ("zip", "tar") and len(entries) == 1:
             # 1 つのファイルを圧縮したもの（app.log.gz → app.log）は、フォルダーを作らずに置きます

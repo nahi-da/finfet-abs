@@ -60,7 +60,7 @@ def detect(pattern: str, containers: list[str] | None = None, existing: dict | N
         for name, fmt, pos in variable_names(text):
             if not NAME_RE.match(name):
                 if source == "path":
-                    issues.append({"pos": pos + 1, "message": f"変数の名前「{name}」は使えません。", "name": name})
+                    issues.append({"pos": pos + 1, "message": f"変数名「{name}」は使用できません。", "name": name})
                 continue
             entry = found.setdefault(name, {"name": name, "dt": set(), "where": set()})
             entry["dt"].add(fmt is not None)
@@ -77,7 +77,7 @@ def detect(pattern: str, containers: list[str] | None = None, existing: dict | N
     out = []
     for name, e in found.items():
         if len(e["dt"]) == 2:
-            issues.append({"pos": None, "message": f"変数「{name}」に、日時の書式があるものとないものが混ざっています。",
+            issues.append({"pos": None, "message": f"変数「{name}」に、日時の書式があるものとないものが混在しています。",
                            "name": name})
         is_dt = True in e["dt"] and False not in e["dt"]
         if name in existing:

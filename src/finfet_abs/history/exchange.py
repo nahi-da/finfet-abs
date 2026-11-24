@@ -32,7 +32,7 @@ def export_file(conditions: list[dict], includes: str, credstore: CredentialStor
                 count_only: bool = False) -> tuple[dict, dict]:
     """エクスポートのファイルの内容と、認証情報の件数（含めた・含められない）を返します。"""
     if includes not in INCLUDES:
-        raise AppError("BAD_INCLUDES", "含める情報を選んでください。")
+        raise AppError("BAD_INCLUDES", "含める情報を選択してください。")
     out = []
     included = 0
     not_included = 0
@@ -81,7 +81,7 @@ def _strip_secrets(obj, path: str, warnings: list[str]):
     if isinstance(obj, list):
         return [_strip_secrets(v, f"{path}[]", warnings) for v in obj]
     if isinstance(obj, str) and _SECRETISH.search(obj):
-        warnings.append("秘密情報らしい値が認証情報の項目の外にあったため、取り除きました。")
+        warnings.append("秘密情報と思われる値が認証情報の項目以外に含まれていたため、削除しました。")
         return _SECRETISH.sub("", obj)
     return obj
 
@@ -105,7 +105,7 @@ class ImportSession:
         with self._lock:
             v = self._items.get(token)
         if v is None:
-            raise AppError("IMPORT_EXPIRED", "ファイルの読み込みからの時間が経ちすぎました。もう一度ファイルを選んでください。")
+            raise AppError("IMPORT_EXPIRED", "ファイルの読み込みから時間が経過しすぎています。もう一度ファイルを選択してください。")
         return v[1]
 
     def drop(self, token: str) -> None:
@@ -117,7 +117,7 @@ def parse_import(raw: bytes, ctx) -> dict:
     """インポートのファイルを検査します（3.5.4.2）。"""
     from .condition import check_compile
     if len(raw) > MAX_FILE:
-        raise AppError("IMPORT_TOO_LARGE", "ファイルが大きすぎます（1 MB まで）。")
+        raise AppError("IMPORT_TOO_LARGE", "ファイルのサイズが上限（1 MB）を超えています。")
     try:
         data = json.loads(raw.decode("utf-8-sig"))
     except (UnicodeDecodeError, json.JSONDecodeError):
@@ -126,9 +126,9 @@ def parse_import(raw: bytes, ctx) -> dict:
         raise AppError("IMPORT_INVALID", "本ツールの検索条件のファイルではありません。")
     ver = data.get("schema_version")
     if not isinstance(ver, int):
-        raise AppError("IMPORT_INVALID", "ファイルの形式の版が分かりません。")
+        raise AppError("IMPORT_INVALID", "ファイルの形式の版を判別できません。")
     if ver > SCHEMA_VERSION:
-        raise AppError("IMPORT_TOO_NEW", "新しいバージョンの本ツールで作られたファイルです。本ツールを更新してから読み込んでください。")
+        raise AppError("IMPORT_TOO_NEW", "新しいバージョンの本ツールで作成されたファイルです。本ツールを更新してから読み込んでください。")
     warnings: list[str] = []
     items = []
     creds = 0
@@ -159,7 +159,7 @@ def parse_import(raw: bytes, ctx) -> dict:
                 creds += 1
         items.append({"index": i, "condition": cond, "error": error})
     if not items:
-        raise AppError("IMPORT_EMPTY", "ファイルに検索条件がありません。")
+        raise AppError("IMPORT_EMPTY", "ファイルに検索条件が含まれていません。")
     return {"items": items, "credentials": creds, "warnings": sorted(set(warnings))}
 
 

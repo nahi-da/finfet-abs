@@ -17,7 +17,7 @@ const ITEM_STATES = [['', 'すべて'], ['pending', '待機中'], ['rehydrate_qu
 const SUMMARY_STATES = ['completed', 'downloading', 'ready', 'rehydrating', 'rehydrate_queued', 'pending', 'skipped', 'error', 'cancelled'];
 const ENDED = new Set(['completed', 'completed_with_errors', 'cancelled']);
 const METHOD_LABELS = { rehydrate_download: 'リハイドレートしてダウンロード', rehydrate_only: 'リハイドレートのみ', download_only: 'ダウンロードのみ' };
-const STRUCT_LABELS = { preserve: '階層を保つ', flatten: '階層を名前にする', name_only: 'ファイル名だけ', template: '指定する' };
+const STRUCT_LABELS = { preserve: '階層を保つ', flatten: '階層を名前にする', name_only: 'ファイル名のみ', template: '指定する' };
 const CONFLICT_LABELS = { number: '番号を付ける', skip: 'スキップ', overwrite: '上書き' };
 
 export async function render(ctx) {
@@ -138,9 +138,9 @@ export async function render(ctx) {
     setStatus = (k) => { stSel.value = k; apply(); };
     const bulk = async (act) => {
       const ids = [...selected];
-      if (!ids.length) { toast('Blob を選んでください。'); return; }
+      if (!ids.length) { toast('Blob を選択してください。'); return; }
       if (act === 'raise-priority') {
-        const ok = await confirmDialog({ title: '優先度を高にしますか', body: '優先度「高」は料金が高くなります。保留中の要求の優先度は、上げることはできますが下げられません。', okText: '高にする' });
+        const ok = await confirmDialog({ title: '優先度を高にしますか', body: '優先度「高」は料金が高くなります。保留中の要求の優先度は、上げることはできますが、下げることはできません。', okText: '高にする' });
         if (!ok) return;
       }
       if (act === 'rerun-selected') { rerun(ids); return; }
@@ -231,7 +231,7 @@ export async function render(ctx) {
       const kv = h('dl', { class: 'kv', style: { gridTemplateColumns: '14em 1fr' } });
       for (const [k, label, kind] of fields) {
         let v = d[k];
-        if (k === 'rehydrate_requested_at' && !v && d.rehydrate_requested_known === 0) v = '不明（ジョブの開始前から要求済み）';
+        if (k === 'rehydrate_requested_at' && !v && d.rehydrate_requested_known === 0) v = '不明（ジョブの開始前に要求済み）';
         if (v === null || v === undefined || v === '') continue;
         const text = k === 'rehydrate_requested_at' && d.rehydrate_requested_known === 0 && !d.rehydrate_requested_at ? v : fmtItem(kind, v, d);
         kv.append(h('dt', { class: 'muted', text: label }), h('dd', { class: kind === 'mono' ? 'mono' : '', text }));
@@ -282,7 +282,7 @@ export async function render(ctx) {
       ...row('リハイドレートの要求の並列数', numIn('rehydrate_concurrency', 'リハイドレートの要求の並列数')),
       ...row('ダウンロードの同時実行数', numIn('download_concurrency', 'ダウンロードの同時実行数')),
       ...row('1 Blob あたりの接続数', h('div', { class: 'line' }, numIn('connections_per_blob', '1 Blob あたりの接続数'), conns)),
-      ...row('チャンクの大きさ（MiB）', numIn('chunk_size_mib', 'チャンクの大きさ')),
+      ...row('チャンクサイズ（MiB）', numIn('chunk_size_mib', 'チャンクサイズ')),
     ), err);
     if (editable) {
       body.append(h('div', { class: 'toolbar' }, button('保存', async () => {
@@ -296,7 +296,7 @@ export async function render(ctx) {
         } catch (e) { err.hidden = false; err.textContent = e.message; }
       }, { primary: true })));
     } else {
-      body.append(h('p', { class: 'muted', text: '実行中のジョブでは、帯域の上限だけを変更できます（上の速度の行）。' }));
+      body.append(h('p', { class: 'muted', text: '実行中のジョブでは、帯域の上限のみ変更できます。' }));
     }
   }
 
@@ -325,11 +325,11 @@ export async function render(ctx) {
     const rem = (job.counts.by_status || {}).rehydrating;
     const dirIn = textInput(o.directory, { width: 'w-long', 'aria-label': '保存先' });
     const conflictSel = select(Object.entries(CONFLICT_LABELS), o.conflict, { 'aria-label': '同名のファイル' });
-    const mode = radios('dl-mode', [['all', '完了した Blob からダウンロードし、残りは完了しだいダウンロードする'], ['completed_only', '完了した Blob だけをダウンロードする']], 'all', () => {});
+    const mode = radios('dl-mode', [['all', 'リハイドレートが完了した Blob から順にダウンロードし、残りは完了しだいダウンロードする'], ['completed_only', 'リハイドレートが完了した Blob のみをダウンロードする']], 'all', () => {});
     const d = openDialog({
       title: 'ダウンロードを開始', width: 720,
       body: formGrid(...row('保存先', h('div', { class: 'line' }, dirIn, button('選択', async () => { const r = await pickFolder({ initial: dirIn.value }); if (r) dirIn.value = r.path; }))),
-        ...row('同名のファイル', conflictSel), ...(rem ? row('リハイドレート中', h('div', null, h('p', { text: `まだリハイドレート中の Blob が ${num(rem[0])} 件あります。` }), mode)) : [])),
+        ...row('同名のファイル', conflictSel), ...(rem ? row('リハイドレート中', h('div', null, h('p', { text: `リハイドレート中の Blob が、まだ ${num(rem[0])} 件あります。` }), mode)) : [])),
     });
     d.setFoot(h('span.push'), button('キャンセル', () => d.close(true)), button('ダウンロードを開始', async () => {
       try {
@@ -353,7 +353,7 @@ export async function render(ctx) {
 
   async function remove() {
     const parts = checkbox('保存中のファイル（.part）も削除する', false);
-    const ok = await confirmDialog({ title: 'ジョブの記録を削除しますか', body: [h('p', { text: 'ダウンロードしたファイルは削除しません。削除した記録は元に戻せません。' }), parts], okText: '削除する', danger: true });
+    const ok = await confirmDialog({ title: 'ジョブの記録を削除しますか', body: [h('p', { text: 'ダウンロード済みのファイルは削除されません。削除した記録は元に戻せません。' }), parts], okText: '削除する', danger: true });
     if (!ok) return;
     await api.post(`/api/v1/jobs/${id}/actions/delete`, { remove_parts: checkInput(parts).checked });
     ctx.navigate('/jobs/ended');

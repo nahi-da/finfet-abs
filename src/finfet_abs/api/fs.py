@@ -40,7 +40,7 @@ def forbidden_dirs(app) -> list[Path]:
 def check_not_forbidden(app, p: Path) -> None:
     for d in forbidden_dirs(app):
         if paths.is_inside(p, d):
-            raise AppError("PATH_FORBIDDEN", "このフォルダーは、本ツールのデータや本体があるため、保存先にできません。")
+            raise AppError("PATH_FORBIDDEN", "このフォルダーには本ツールのデータまたは本体があるため、保存先に指定できません。")
 
 
 def list_drives() -> list[str]:
@@ -80,7 +80,7 @@ def register(router, app) -> None:
                     if len(names) >= MAX_ENTRIES:
                         break
         except PermissionError:
-            raise AppError("DIR_ACCESS_DENIED", "このフォルダーの中を表示する権限がありません。", status=403) from None
+            raise AppError("DIR_ACCESS_DENIED", "このフォルダーの内容を表示する権限がありません。", status=403) from None
         names.sort(key=str.lower)
         parent = str(p.parent) if p.parent != p else None
         return json_response({"path": str(p), "parent": parent, "dirs": names})
@@ -91,15 +91,15 @@ def register(router, app) -> None:
         parent = normalize_dir(body.get("path"))
         name = str(body.get("name") or "").strip()
         if not name or paths.safe_component(name) != name:
-            raise bad_request("フォルダーの名前に使えない文字が含まれています。", "NAME_INVALID")
+            raise bad_request("フォルダー名に使用できない文字が含まれています。", "NAME_INVALID")
         target = parent / name
         check_not_forbidden(app, target)
         if target.exists():
-            raise AppError("ALREADY_EXISTS", "同じ名前のフォルダーがあります。", status=409)
+            raise AppError("ALREADY_EXISTS", "同じ名前のフォルダーが存在します。", status=409)
         try:
             target.mkdir()
         except OSError as exc:
-            raise AppError("MKDIR_FAILED", f"フォルダーを作れませんでした（{exc.strerror or exc}）。") from None
+            raise AppError("MKDIR_FAILED", f"フォルダーを作成できませんでした（{exc.strerror or exc}）。") from None
         return json_response({"path": str(target)})
 
     @router.post("/api/v1/fs/check-writable")
@@ -115,7 +115,7 @@ def register(router, app) -> None:
                 pass
             probe.unlink()
         except OSError:
-            raise AppError("NOT_WRITABLE", "このフォルダーには書き込めません。") from None
+            raise AppError("NOT_WRITABLE", "このフォルダーには書き込む権限がありません。") from None
         free = shutil.disk_usage(p).free
         if body.get("remember"):
             recent.add(app.db, "directory", str(p))

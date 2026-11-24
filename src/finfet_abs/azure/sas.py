@@ -35,7 +35,7 @@ def validate_account(name: str) -> str:
     """ストレージアカウント名（3〜24 文字の英小文字と数字）。"""
     n = (name or "").strip()
     if not ACCOUNT_RE.match(n):
-        raise ParseError("ストレージアカウント名は、3〜24 文字の英小文字と数字です。")
+        raise ParseError("ストレージアカウント名は、3〜24 文字の英小文字と数字で指定してください。")
     return n
 
 
@@ -44,7 +44,7 @@ def parse_blob_host(host: str) -> tuple[str, str, bool]:
     h = (host or "").lower()
     parts = h.split(".")
     if len(parts) < 4 or parts[1] not in ("blob", "dfs"):
-        raise ParseError("URL のホスト名が「<ストレージアカウント>.blob.<ドメイン>」の形ではありません（カスタムドメインは使えません）。")
+        raise ParseError("URL のホスト名が「<ストレージアカウント>.blob.<ドメイン>」の形式ではありません（カスタムドメインは使用できません）。")
     account = validate_account(parts[0])
     suffix = validate_suffix(".".join(parts[2:]))
     return account, suffix, parts[1] == "dfs"
@@ -135,7 +135,7 @@ def parse_sas_token(token: str) -> SasInfo:
     else:
         raise ParseError("SAS の種類を判定できません（sr・srt がありません）。")
     if kind == "account" and "b" not in q.get("ss", "b"):
-        raise ParseError("この SAS は Blob サービスに使えません（ss に b がありません）。")
+        raise ParseError("この SAS は Blob サービスに使用できません（ss に b がありません）。")
     return SasInfo(kind=kind, permissions=q.get("sp", ""), resource=q.get("sr"), resource_types=q.get("srt"),
                    services=q.get("ss"), start=_parse_time(q.get("st")), expiry=_parse_time(q.get("se")),
                    policy_id=q.get("si"), ip=q.get("sip"), protocol=q.get("spr"), version=q.get("sv"))
@@ -177,11 +177,11 @@ def split_blob_url(url: str) -> tuple[str, str, str | None, str | None, str, boo
     except ValueError:
         raise ParseError("URL の形式が正しくありません。") from None
     if parts.scheme.lower() == "http":
-        raise ParseError("HTTP の URL は使えません。HTTPS の URL を指定してください。")
+        raise ParseError("HTTP の URL は使用できません。HTTPS の URL を指定してください。")
     if parts.scheme.lower() != "https" or not parts.hostname:
         raise ParseError("https:// で始まる URL を指定してください。")
     if parts.port not in (None, 443):
-        raise ParseError("ポートを指定した URL は使えません。")
+        raise ParseError("ポートを指定した URL は使用できません。")
     account, suffix, from_dfs = parse_blob_host(parts.hostname)
     path = parts.path.lstrip("/")
     container = None

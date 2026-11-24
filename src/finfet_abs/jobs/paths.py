@@ -131,7 +131,7 @@ class Template:
         if not text.strip():
             raise TemplateError([TemplateIssue(0, "保存するパスを入力してください。")])
         if re.match(r"^(?:[A-Za-z]:|[/\\])", text):
-            issues.append(TemplateIssue(0, "保存先からの相対パスで指定してください（ドライブ名や先頭の \\ は使えません）。"))
+            issues.append(TemplateIssue(0, "保存先からの相対パスで指定してください（ドライブ名や先頭の \\ は使用できません）。"))
         pos = 0
         literal_check = []
         for m in _PLACE.finditer(text):
@@ -144,19 +144,19 @@ class Template:
             if inner.startswith("@"):
                 b = inner[1:]
                 if b not in BUILTINS:
-                    issues.append(TemplateIssue(m.start(), f"「{{{{{inner}}}}}」は使えません（@account、@container、@path、@dir、"
-                                                           "@name、@stem、@ext を使えます）。"))
+                    issues.append(TemplateIssue(m.start(), f"「{{{{{inner}}}}}」は使用できません（@account、@container、@path、@dir、"
+                                                           "@name、@stem、@ext を使用できます）。"))
                     continue
                 used.append((inner, None))
                 parts.append(lambda v, b=b: v["builtin"][b])
                 continue
             name, eq, fmt = inner.partition("=")
             if url_mode:
-                issues.append(TemplateIssue(m.start(), "URL で指定したジョブでは、@ で始まるものだけを使えます。"))
+                issues.append(TemplateIssue(m.start(), "URL で指定したジョブでは、@ で始まるもののみ使用できます。"))
                 continue
             info = variables.get(name)
             if info is None:
-                issues.append(TemplateIssue(m.start(), f"変数「{name}」は検索条件にありません。"))
+                issues.append(TemplateIssue(m.start(), f"変数「{name}」は検索条件に含まれていません。"))
                 continue
             if info.kind == "datetime":
                 if not eq:
@@ -170,13 +170,13 @@ class Template:
                 missing = sorted({it.unit for it in items if it.symbol} - info.units)
                 if missing:
                     labels = "・".join(dtv.UNIT_LABELS[u] for u in missing)
-                    issues.append(TemplateIssue(m.start(), f"日時の変数「{name}」のパスパターンに{labels}がないため、使えません。"))
+                    issues.append(TemplateIssue(m.start(), f"日時の変数「{name}」のパスパターンに{labels}が含まれていないため、使用できません。"))
                     continue
                 used.append((name, fmt))
                 parts.append(lambda v, n=name, items=items: _fmt_dt(v["vars"].get(n), items))
             else:
                 if eq:
-                    issues.append(TemplateIssue(m.start(), f"変数「{name}」は日時ではないため、書式は付けられません。"))
+                    issues.append(TemplateIssue(m.start(), f"変数「{name}」は日時の変数ではないため、書式を付けられません。"))
                     continue
                 used.append((name, None))
                 parts.append(lambda v, n=name: "" if v["vars"].get(n) is None else str(v["vars"].get(n)))
@@ -185,7 +185,7 @@ class Template:
             parts.append(lambda _v, s=lit: s)
             literal_check.append((pos, lit))
         if "{{" in "".join(lit for _p, lit in literal_check):
-            issues.append(TemplateIssue(text.find("{{", 0), "閉じていない {{ があります。"))
+            issues.append(TemplateIssue(text.find("{{", 0), "閉じられていない {{ があります。"))
         # 空の階層（指定の文字の中の // など）
         m2 = re.search(r"[/\\]{2,}|[/\\]$", text)
         if m2:

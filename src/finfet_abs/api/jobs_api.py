@@ -81,7 +81,7 @@ def register(router, app) -> None:
         except (TypeError, ValueError):
             raise bad_request("帯域の上限を数値で指定してください。") from None
         if not 0 <= v <= 10000:
-            raise bad_request("帯域の上限は 0〜10,000 MB/s にしてください。")
+            raise bad_request("帯域の上限は 0〜10,000 MB/s の範囲で指定してください。")
         s["limits"].set_bandwidth_mbps(v)
         app.events.publish("bandwidth.changed", {"mbps": v})
         return json_response({"mbps": v})
@@ -215,17 +215,17 @@ def register(router, app) -> None:
         root = job.get("job_folder")
         target = it.get("local_path")
         if not target or not root or not paths.inside(root, os.path.relpath(target, root)):
-            raise AppError("FILE_NOT_FOUND", "ファイルがありません。", status=404)
+            raise AppError("FILE_NOT_FOUND", "ファイルが見つかりません。", status=404)
         long = paths.long_path(target)
         if action == "open-file":
             if it["status"] != "completed" or not os.path.isfile(long):
-                raise AppError("FILE_NOT_FOUND", "ファイルがありません。", status=404)
+                raise AppError("FILE_NOT_FOUND", "ファイルが見つかりません。", status=404)
             os.startfile(long)  # noqa: S606（ジョブで保存したファイルだけを開く）
             return json_response({"ok": True})
         if action == "open-folder":
             folder = Path(target).parent
             if not os.path.isdir(paths.long_path(folder)):
-                raise AppError("FILE_NOT_FOUND", "フォルダーがありません。", status=404)
+                raise AppError("FILE_NOT_FOUND", "フォルダーが見つかりません。", status=404)
             os.startfile(paths.long_path(folder))  # noqa: S606（フォルダーだけを開く）
             return json_response({"ok": True})
         raise NotFound("操作が見つかりません。")

@@ -12,7 +12,7 @@ from .backend import BackendError
 log = logging.getLogger(__name__)
 
 MESSAGES = {
-    "AuthorizationPermissionMismatch": "この Blob（コンテナー）を操作する権限がありません。Entra ID の場合は、ストレージ BLOB データ閲覧者（検索・ダウンロード）または共同作成者（リハイドレート）のロールが必要です。",
+    "AuthorizationPermissionMismatch": "この Blob（コンテナー）を操作する権限がありません。Entra ID の場合は、ストレージ BLOB データ閲覧者（検索・ダウンロード）またはストレージ BLOB データ共同作成者（リハイドレート）のロールが必要です。",
     "AuthorizationFailure": "ストレージアカウントのファイアウォールにより接続できない可能性があります（この PC の IP アドレスが許可されていない、プライベートエンドポイントのみ許可されている、など）。",
     "KeyBasedAuthenticationNotPermitted": "このストレージアカウントでは、アクセスキー・アカウント SAS による認証が無効にされています。Entra ID（ユーザーアカウント）を使用してください。",
     "AuthenticationFailed": "SAS またはアクセスキーが無効です（期限切れ、署名の誤り、許可されていない IP アドレスなど）。",
@@ -21,13 +21,13 @@ MESSAGES = {
     "ResourceNotFound": "ストレージアカウントまたはコンテナーが見つかりません。",
     "BlobArchived": "Archive 層のため、ダウンロードできません。リハイドレートが必要です。",
     "BlobBeingRehydrated": "すでにリハイドレート中です。",
-    "ServerBusy": "Azure が混雑しています。自動で間隔を空けて再試行します。",
-    "OperationTimedOut": "Azure が混雑しています。自動で間隔を空けて再試行します。",
-    "TooManyRequests": "Azure が混雑しています。自動で間隔を空けて再試行します。",
+    "ServerBusy": "Azure 側の処理が混雑しています。自動で間隔を空けて再試行します。",
+    "OperationTimedOut": "Azure 側の処理が混雑しています。自動で間隔を空けて再試行します。",
+    "TooManyRequests": "Azure 側の処理が混雑しています。自動で間隔を空けて再試行します。",
     "ConditionNotMet": "ダウンロード中に Blob が更新されたため、最初からダウンロードし直します。",
     "AuthorizationFailed": "アクセスキーを取得する権限がありません。",
-    "InvalidAuthenticationInfo": "認証の情報が正しくありません（テナントの違い、トークンの期限切れなど）。",
-    "NoAuthenticationInformation": "認証の情報がありません。",
+    "InvalidAuthenticationInfo": "認証情報が正しくありません（テナントの誤り、トークンの期限切れなど）。",
+    "NoAuthenticationInformation": "認証情報がありません。",
     "PublicAccessNotPermitted": "このストレージアカウントでは、認証なしのアクセスが許可されていません。",
 }
 
@@ -72,7 +72,7 @@ def network_message(exc: BaseException, *, account: str | None = None, proxy: st
                 return ErrorInfo("ProxyAuthenticationRequired", "プロキシの認証が必要です。設定の「プロキシ」で ID とパスワードを入力してください。")
             return ErrorInfo("ProxyConnectFailed", f"プロキシ「{proxy or '不明'}」に接続できません。設定の「プロキシ」を確認してください。")
         if isinstance(e, requests.exceptions.SSLError) or "SSLError" in name or "CERTIFICATE_VERIFY_FAILED" in text:
-            return ErrorInfo("CertificateVerifyFailed", "通信の証明書を検証できません。通信を検査するプロキシを使っている場合は、組織の CA 証明書を設定の「追加の CA 証明書」に指定してください。")
+            return ErrorInfo("CertificateVerifyFailed", "通信の証明書を検証できません。通信を検査するプロキシを使用している場合は、組織の CA 証明書を設定の「追加の CA 証明書」に指定してください。")
         if isinstance(e, socket.gaierror) or "getaddrinfo failed" in text or "NameResolutionError" in name or \
                 "Failed to resolve" in text:
             target = f"ストレージアカウント「{account}」" if account else "接続先"
@@ -120,7 +120,7 @@ def from_exception(exc: BaseException, *, account: str | None = None, container:
     if isinstance(exc, (ServiceRequestError, ServiceResponseError)):
         return BackendError("ConnectionFailed", "接続できませんでした。ネットワーク、プロキシ、ファイアウォールの設定を確認してください。",
                             detail=redact(f"{type(exc).__name__}"))
-    return BackendError("UnknownError", "予期しないエラーが発生しました。詳しくはログを確認してください。",
+    return BackendError("UnknownError", "予期しないエラーが発生しました。詳細はログを確認してください。",
                         detail=redact(f"{type(exc).__name__}: {exc}")[:500])
 
 

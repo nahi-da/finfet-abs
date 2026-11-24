@@ -10,7 +10,7 @@ from ..version import __version__
 from .paths import APP_DIR
 
 INSTALLED = APP_DIR / "runtime" / "installed.json"
-MISMATCH = "Python の実行環境の版が、本ツールの版と合いません。全部入り版の ZIP を新しいフォルダーに展開してください。"
+MISMATCH = "Python の実行環境の版が、本ツールの版と一致しません。全部入り版の ZIP を新しいフォルダーに展開してください。"
 
 
 def check(installed: Path = INSTALLED, *, version: str = __version__, python: str | None = None) -> str | None:

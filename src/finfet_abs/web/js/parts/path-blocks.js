@@ -178,7 +178,7 @@ export function pathBlocks(opt) {
 
   // ---- 使える要素（パレット）
   function chip(tok, label, cls, title) {
-    const el = h('button', { type: 'button', class: `pb-chip ${cls}`, draggable: 'true', title: `${title}（クリックで末尾に追加、ドラッグで好きな位置に追加）` },
+    const el = h('button', { type: 'button', class: `pb-chip ${cls}`, draggable: 'true', title: `${title}（クリックで末尾に追加、ドラッグで任意の位置に追加）` },
       icon('plus'), label);
     el.addEventListener('click', () => {
       insertAt(tokens.length, { ...tok });

@@ -90,7 +90,7 @@ async function renderCurrent() {
   clear(root);
   if (!route) {
     setTitle('見つかりません');
-    root.append(h('h1', { text: '見つかりません' }), h('p', null, 'このページはありません。', navButton('ジョブを開く', '/jobs')));
+    root.append(h('h1', { text: '見つかりません' }), h('p', null, 'このページは存在しません。', navButton('ジョブを開く', '/jobs')));
     return;
   }
   const [re, mod, , name] = route;
@@ -257,7 +257,7 @@ export async function shutdownApp() {
   if (res && res.confirm_required) {
     const ok = await confirmDialog({
       title: '本ツールを終了しますか',
-      body: [h('p', { text: '実行中のジョブを一時停止してから終了します。次に起動したときに再開できます。' }),
+      body: [h('p', { text: '実行中のジョブを一時停止してから終了します。次回の起動時に再開できます。' }),
         h('ul', null, res.running.map((n) => h('li', { text: n })))],
       okText: '終了する',
     });
@@ -267,7 +267,7 @@ export async function shutdownApp() {
   guard = null;
   const root = pageEl();
   clear(root);
-  root.append(h('h1', { text: '本ツールを終了しました' }), h('p', { text: 'このタブを閉じてください。もう一度使うときは、finfet-abs.bat を実行します。' }));
+  root.append(h('h1', { text: '本ツールを終了しました' }), h('p', { text: 'このタブを閉じてください。再度使用する場合は、finfet-abs.bat を実行してください。' }));
   document.title = '終了しました - FinFeT';
 }
 
@@ -283,7 +283,7 @@ async function accountMenu(anchor) {
     }
     items.push('sep');
     items.push({ text: 'アカウントを追加', onClick: () => import('./parts/signin.js').then((m) => m.startSignIn(null, { add: true })) });
-    items.push({ text: '接続のページを開く', onClick: () => navigate('/connections') });
+    items.push({ text: '接続ページを開く', onClick: () => navigate('/connections') });
     items.push({ text: accounts.length > 1 ? 'すべてサインアウト' : 'サインアウト', onClick: () => import('./pages/connections.js').then((m) => m.signOut()) });
   } else if (auth) {
     items.push({ text: 'サインイン', onClick: () => import('./parts/signin.js').then((m) => m.startSignIn()) });
@@ -319,7 +319,7 @@ async function boot() {
     window.__finfetVersion = app.session.version;
   } catch (e) {
     clear(pageEl());
-    pageEl().append(h('h1', { text: 'FinFeT' }), h('p', { text: e.status === 401 ? '本ツールの画面を開くには、finfet-abs.bat をもう一度実行してください。' : e.message }));
+    pageEl().append(h('h1', { text: 'FinFeT' }), h('p', { text: e.status === 401 ? '本ツールの画面を開くには、finfet-abs.bat を再度実行してください。' : e.message }));
     return;
   }
   const s = app.session;

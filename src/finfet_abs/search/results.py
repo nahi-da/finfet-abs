@@ -92,7 +92,7 @@ class ResultsService:
     def _check(self, sid: str):
         row = self.db.query_one("SELECT * FROM searches WHERE id=?", (sid,))
         if row is None:
-            raise NotFound("検索結果が見つかりません（古い検索結果は削除されます）。")
+            raise NotFound("検索結果が見つかりません（古い検索結果は自動で削除されます）。")
         return row
 
     def _shortener(self, sid: str, mode: str):

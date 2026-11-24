@@ -10,16 +10,16 @@ import { formGrid, row, select, setError, textInput } from './form.js';
 import { startSignIn } from './signin.js';
 
 const METHODS = [
-  ['azure', 'サインイン中のアカウントから選ぶ'],
+  ['azure', 'サインイン中のアカウントから選択'],
   ['connection_string', '接続文字列'],
   ['sas_url', 'SAS URL'],
   ['account_key', 'アカウント名とキー'],
 ];
 // 追加の方法の説明（v1.5.3: 依頼者の意見。最初の画面が簡素で、違いが分かりにくかったため）
 const METHOD_DESC = {
-  connection_string: 'Azure Portal の［アクセスキー］などで確認できる接続文字列を貼り付けます。',
-  sas_url: 'ストレージアカウントまたはコンテナーの SAS URL を貼り付けます。操作できる範囲と期限は、SAS のとおりです。',
-  account_key: 'ストレージアカウント名と、アクセスキーを入力します。',
+  connection_string: 'Azure Portal の［アクセスキー］などで確認できる接続文字列を貼り付けてください。',
+  sas_url: 'ストレージアカウントまたはコンテナーの SAS URL を貼り付けてください。操作できる範囲と有効期限は、SAS の内容に従います。',
+  account_key: 'ストレージアカウント名と、アクセスキーを入力してください。',
 };
 
 /**
@@ -107,13 +107,13 @@ export function openAddTargetDialog(opt = {}) {
         extra.sub ? h('span', { class: 'method-sub', text: extra.sub }) : null,
         h('span', { class: 'method-go' }, icon('arrow')));
       const azureCard = signedIn
-        ? card('azure', 'サインイン中のアカウントから選ぶ', 'サインインしているアカウントで使えるストレージアカウントの一覧から、コンテナーを選びます。キーや SAS を入力する必要はありません。',
+        ? card('azure', 'サインイン中のアカウントから選択', 'サインイン中のアカウントで使用できるストレージアカウントの一覧から、コンテナーを選択します。キーや SAS を入力する必要はありません。',
           { main: true, tag: 'おすすめ', sub: `サインイン中: ${who.join('、') || '（アカウント）'}` })
-        : card('azure', 'Microsoft Entra ID でサインインして選ぶ', 'サインインすると、そのアカウントで使えるストレージアカウントの一覧から、コンテナーを選べます。',
+        : card('azure', 'Microsoft Entra ID でサインインして選択', 'サインインすると、そのアカウントで使用できるストレージアカウントの一覧から、コンテナーを選択できます。',
           { main: true, tag: 'おすすめ', sub: 'まだサインインしていません' });
       const methods = h('section', { class: 'method-section' }, h('h2', { text: '追加の方法' }),
         h('div', { class: 'method-grid' }, azureCard),
-        h('h3', { class: 'method-subhead', text: 'キー・SAS・接続文字列を使う' }),
+        h('h3', { class: 'method-subhead', text: 'キー・SAS・接続文字列を使用' }),
         h('div', { class: 'method-grid three' }, METHODS.filter(([id]) => id !== 'azure').map(([id, label]) => card(id, label, METHOD_DESC[id]))));
       d.setBody(methods);
       try {
@@ -122,7 +122,7 @@ export function openAddTargetDialog(opt = {}) {
           : await api.get('/api/v1/credentials');
         const usable = res.items.filter((c) => c.usable);
         if (usable.length) {
-          d.body.append(h('section', { class: 'method-section' }, h('h2', { text: '保存した認証情報から選ぶ' }),
+          d.body.append(h('section', { class: 'method-section' }, h('h2', { text: '保存した認証情報から選択' }),
             h('div', { class: 'saved-list' }, usable.map((c) => h('button', { type: 'button', class: 'saved-item', onclick: () => fromSaved(c) },
               h('span', { class: 'saved-name mono', text: `${c.storage_account}${c.scope_container ? ` / ${c.scope_container}` : ''}${c.endpoint_suffix !== AZURE ? `（${c.endpoint_suffix}）` : ''}` }),
               h('span', { class: 'saved-meta muted', text: `${c.scope_container ? 'コンテナー' : 'ストレージアカウント全体'}・${c.auth_label}${c.expires_at ? `・${dateShort(c.expires_at)} まで` : ''}` }),
@@ -138,10 +138,10 @@ export function openAddTargetDialog(opt = {}) {
     function drawPicks() {
       clear(selLine);
       selLine.append(h('span', { class: 'td-sel-label' }, '選択 ', h('strong', { text: String(picks.size) }), ' 件'));
-      if (!picks.size) selLine.append(h('span', { class: 'muted small', text: '追加するコンテナーを選んでください。' }));
+      if (!picks.size) selLine.append(h('span', { class: 'muted small', text: '追加するコンテナーを選択してください。' }));
       for (const [k, p] of picks) {
         selLine.append(h('span', { class: 'chip' }, h('span', { class: 'chip-acct', text: `${p.account} /` }), p.container,
-          iconButton('close', '選択から外す', () => {
+          iconButton('close', '選択を解除', () => {
             picks.delete(k);
             drawPicks();
             onPicksChanged();
@@ -155,7 +155,7 @@ export function openAddTargetDialog(opt = {}) {
     async function submit(account, suffix, auth, containers, errorEl, replaceExisting = false) {
       setError(errorEl, null);
       if (!containers.length) {
-        setError(errorEl, 'コンテナーを1つ以上選んでください。');
+        setError(errorEl, 'コンテナーを 1 つ以上選択してください。');
         return;
       }
       try {
@@ -165,9 +165,9 @@ export function openAddTargetDialog(opt = {}) {
         if (e.code === 'CREDENTIAL_EXISTS') {
           const ex = e.data.existing || {};
           const ok = await confirmDialog({
-            title: '保存した認証情報を置き換えますか',
-            body: `${ex.storage_account}${ex.scope_container ? ` / ${ex.scope_container}` : ''} の認証情報（${ex.auth_label}・${ex.source_label}）が保存されています。入力した認証情報で置き換えます。`,
-            okText: '置き換える',
+            title: '保存した認証情報を上書きしますか',
+            body: `${ex.storage_account}${ex.scope_container ? ` / ${ex.scope_container}` : ''} の認証情報（${ex.auth_label}・${ex.source_label}）が保存されています。入力した認証情報で上書きします。`,
+            okText: '上書きする',
           });
           if (ok) await submit(account, suffix, auth, containers, errorEl, true);
           return;
@@ -197,12 +197,12 @@ export function openAddTargetDialog(opt = {}) {
         drawPicks();
         onPicksChanged();
       };
-      const allBtn = linkButton('表示中をすべて選ぶ', () => {
+      const allBtn = linkButton('表示中の項目をすべて選択', () => {
         for (const n of visible()) picks.set(key(account(), n), { account: account(), container: n });
         changed();
         draw();
       });
-      const noneBtn = linkButton('選択を外す', () => {
+      const noneBtn = linkButton('選択を解除', () => {
         for (const n of names) picks.delete(key(account(), n));
         changed();
         draw();
@@ -241,7 +241,7 @@ export function openAddTargetDialog(opt = {}) {
         }
         if (shown.length > 2000) list.append(h('div', { class: 'pick-empty', text: `${num(shown.length)} 件のうち 2,000 件を表示しています。キーワードで絞り込んでください。` }));
         if (!names.length) list.append(h('div', { class: 'pick-empty', text: message || opts.emptyText || 'コンテナーはありません。' }));
-        else if (!shown.length) list.append(h('div', { class: 'pick-empty', text: 'キーワードに合うコンテナーはありません。' }));
+        else if (!shown.length) list.append(h('div', { class: 'pick-empty', text: 'キーワードに一致するコンテナーはありません。' }));
       };
       kw.addEventListener('input', draw);
       const addByName = () => {
@@ -257,7 +257,7 @@ export function openAddTargetDialog(opt = {}) {
       const el = pane(opts.step || null, 'コンテナー', [forAcct, count],
         h('div', { class: 'td-pane-tools' }, kwBox.el, h('span', { class: 'td-bulk' }, allBtn, noneBtn)),
         msgEl, list,
-        h('div', { class: 'td-pane-foot' }, h('span', { class: 'td-foot-label', text: '一覧にないコンテナー' }), nameIn, addButton('加える', addByName)));
+        h('div', { class: 'td-pane-foot' }, h('span', { class: 'td-foot-label', text: '一覧にないコンテナー' }), nameIn, addButton('選択に追加', addByName)));
       const cs = {
         el,
         setNames(n, m) { loading = null; names = n; message = m || ''; draw(); },
@@ -294,7 +294,7 @@ export function openAddTargetDialog(opt = {}) {
       cs.setLoading();
       try {
         const r = await runTask('POST', '/api/v1/containers/list', { storage_account: c.storage_account, endpoint_suffix: c.endpoint_suffix, auth: { credential_id: c.id } });
-        cs.setNames(r.containers, r.list_error ? `コンテナーの一覧を取得できません（${r.list_error}）。コンテナー名を入力してください。` : '');
+        cs.setNames(r.containers, r.list_error ? `コンテナーの一覧を取得できませんでした（${r.list_error}）。コンテナー名を入力してください。` : '');
       } catch (e) {
         cs.setNames([], e.message);
       }
@@ -303,7 +303,7 @@ export function openAddTargetDialog(opt = {}) {
 
     // ---------------------------------------------------------------- Azure にサインイン
     async function azureScreen(user) {
-      d.setTitle(titleWith('サインイン中のアカウントから選ぶ'));
+      d.setTitle(titleWith('サインイン中のアカウントから選択'));
       picks.clear();
       // 待っている間も、何をしているかを表示します（v1.5.3: 依頼者の意見）
       d.setBody(loadingPanel('サインインの状態を確認しています…').el);
@@ -323,7 +323,7 @@ export function openAddTargetDialog(opt = {}) {
       const acc = accts.length > 1 ? a.id : null;
       const who = accts.length > 1
         ? select(accts.map((x) => [x.id, x.tenant_name ? `${x.username}（${x.tenant_name}）` : x.username]), a.id, {
-          'aria-label': '使うアカウント', onchange: (e) => azureScreen(e.target.value),
+          'aria-label': '使用するアカウント', onchange: (e) => azureScreen(e.target.value),
         })
         : h('span', { class: 'td-who', text: a.tenant_name ? `${a.username}（${a.tenant_name}）` : a.username });
       const addAcct = addButton('アカウントを追加', async () => { if (await startSignIn(null, { add: true })) azureScreen(a.id); });
@@ -355,7 +355,7 @@ export function openAddTargetDialog(opt = {}) {
       const cs = containerSection(() => current, {
         step: '2',
         initial: opt.initialContainer,
-        emptyText: 'ストレージアカウントを選ぶと、ここにコンテナーが表示されます。',
+        emptyText: 'ストレージアカウントを選択すると、ここにコンテナーが表示されます。',
       });
       const loadContainers = async (name) => {
         current = name;
@@ -364,7 +364,7 @@ export function openAddTargetDialog(opt = {}) {
         try {
           const r = await runTask('POST', '/api/v1/containers/list', { storage_account: name, endpoint_suffix: AZURE, auth: { kind: mode, account: acc } });
           if (current !== name) return;
-          cs.setNames(r.containers, r.list_error ? `コンテナーの一覧を取得できません（${r.list_error}）。コンテナー名を入力してください。` : '');
+          cs.setNames(r.containers, r.list_error ? `コンテナーの一覧を取得できませんでした（${r.list_error}）。コンテナー名を入力してください。` : '');
         } catch (e) {
           if (current === name) cs.setNames([], e.message);
         }
@@ -397,8 +397,8 @@ export function openAddTargetDialog(opt = {}) {
           icon('chevron')));
         }
         if (shown.length > RENDER_LIMIT) acctList.append(h('div', { class: 'pick-empty', text: `${num(shown.length)} 件のうち ${RENDER_LIMIT} 件を表示しています。キーワードで絞り込んでください。` }));
-        if (!accounts.length) acctList.append(h('div', { class: 'pick-empty', text: 'ストレージアカウントはありません。一覧にない場合は、下の欄に名前を入力してください。' }));
-        else if (!shown.length) acctList.append(h('div', { class: 'pick-empty', text: 'キーワードに合うストレージアカウントはありません。' }));
+        if (!accounts.length) acctList.append(h('div', { class: 'pick-empty', text: 'ストレージアカウントが見つかりません。一覧にない場合は、下の欄に名前を入力してください。' }));
+        else if (!shown.length) acctList.append(h('div', { class: 'pick-empty', text: 'キーワードに一致するストレージアカウントはありません。' }));
         acctList.scrollTop = top0;
         if (refocus) acctList.querySelector('.acct-item.selected')?.focus();
       }
@@ -406,7 +406,7 @@ export function openAddTargetDialog(opt = {}) {
       const addManual = () => {
         const n = manual.value.trim().toLowerCase();
         if (!/^[a-z0-9]{3,24}$/.test(n)) {
-          setError(manual, 'ストレージアカウント名は、3〜24 文字の英小文字と数字です。');
+          setError(manual, 'ストレージアカウント名は、3〜24 文字の英小文字と数字で入力してください。');
           return;
         }
         setError(manual, null);
@@ -417,7 +417,7 @@ export function openAddTargetDialog(opt = {}) {
       manual.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); addManual(); } });
       const left = pane('1', 'ストレージアカウント', [acctCount],
         h('div', { class: 'td-pane-tools' }, kwBox.el), acctList,
-        h('div', { class: 'td-pane-foot' }, h('span', { class: 'td-foot-label', text: '一覧にないストレージアカウント' }), manual, addButton('加える', addManual)));
+        h('div', { class: 'td-pane-foot' }, h('span', { class: 'td-foot-label', text: '一覧にないストレージアカウント' }), manual, addButton('名前で指定', addManual)));
       onPicksChanged = () => drawAccounts();
       d.setBody(top, unavailable, h('div', { class: 'td-split' }, left, cs.el), selLine, err);
       drawPicks();
@@ -427,7 +427,7 @@ export function openAddTargetDialog(opt = {}) {
           if (!groups.has(p.account)) groups.set(p.account, []);
           groups.get(p.account).push(p.container);
         }
-        if (!groups.size) { setError(err, 'コンテナーを1つ以上選んでください。'); return; }
+        if (!groups.size) { setError(err, 'コンテナーを 1 つ以上選択してください。'); return; }
         const all = [];
         for (const [acct, conts] of groups) {
           try {
@@ -438,7 +438,7 @@ export function openAddTargetDialog(opt = {}) {
         finish(all);
       }, { primary: true }));
       // 取得中の表示: 段階（テナントごと）・見つかった数・経過した秒数（v1.5.3: 依頼者の意見）
-      const loading = loadingPanel('ストレージアカウントの一覧を取得しています…', 'サインイン中のアカウントで使えるテナント・サブスクリプションを調べています。');
+      const loading = loadingPanel('ストレージアカウントの一覧を取得しています…', 'サインイン中のアカウントで使用できるテナント・サブスクリプションを確認しています。');
       const elapsed = h('div', { class: 'loading-elapsed muted' });
       loading.el.querySelector('.loading-body').append(elapsed);
       acctList.append(loading.el);
@@ -451,7 +451,7 @@ export function openAddTargetDialog(opt = {}) {
         if (p.step === 'tenants') loading.set('テナントの一覧を取得しています…');
         else if (p.step === 'tenant') {
           loading.set(`テナント「${p.tenant}」のストレージアカウントを取得しています（${p.index} / ${p.total}）…`,
-            p.found ? `これまでに ${p.found.toLocaleString('en-US')} 件見つかりました。` : 'サブスクリプションが多い場合は、数十秒かかることがあります。');
+            p.found ? `これまでに ${p.found.toLocaleString('en-US')} 件見つかりました。` : 'サブスクリプションが多い場合は、数十秒かかる場合があります。');
         }
       });
       const prevCleanup = screenCleanup;
@@ -510,7 +510,7 @@ export function openAddTargetDialog(opt = {}) {
         if (parsed.level === 'container') {
           fixedContainer = parsed.container;
           if (choose && fixedContainer !== opt.row.container) {
-            setError(inputs.focus, `この SAS はコンテナー「${fixedContainer}」のものです。この行のコンテナーには使えません。`);
+            setError(inputs.focus, `この SAS はコンテナー「${fixedContainer}」用です。この行のコンテナーには使用できません。`);
             return;
           }
           contSec.hidden = true;
@@ -523,7 +523,7 @@ export function openAddTargetDialog(opt = {}) {
         cs.setLoading(`${parsed.account} のコンテナーを取得しています…`);
         try {
           const r = await runTask('POST', '/api/v1/containers/list', { storage_account: parsed.account, endpoint_suffix: parsed.endpoint_suffix, auth: authBody() });
-          if (parsed.level !== 'container') cs.setNames(r.containers, r.list_error ? `コンテナーの一覧を取得できません（${r.list_error}）。コンテナー名を入力してください。` : '');
+          if (parsed.level !== 'container') cs.setNames(r.containers, r.list_error ? `コンテナーの一覧を取得できませんでした（${r.list_error}）。コンテナー名を入力してください。` : '');
           else cs.setNames([fixedContainer], '');
         } catch (e) {
           cs.setNames([], '');
@@ -537,8 +537,8 @@ export function openAddTargetDialog(opt = {}) {
           parts.push({ account: 'アカウント SAS', service: 'サービス SAS', user_delegation: 'ユーザー委任 SAS' }[info.sas.kind] || 'SAS');
           parts.push(info.level === 'container' ? `コンテナー ${info.container}` : info.level === 'blob' ? 'Blob' : 'ストレージアカウント全体');
           parts.push(`権限 ${info.sas.permission_labels.join('・') || (info.sas.policy ? 'アクセスポリシーによる' : 'なし')}`);
-          parts.push(info.sas.expiry ? `${dateShort(info.sas.expiry)} まで` : (info.sas.policy ? '期限はアクセスポリシーによる' : '期限なし'));
-          if (info.sas.ip_restricted) parts.push('許可された IP アドレスからのみ使えます');
+          parts.push(info.sas.expiry ? `${dateShort(info.sas.expiry)} まで` : (info.sas.policy ? '有効期限はアクセスポリシーに従う' : '期限なし'));
+          if (info.sas.ip_restricted) parts.push('許可された IP アドレスからのみ使用できます');
         }
         parsedLine.textContent = `${info.account}${info.endpoint_suffix !== AZURE ? `（${info.endpoint_suffix}）` : ''}　${parts.join('、')}`;
         const warns = [];
@@ -602,7 +602,7 @@ export function openAddTargetDialog(opt = {}) {
       }
       d.setBody(pane('1', '認証情報', [], formRows, method === 'account_key' ? parsedLine : null), contSec, selLine, err);
       drawPicks();
-      const note = h('span', { class: 'note', text: '入力した認証情報は暗号化して、この PC のこの Windows ユーザーだけが使える形で保存します。' });
+      const note = h('span', { class: 'note', text: '入力した認証情報は暗号化し、この PC の現在の Windows ユーザーのみが使用できる形で保存します。' });
       d.setFoot(note, button('キャンセル', () => d.close()), button(choose ? '決定' : '追加', async () => {
         if (!parsed) {
           setError(inputs.focus, '認証情報を入力してください。');

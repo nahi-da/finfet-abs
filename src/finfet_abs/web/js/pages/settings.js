@@ -13,63 +13,63 @@ const TZ = [['local', 'ローカル時刻'], ['utc', 'UTC']];
 
 /** 各項目の説明（v1.5.0。[?] で表示します。範囲・既定値は、スキーマから加えます）。 */
 const HELP = {
-  'search.max_results': '1 回の検索で保持する Blob の数の上限です。上限に達すると、検索を打ち切ります。条件を絞れない大きな検索で、メモリと時間を使いすぎないためのものです。',
-  'search.max_prefixes': 'パスパターンから作る prefix（一覧を取る範囲）の数の上限です。多いほど、取得する Blob が減って速くなりますが、要求の数が増えます。超えると、より短い prefix にまとめます。',
-  'search.merge_trial_pages': '短い prefix でまとめて一覧を取った方が速いかを試すページ数です。通常は変える必要はありません。',
-  'search.page_size': '検索とパスパターンの自動生成で、Blob の一覧を 1 回の要求で取得する件数です。Azure の上限が 5,000 件のため、これより大きくはできません。小さくすると、要求の回数が増えて時間がかかりますが、1 回の応答が速く返るため、進み具合がこまめに表示されます。通常は 5,000 のままにします。合計の件数の上限は「上限件数」です。',
-  'search.list_concurrency': '一覧の取得を、同時にいくつ行うかです。増やすと速くなりますが、Azure の要求の速度の制限（スロットリング）にかかりやすくなります。',
-  'search.input_timezone': '検索のページで日時を入力するときの、既定の基準です。ログの多くは、パスの日時が UTC です。',
-  'search.exclude_adls_directories': 'Data Lake Storage（階層型の名前空間）のディレクトリは、一覧で Blob のように見えます。有効にすると、検索結果に含めません。',
-  'search.keep_recent': '検索結果を、新しいものからいくつ残すかです。古い結果は自動で消します（検索履歴の条件は残ります）。',
-  'fetch.directory': 'ダウンロードしたファイルを保存するフォルダーの既定です。ジョブの作成のときに変えられます。%USERPROFILE% のような環境変数を使えます。',
-  'fetch.job_folder': '有効にすると、保存先の下にジョブの名前のフォルダーを作って保存します。ジョブごとにファイルを分けられます。',
-  'fetch.path_structure': '保存するファイルの名前の付け方です。「階層を保つ」は Blob 名の「/」をフォルダーにします。「階層を名前にする」は「/」を「_」に変えて 1 つのフォルダーに置きます。',
-  'fetch.conflict': '保存先に同じ名前のファイルがあるときの扱いです。',
-  'fetch.set_mtime': '保存したファイルの更新日時を、Blob の最終更新日時にそろえます。',
-  'fetch.verify_md5': 'Blob に Content-MD5 があれば、ダウンロードした内容と照合します。一致しなければエラーにします。',
-  'fetch.extract_archives': 'ダウンロードした圧縮ファイルを展開します。展開できなくても、ダウンロードは完了のままです。',
-  'fetch.extract_max_gib': '1 つの圧縮ファイルを展開した大きさの合計の上限です。超えたら展開を止めます（極端に大きく膨らむファイルへの備え）。',
-  'fetch.reuse_search_info_minutes': '検索してからこの時間以内にジョブを作ると、Blob の状態の確認を省き、検索結果の情報を使います。0 にすると、毎回確認します。',
-  'queue.resume_on_startup': '本ツールを終了したときに実行中だったジョブを、次に起動したときに自動で再開します。',
+  'search.max_results': '1 回の検索で保持する Blob の件数の上限です。上限に達した場合は、検索を打ち切ります。条件を絞り込めない大規模な検索で、メモリと処理時間を消費しすぎないようにするための設定です。',
+  'search.max_prefixes': 'パスパターンから作成する prefix（一覧を取得する範囲）の数の上限です。多くするほど取得する Blob が減り処理は速くなりますが、要求の回数が増えます。上限を超えた場合は、より短い prefix にまとめます。',
+  'search.merge_trial_pages': '短い prefix でまとめて一覧を取得した方が速いかを試行するページ数です。通常は変更する必要はありません。',
+  'search.page_size': '検索とパスパターンの自動生成で、Blob の一覧を 1 回の要求で取得する件数です。Azure の上限が 5,000 件のため、これより大きな値は指定できません。小さくすると、要求の回数が増えて時間がかかりますが、1 回の応答が速く返るため、進捗がこまめに表示されます。通常は 5,000 のままにしてください。合計の件数の上限は「上限件数」で指定します。',
+  'search.list_concurrency': '一覧の取得を同時に実行する数です。増やすと処理は速くなりますが、Azure の要求数の制限（スロットリング）を受けやすくなります。',
+  'search.input_timezone': '検索ページで日時を入力する際の、既定の基準です。多くのログでは、パス上の日時が UTC です。',
+  'search.exclude_adls_directories': 'Data Lake Storage（階層型の名前空間）のディレクトリは、一覧では Blob として表示されます。有効にすると、ディレクトリを検索結果から除外します。',
+  'search.keep_recent': '新しいものから順に保持する検索結果の数です。古い結果は自動で削除します（検索履歴の条件は残ります）。',
+  'fetch.directory': 'ダウンロードしたファイルを保存するフォルダーの既定値です。ジョブの作成時に変更できます。%USERPROFILE% のような環境変数を使用できます。',
+  'fetch.job_folder': '有効にすると、保存先の下にジョブ名のフォルダーを作成して保存します。ジョブごとにファイルを分けて管理できます。',
+  'fetch.path_structure': '保存するファイルの名前の付け方です。「階層を保つ」では、Blob 名の「/」をフォルダーの区切りとして扱います。「階層を名前にする」では、「/」を「_」に置き換えて 1 つのフォルダーに保存します。',
+  'fetch.conflict': '保存先に同じ名前のファイルが存在する場合の扱いです。',
+  'fetch.set_mtime': '保存したファイルの更新日時を、Blob の最終更新日時に合わせます。',
+  'fetch.verify_md5': 'Blob に Content-MD5 が設定されている場合は、ダウンロードした内容と照合します。一致しない場合は、エラーにします。',
+  'fetch.extract_archives': 'ダウンロードした圧縮ファイルを展開します。展開に失敗した場合も、ダウンロードは完了として扱います。',
+  'fetch.extract_max_gib': '1 つの圧縮ファイルを展開したときの合計サイズの上限です。上限を超えた場合は、展開を中止します。展開後のサイズが極端に大きくなるファイルへの対策です。',
+  'fetch.reuse_search_info_minutes': '検索後、この時間以内にジョブを作成した場合は、Blob の状態の確認を省略し、検索結果の情報を使用します。0 にすると、毎回確認します。',
+  'queue.resume_on_startup': '本ツールの終了時に実行中だったジョブを、次回の起動時に自動で再開します。',
   'rehydrate.target_tier': 'Archive の Blob をリハイドレートするときの、復元先の層の既定です。',
-  'rehydrate.priority': 'リハイドレートの優先度の既定です。「高」は速く（多くは 1 時間以内）終わりますが、料金が高くなります。「標準」は最大 15 時間ほどかかります。',
-  'rehydrate.poll_first_minutes.high': 'リハイドレートの完了を確かめる間隔です。最初の確認までの時間と、その後の間隔を指定します。',
-  'rehydrate.poll_first_minutes.standard': 'リハイドレートの完了を確かめる間隔です。最初の確認までの時間と、その後の間隔を指定します。',
-  'rehydrate.check_on_startup': '起動したときに、リハイドレートの完了を待っているジョブの状態を確かめます。',
-  'queue.concurrent_jobs': '同時に実行するジョブの数です。1 にすると、キューの順に 1 つずつ実行します。',
-  'transfer.max_connections': '本ツール全体で、Azure に同時につなぐ数の上限です。',
-  'transfer.check_concurrency': 'Blob の状態の確認を、同時にいくつ行うかです。',
-  'transfer.rehydrate_concurrency': 'リハイドレートの要求を、同時にいくつ送るかです。',
+  'rehydrate.priority': 'リハイドレートの優先度の既定値です。「高」は短時間（多くの場合 1 時間以内）で完了しますが、料金が高くなります。「標準」は完了まで最大で 15 時間程度かかります。',
+  'rehydrate.poll_first_minutes.high': 'リハイドレートの完了を確認する間隔です。最初の確認までの時間と、その後の間隔を指定します。',
+  'rehydrate.poll_first_minutes.standard': 'リハイドレートの完了を確認する間隔です。最初の確認までの時間と、その後の間隔を指定します。',
+  'rehydrate.check_on_startup': '起動時に、リハイドレートの完了を待っているジョブの状態を確認します。',
+  'queue.concurrent_jobs': '同時に実行するジョブの数です。1 にすると、キューの順に 1 件ずつ実行します。',
+  'transfer.max_connections': '本ツール全体で、Azure に同時に接続する数の上限です。',
+  'transfer.check_concurrency': 'Blob の状態の確認を同時に実行する数です。',
+  'transfer.rehydrate_concurrency': 'リハイドレートの要求を同時に送信する数です。',
   'transfer.download_concurrency': '同時にダウンロードする Blob の数です。',
-  'transfer.connections_per_blob': '大きな Blob を、いくつの接続に分けて並行してダウンロードするかです。',
-  'transfer.chunk_size_mib': '1 回の要求でダウンロードする大きさです。回線が不安定なときは小さくすると、やり直す量が減ります。',
-  'transfer.bandwidth_mbps': 'ダウンロードの速さの上限です。0 で無制限です。実行中のジョブにもすぐ反映されます。',
+  'transfer.connections_per_blob': 'サイズの大きな Blob を、分割して並行にダウンロードする際の接続数です。',
+  'transfer.chunk_size_mib': '1 回の要求でダウンロードするサイズです。回線が不安定な場合は、小さくすると再試行する量を減らせます。',
+  'transfer.bandwidth_mbps': 'ダウンロード速度の上限です。0 の場合は無制限です。実行中のジョブにも直ちに反映されます。',
   'transfer.request_rate': '1 秒あたりに Azure に送る要求の数の上限です。',
-  'transfer.retry_total': '一時的な失敗（通信の切断、スロットリングなど）のときに、やり直す回数です。',
-  'transfer.connect_timeout': '接続と読み取りを待つ時間です。この時間を過ぎると、失敗としてやり直します。',
-  'load.process_priority': '本ツールの処理の優先度（Windows のプロセスの優先度）です。低くすると、ほかの作業の邪魔をしにくくなります。',
-  'load.prevent_sleep_downloading': 'ジョブの実行中に、PC がスリープしないようにします。',
-  'auth.default_entra_mode': '接続先の追加で、サインイン中のアカウントから選ぶときの既定の認証の方式です。',
-  'auth.default_tenant': 'サインインするテナントの既定です。organizations は、サインインしたアカウントの所属するテナントです。',
-  'auth.client_id': 'サインインに使うアプリケーション（クライアント）の ID です。組織で指定されている場合だけ変えます。',
-  'auth.sas_expiry_warn_hours': 'SAS の有効期限がこの時間以内になったら、警告を表示します。',
-  'network.proxy.mode': '「自動」は Windows のプロキシの設定（環境変数・システムの設定）を使います。',
+  'transfer.retry_total': '一時的な失敗（通信の切断、スロットリングなど）が発生した場合に、再試行する回数です。',
+  'transfer.connect_timeout': '接続と読み取りの待ち時間です。この時間を超えた場合は、失敗として再試行します。',
+  'load.process_priority': '本ツールの処理の優先度（Windows のプロセスの優先度）です。低くすると、ほかの作業への影響を抑えられます。',
+  'load.prevent_sleep_downloading': 'ジョブの実行中に、PC がスリープ状態にならないようにします。',
+  'auth.default_entra_mode': '接続先の追加で、サインイン中のアカウントから選択する場合の既定の認証方式です。',
+  'auth.default_tenant': 'サインインするテナントの既定値です。organizations を指定すると、サインインしたアカウントが所属するテナントを使用します。',
+  'auth.client_id': 'サインインに使用するアプリケーション（クライアント）の ID です。組織で指定されている場合のみ変更してください。',
+  'auth.sas_expiry_warn_hours': 'SAS の有効期限までの残り時間がこの時間を下回った場合に、警告を表示します。',
+  'network.proxy.mode': '「自動」では、Windows のプロキシの設定（環境変数・システムの設定）を使用します。',
   'network.proxy.url': 'プロキシの URL です（例: http://proxy.example:8080）。',
-  'network.proxy.bypass': 'プロキシを使わない宛先です。「,」で区切ります。',
-  'network.ca_bundle': '組織のプロキシが通信を検査する場合など、追加で信頼する CA 証明書（PEM 形式）のファイルです。',
+  'network.proxy.bypass': 'プロキシを経由しない宛先です。複数指定する場合は「,」で区切ります。',
+  'network.ca_bundle': '組織のプロキシが通信を検査する場合などに、追加で信頼する CA 証明書（PEM 形式）のファイルです。',
   'ui.theme': '画面の色の組み合わせです。',
-  'ui.font_size': '画面の文字の大きさです。「大」では、表の行やボタンも大きくなります。「画面の大きさに合わせる」では、ブラウザの幅が 1,600px 未満では標準、1,600px 以上では大、2,200px 以上ではさらに大きくします（幅の狭い画面の表示は変わりません）。',
-  'ui.start_page': '本ツールを起動したときに最初に開くページです。',
-  'ui.activity_popups': 'お知らせを、画面の右上にポップアップでも表示します。クリックすると、ジョブ・検索結果の詳細（エラーのときはエラーの内容）を開きます。マウスを重ねている間は消えません。見ているページのお知らせは、ポップアップにしません。すべてのお知らせは、上部のバーの「お知らせ」で後から見られます。',
-  'ui.browser_notifications': 'リハイドレートの完了などを、Windows の通知（ブラウザの通知）でも知らせます。本ツールの画面が裏にあるときだけ通知します。',
-  'ui.blob_name_display': '検索結果などでの、Blob 名の表示のしかたの既定です。',
-  'exit.when_closed': '本ツールの画面をすべて閉じたら、本ツールを終了します。',
-  'exit.wait_minutes': '画面をすべて閉じてから、本ツールを終了するまでの時間です。',
-  'log.level': 'ログに書く内容の細かさです。問題を調べるときは DEBUG にします。',
-  'log.max_files': 'ログのファイルを残す日数です。古いものから消します。',
-  'log.console': '本ツールを起動したときの黒いウィンドウ（コンソール）に、ログを表示します。ファイルのログと同じく、秘密の値は伏せ字にします。表示が追いつかないときは、一部の行を省きます（ファイルにはすべて残ります）。',
-  'log.console_level': 'コンソールに表示するログの細かさです。ファイルのログのレベルとは別に決められます。',
-  'history.max_entries': '検索履歴を残す数の上限です。ピン留めした履歴は消しません。',
+  'ui.font_size': '画面の文字サイズです。「大」では、表の行やボタンも大きくなります。「画面の大きさに合わせる」では、ブラウザの幅が 1,600px 未満の場合は標準、1,600px 以上の場合は大、2,200px 以上の場合はさらに大きくします（幅の狭い画面の表示は変わりません）。',
+  'ui.start_page': '本ツールの起動時に最初に開くページです。',
+  'ui.activity_popups': 'お知らせを、画面の右上にポップアップでも表示します。クリックすると、ジョブや検索結果の詳細（エラーの場合はエラーの内容）を開きます。マウスポインターを重ねている間は表示が消えません。表示中のページに関するお知らせは、ポップアップで表示しません。すべてのお知らせは、上部のバーの「お知らせ」から後で確認できます。',
+  'ui.browser_notifications': 'リハイドレートの完了などを、Windows の通知（ブラウザの通知）でも知らせます。本ツールの画面が背面にある場合のみ通知します。',
+  'ui.blob_name_display': '検索結果などでの、Blob 名の表示方法の既定値です。',
+  'exit.when_closed': '本ツールの画面をすべて閉じた場合に、本ツールを終了します。',
+  'exit.wait_minutes': '画面をすべて閉じてから、本ツールが終了するまでの時間です。',
+  'log.level': 'ログに出力する内容の詳細度です。問題を調査する場合は DEBUG にしてください。',
+  'log.max_files': 'ログファイルを保持する日数です。古いものから削除します。',
+  'log.console': '本ツールの起動時に開くウィンドウ（コンソール）に、ログを表示します。ファイルのログと同様に、秘密の値は伏せ字にします。表示が追いつかない場合は、一部の行を省略します（ファイルにはすべて記録されます）。',
+  'log.console_level': 'コンソールに表示するログの詳細度です。ファイルに出力するログのレベルとは別に設定できます。',
+  'history.max_entries': '検索履歴を保持する数の上限です。ピン留めした履歴は削除しません。',
 };
 
 /**
@@ -82,25 +82,25 @@ function sections(session) {
       id: 'search', title: '検索', items: [
         ['search.max_results', '上限件数', 'num', { unit: '件' }],
         ['search.max_prefixes', 'prefix の上限', 'num'],
-        ['search.merge_trial_pages', 'まとめて取得を試すページ数', 'num'],
+        ['search.merge_trial_pages', 'まとめて取得を試行するページ数', 'num'],
         ['search.page_size', '1 回の要求で取得する件数', 'num', { unit: '件' }],
         ['search.list_concurrency', '一覧の取得の並列数', 'num'],
         ['search.input_timezone', '期間の入力の既定', 'select', { options: TZ }],
-        ['search.exclude_adls_directories', 'Data Lake のディレクトリを除く', 'check'],
-        ['search.keep_recent', '検索結果を残す数', 'num', { unit: '件' }],
+        ['search.exclude_adls_directories', 'Data Lake のディレクトリを除外する', 'check'],
+        ['search.keep_recent', '検索結果を保持する数', 'num', { unit: '件' }],
       ],
     },
     {
       id: 'fetch', title: '取得', items: [
         ['fetch.directory', '保存先', 'dir'],
-        ['fetch.job_folder', 'ジョブのフォルダー', 'check', { text: '保存先の下にジョブごとのフォルダーを作る' }],
-        ['fetch.path_structure', 'パス構造', 'select', { options: [['preserve', '階層を保つ'], ['flatten', '階層を名前にする'], ['name_only', 'ファイル名だけ'], ['template', '指定する']] }],
+        ['fetch.job_folder', 'ジョブのフォルダー', 'check', { text: '保存先の下にジョブごとのフォルダーを作成する' }],
+        ['fetch.path_structure', 'パス構造', 'select', { options: [['preserve', '階層を保つ'], ['flatten', '階層を名前にする'], ['name_only', 'ファイル名のみ'], ['template', '指定する']] }],
         ['fetch.conflict', '同名のファイル', 'select', { options: [['number', '番号を付ける'], ['skip', 'スキップ'], ['overwrite', '上書き']] }],
         ['fetch.set_mtime', '最終更新日時', 'check', { text: 'ファイルの更新日時を Blob の最終更新日時にする' }],
-        ['fetch.verify_md5', 'MD5 の照合', 'check', { text: 'Content-MD5 がある Blob を、ダウンロード後に照合する' }],
-        ['fetch.extract_archives', '圧縮ファイルの展開', 'check', { text: 'ダウンロードした圧縮ファイル（zip・tar・gz・bz2・xz）を、同じフォルダーに展開する（.tar.gz のような入れ子は最後まで展開し、元のファイルは残す）' }],
-        ['fetch.extract_max_gib', '展開の上限', 'num', { unit: 'GiB（1 つの圧縮ファイルを展開した大きさの合計。超えたら展開を止める）' }],
-        ['fetch.reuse_search_info_minutes', '検索結果を確認の代わりに使う時間', 'num', { unit: '分' }],
+        ['fetch.verify_md5', 'MD5 の照合', 'check', { text: 'Content-MD5 が設定されている Blob を、ダウンロード後に照合する' }],
+        ['fetch.extract_archives', '圧縮ファイルの展開', 'check', { text: 'ダウンロードした圧縮ファイル（zip・tar・gz・bz2・xz）を、同じフォルダーに展開する（.tar.gz のような多重の圧縮もすべて展開し、元のファイルは残す）' }],
+        ['fetch.extract_max_gib', '展開の上限', 'num', { unit: 'GiB（1 つの圧縮ファイルを展開したときの合計サイズ。超えた場合は展開を中止）' }],
+        ['fetch.reuse_search_info_minutes', '検索結果を確認の代わりに使用する時間', 'num', { unit: '分' }],
         ['queue.resume_on_startup', '起動時に実行中だったジョブを再開する', 'check'],
       ],
     },
@@ -121,7 +121,7 @@ function sections(session) {
         ['transfer.rehydrate_concurrency', 'リハイドレートの要求の並列数', 'num'],
         ['transfer.download_concurrency', 'ダウンロードの同時実行数', 'num', { unit: 'Blob' }],
         ['transfer.connections_per_blob', '1 Blob あたりの接続数', 'num'],
-        ['transfer.chunk_size_mib', 'チャンクの大きさ', 'num', { unit: 'MiB' }],
+        ['transfer.chunk_size_mib', 'チャンクサイズ', 'num', { unit: 'MiB' }],
         ['transfer.bandwidth_mbps', '帯域の上限', 'num', { unit: 'MB/s', mbps: true, step: 'any' }],
         ['transfer.request_rate', '要求の数の上限', 'num', { unit: '件/秒' }],
         ['transfer.retry_total', '再試行の回数', 'num', { unit: '回' }],
@@ -152,12 +152,12 @@ function sections(session) {
     {
       id: 'ui', title: '画面', items: [
         ['ui.theme', 'テーマ', 'radios', { options: [['dark', 'ダーク'], ['light', 'ライト'], ['system', 'Windows の設定に合わせる']] }],
-        ['ui.font_size', '文字の大きさ', 'radios', { options: [['auto', '画面の大きさに合わせる'], ['normal', '標準'], ['large', '大']] }],
+        ['ui.font_size', '文字サイズ', 'radios', { options: [['auto', '画面の大きさに合わせる'], ['normal', '標準'], ['large', '大']] }],
         ['ui.start_page', '起動時に開くページ', 'select', { options: [['jobs', 'ジョブ'], ['search', '検索']] }],
-        ['ui.activity_popups', 'ポップアップ', 'check', { text: 'ジョブの開始・完了・エラー、検索の終了などを、画面の右上にポップアップで知らせる' }],
+        ['ui.activity_popups', 'ポップアップ', 'check', { text: 'ジョブの開始・完了・エラー、検索の終了などを、画面の右上にポップアップで通知する' }],
         ['ui.browser_notifications', 'ブラウザの通知', 'check', { text: 'リハイドレートの完了などを、ブラウザの通知でも知らせる' }],
         ['ui.blob_name_display', 'Blob 名の表示', 'select', { options: [['full', '全体'], ['common', '共通する階層を省略'], ['tail', '末尾のみ']] }],
-        ['exit.when_closed', '自動の終了', 'check', { text: '本ツールの画面（ブラウザのタブ）をすべて閉じたら、本ツールを終了する（実行中のジョブ・検索があるときは、終わってから終了します）' }],
+        ['exit.when_closed', '自動の終了', 'check', { text: '本ツールの画面（ブラウザのタブ）をすべて閉じた場合に、本ツールを終了する（実行中のジョブ・検索がある場合は、完了後に終了します）' }],
         ['exit.wait_minutes', '終了までの時間', 'num', { unit: '分（画面をすべて閉じてから）' }],
       ],
     },
@@ -271,7 +271,7 @@ export async function render(ctx) {
         const input = textInput('', { width: opt.width, mono: opt.mono, placeholder: opt.placeholder, type: kind === 'password' ? 'password' : 'text', oninput: () => updateDirty(), 'aria-label': label });
         fields.set(key, { el: input, get: () => input.value.trim(), set: (v) => { input.value = v ?? ''; } });
         if (kind === 'password') {
-          fields.get(key).set = () => { input.value = ''; input.placeholder = saved['network.proxy.password_set'] ? '設定済み（変えるときだけ入力）' : ''; };
+          fields.get(key).set = () => { input.value = ''; input.placeholder = saved['network.proxy.password_set'] ? '設定済み（変更する場合のみ入力）' : ''; };
         }
         const parts = [input];
         if (opt.resetDefault) {
@@ -300,7 +300,7 @@ export async function render(ctx) {
       }
       case 'sleep': {
         const [k1, k2] = key;
-        return row(label, [checkField(k1, 'ダウンロード中はスリープしない'), checkField(k2, 'リハイドレート待ちの間もスリープしない')]);
+        return row(label, [checkField(k1, 'ダウンロード中はスリープ状態にしない'), checkField(k2, 'リハイドレート待ちの間もスリープ状態にしない')]);
       }
       case 'proxytest': {
         const out = h('div', { class: 'pre' });
@@ -318,12 +318,12 @@ export async function render(ctx) {
       case 'datadir': {
         const parts = [h('div', null, h('span', { class: 'mono', text: res.data_dir }), h('span', { class: 'muted', text: `　${res.mode_label}` })),
           linkButton('フォルダーを開く', () => api.post('/api/v1/fs/open-folder', { path: res.data_dir }).catch((e) => toastError(e)))];
-        if (session.acl_warning) parts.push(h('div', { class: 'warn', text: 'データのフォルダーに、ほかの人から読めないようにする設定（ACL）をできませんでした。ほかの人から読めるおそれがあります。' }));
+        if (session.acl_warning) parts.push(h('div', { class: 'warn', text: 'データフォルダーのアクセス制限（ACL）を設定できませんでした。ほかのユーザーがデータを閲覧できる可能性があります。' }));
         return row(label, parts);
       }
       case 'reset':
         return row('', button('設定を既定に戻す', async () => {
-          const ok = await confirmDialog({ title: '設定を既定に戻しますか', body: 'すべての設定を既定の値に戻します。プロキシのパスワードも消えます。', okText: '既定に戻す' });
+          const ok = await confirmDialog({ title: '設定を既定に戻しますか', body: 'すべての設定を既定値に戻します。保存されているプロキシのパスワードも削除されます。', okText: '既定に戻す' });
           if (!ok) return;
           const r = await api.post('/api/v1/settings/reset', {});
           saved = r.values;
@@ -429,7 +429,7 @@ export async function render(ctx) {
   root.append(h('div', { class: 'page-head' }, h('h1', { text: '設定' })), h('div', { class: 'settings-layout' }, toc, body), bar);
   load(saved);
   updateDirty();
-  ctx.setGuard(() => (Object.keys(changes()).length ? '保存していない設定の変更があります。' : null));
+  ctx.setGuard(() => (Object.keys(changes()).length ? '保存されていない設定の変更があります。' : null));
 
   // 現在の節を目次で示します。上端を過ぎた最後の節を現在の節とし、最後までスクロールしたら最後の節にします
   // （v1.5.0: 最後の節が短いと、上端まで来ずにハイライトされなかったため）。目次をクリックした節は、次に手で動かすまで保ちます

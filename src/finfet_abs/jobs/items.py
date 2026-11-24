@@ -95,7 +95,7 @@ def to_csv(db, job_id: str, f: dict) -> bytes:
             "取得したバイト数", "試行回数", "MD5 の照合", "エラーコード", "エラーの内容", "認証方式", "保存した認証情報の ID"]
     w.writerow(head)
     for r in db.query(f"SELECT i.* FROM job_items i WHERE {where} ORDER BY i.sort_key", params):
-        requested = r["rehydrate_requested_at"] or ("不明（ジョブの開始前から要求済み）" if r["rehydrate_requested_known"] == 0 else "")
+        requested = r["rehydrate_requested_at"] or ("不明（ジョブの開始前に要求済み）" if r["rehydrate_requested_known"] == 0 else "")
         w.writerow([r["storage_account"], r["container"], r["blob_name"], url_of(r), ITEM_LABELS.get(r["status"], r["status"]),
                     r["status_reason"] or "", r["blob_type"] or "", r["size"] if r["size"] is not None else "", r["etag"] or "",
                     r["content_md5"] or "", r["creation_time"] or "", r["last_modified"] or "", r["tier_at_search"] or "",

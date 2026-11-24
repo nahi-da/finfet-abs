@@ -21,7 +21,7 @@ def _str(v, limit: int = 1024, default: str = "") -> str:
     if v is None:
         return default
     if not isinstance(v, str):
-        raise ValueError("文字列ではありません")
+        raise ValueError("文字列で指定してください")
     if len(v) > limit:
         raise ValueError("長すぎます")
     return v

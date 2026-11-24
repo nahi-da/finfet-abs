@@ -48,7 +48,7 @@ class NotSignedIn(InteractionRequired):
     """サインインしていない（account を指定した場合は、そのアカウントでサインインしていない）。"""
 
     def __init__(self, account: str | None = None) -> None:
-        msg = f"{account} でサインインしていません。接続のページでサインインしてください。" if account else "サインインしていません。"
+        msg = f"{account} でサインインしていません。接続ページでサインインしてください。" if account else "サインインしていません。"
         super().__init__(None, ErrorInfo("NOT_SIGNED_IN", msg), account=account)
 
 
@@ -79,7 +79,7 @@ def build_token_cache(path: Path):
         persistence = build_encrypted_persistence(str(path))
         return PersistedTokenCache(persistence), True
     except Exception as exc:  # noqa: BLE001
-        log.warning("トークンキャッシュを暗号化して保存できないため、メモリだけで使います（%s）", type(exc).__name__)
+        log.warning("トークンキャッシュを暗号化して保存できないため、メモリ上のみで使用します（%s）", type(exc).__name__)
         return msal.SerializableTokenCache(), False
 
 
@@ -287,7 +287,7 @@ class AuthService:
             try:
                 self._open_browser(flow["auth_uri"])
             except Exception:  # noqa: BLE001
-                log.warning("ブラウザでサインインのページを開けませんでした")
+                log.warning("ブラウザでサインインページを開けませんでした")
         self._changed()
         return {"flow_id": fid, "auth_uri": flow["auth_uri"]}
 

@@ -58,7 +58,7 @@ class JobLog:
                 with open(self.path, "a", encoding="utf-8") as f:
                     f.write(line)
             except OSError:
-                log.exception("ジョブのログを書けませんでした")
+                log.exception("ジョブのログを書き込めませんでした")
 
 
 def item_target(row) -> ContainerRef:
@@ -86,7 +86,7 @@ def classify(info: BlobInfo, method: str) -> tuple[str, str | None]:
 def _err(exc: BaseException) -> tuple[str, str]:
     if isinstance(exc, (BackendError, AppError)):
         return exc.code, exc.message
-    return "INTERNAL", "内部のエラーが発生しました。詳しくはログを確認してください。"
+    return "INTERNAL", "内部エラーが発生しました。詳細はログを確認してください。"
 
 
 class Speed:
@@ -224,7 +224,7 @@ class JobEngine:
                                 (res.get("auth_kind"), res.get("credential_id"), r["id"]))
                 changed = True
         if changed:
-            JobLog(self.logs_dir, rows[0]["job_id"], self.clock).write("INFO", "削除された認証情報の代わりに、使える認証情報を使います")
+            JobLog(self.logs_dir, rows[0]["job_id"], self.clock).write("INFO", "削除された認証情報の代わりに、使用できる別の認証情報を使用します")
         return changed
 
     def auth_check(self, job_id: str) -> None:
@@ -244,7 +244,7 @@ class JobEngine:
                 who = f"（{r['account']}）" if r["account"] else ""
                 code, text = "NOT_SIGNED_IN", f"サインインが必要です{who}。サインインしてから開始してください。"
             else:
-                code, text = "NO_CREDENTIAL", "認証情報がありません。接続のページで接続先を追加してから開始してください。"
+                code, text = "NO_CREDENTIAL", "認証情報がありません。接続ページで接続先を追加してから開始してください。"
             self.auth_problem(job_id, code, text, r["account"])
             raise AppError(code, text, status=409)
         all_rows = self.db.query("SELECT * FROM job_items WHERE job_id=? AND credential_id IS NOT NULL AND secret_id IS NULL",
@@ -413,7 +413,7 @@ class JobEngine:
                     updates.append(("recheck", r, {}))
                 elif info.tier == "Archive":
                     updates.append(("error", r, {"error_code": "RehydrationLost",
-                                                 "error_message": "リハイドレートが行われていません。再要求してください。"}))
+                                                 "error_message": "リハイドレートが実行されていません。再要求してください。"}))
                 else:
                     updates.append(("done", r, {"tier": info.tier, "access_tier_change_time": to_iso(info.access_tier_change_time),
                                                 "etag": info.etag, "size": info.size, "content_md5": info.content_md5}))
@@ -476,7 +476,7 @@ class JobEngine:
             elif method == "rehydrate_only" and n_active - n_ready == 0:
                 if self.db.execute("UPDATE jobs SET status='waiting_download', updated_at=? WHERE id=? AND "
                                    "status='waiting_rehydrate'", (now, job_id)):
-                    self.notify("warn", f"「{row['name']}」のリハイドレートが終わりました。ダウンロードを開始できます", job_id)
+                    self.notify("warn", f"「{row['name']}」のリハイドレートが完了しました。ダウンロードを開始できます", job_id)
             elif n_active == 0:
                 self.finish(job_id)
         self.service.recount(job_id)
@@ -490,13 +490,13 @@ class JobEngine:
         now = to_iso(self.clock.now())
         self.db.execute("UPDATE jobs SET status=?, ended_at=?, updated_at=?, lock_json=NULL, lock_heartbeat_at=NULL WHERE id=?",
                         (status, now, now, job_id))
-        JobLog(self.logs_dir, job_id, self.clock).write("INFO", f"ジョブが終わりました（{STATUS_LABELS[status]}）")
+        JobLog(self.logs_dir, job_id, self.clock).write("INFO", f"ジョブが終了しました（{STATUS_LABELS[status]}）")
         if status == "completed":
             self.notify("ok", f"「{self.job_name(job_id)}」が完了しました", job_id)
         else:
-            self.notify("error", f"「{self.job_name(job_id)}」は一部が失敗しました（エラー {n_err:,} 件）", job_id,
+            self.notify("error", f"「{self.job_name(job_id)}」は一部の Blob で失敗しました（エラー {n_err:,} 件）", job_id,
                         url=f"/jobs/{job_id}?status=error")
-        log.info("ジョブが終わりました（%s）", STATUS_LABELS[status])
+        log.info("ジョブが終了しました（%s）", STATUS_LABELS[status])
         return status
 
     # ------------------------------------------------------------ Blob への操作（4.6.2）
@@ -549,7 +549,7 @@ class JobEngine:
         """終了したジョブの再開（3.3.13）。未完了の Blob だけを処理します。"""
         row = self.db.query_one("SELECT * FROM jobs WHERE id=?", (job_id,))
         if row is None or row["status"] not in ENDED:
-            raise AppError("JOB_NOT_ENDED", "終了したジョブだけを再開できます。", status=409)
+            raise AppError("JOB_NOT_ENDED", "再開できるのは、終了したジョブのみです。", status=409)
         now = self.clock.now()
 
         def fn(c):
@@ -645,7 +645,7 @@ def fetch_infos(backend, limits: Limits, rows: list) -> tuple[dict[int, BlobInfo
                 else:
                     remaining.append(r)
         except BackendError as exc:
-            log.info("一覧での確認ができないため、1件ずつ確かめます: %s", exc.code)
+            log.info("一覧による確認ができないため、1 件ずつ確認します: %s", exc.code)
     for r in remaining:
         try:
             with limits.request(account):
@@ -712,7 +712,7 @@ class JobRunner(threading.Thread):
                           (now, self.job_id)),
                 c.execute("UPDATE job_items SET status='ready', updated_at=? WHERE job_id=? AND status='downloading'",
                           (now, self.job_id))))
-            self.log.write("INFO", "処理を止めました")
+            self.log.write("INFO", "処理を停止しました")
             return
         self._end(opts)
 
@@ -731,7 +731,7 @@ class JobRunner(threading.Thread):
                         "status='running'", (new, now, self.job_id))
         self.log.write("INFO", STATUS_LABELS[new] + "になりました")
         if new == "waiting_download":
-            self.engine.notify("warn", f"「{self.engine.job_name(self.job_id)}」のリハイドレートが終わりました。ダウンロードを開始できます",
+            self.engine.notify("warn", f"「{self.engine.job_name(self.job_id)}」のリハイドレートが完了しました。ダウンロードを開始できます",
                                self.job_id)
 
     def _job_error(self, message: str, *, pause: bool) -> None:
@@ -769,7 +769,7 @@ class JobRunner(threading.Thread):
         self.engine.auth_problem(self.job_id, code, msg)
         self.db.execute("UPDATE jobs SET status='paused', updated_at=?, lock_json=NULL WHERE id=? AND status='running'",
                         (now, self.job_id))
-        self.log.write("WARN", f"認証が使えないため、一時停止しました: {msg}")
+        self.log.write("WARN", f"認証を使用できないため、一時停止しました: {msg}")
         self.stop_event.set()
         return True
 
@@ -929,7 +929,7 @@ class JobRunner(threading.Thread):
         try:
             base.mkdir(parents=True, exist_ok=True)
         except OSError as exc:
-            self._job_error(f"保存先のフォルダーを作れません（{exc.strerror or exc}）。", pause=True)
+            self._job_error(f"保存先のフォルダーを作成できません（{exc.strerror or exc}）。", pause=True)
             return False
         if row["job_folder"]:
             self.root = Path(row["job_folder"])
@@ -944,7 +944,7 @@ class JobRunner(threading.Thread):
         try:
             self.root.mkdir(parents=True, exist_ok=True)
         except OSError as exc:
-            self._job_error(f"ジョブのフォルダーを作れません（{exc.strerror or exc}）。", pause=True)
+            self._job_error(f"ジョブのフォルダーを作成できません（{exc.strerror or exc}）。", pause=True)
             return False
         return self._check_space()
 
@@ -955,7 +955,7 @@ class JobRunner(threading.Thread):
         free = free_bytes(str(self.root))
         if free is not None and free < need:
             gb = 1024 ** 3
-            self._job_error(f"保存先の空き容量が足りません（必要: {need / gb:.1f} GB、空き: {free / gb:.1f} GB）。", pause=True)
+            self._job_error(f"保存先の空き容量が不足しています（必要: {need / gb:.1f} GB、空き: {free / gb:.1f} GB）。", pause=True)
             self.stop_event.set()
             return False
         return True
@@ -1006,7 +1006,7 @@ class JobRunner(threading.Thread):
         rel = r["planned_path"]
         if not rel or not paths.inside(self.root, rel):
             self._update(r["id"], "downloading", status="error", error_code="PATH_OUTSIDE",
-                         error_message="保存するパスが保存先の外を指しています。")
+                         error_message="保存するパスが、保存先のフォルダーの外を指しています。")
             return
         # 保存先のファイル名を確保します（再開のときは、前に確保した名前を使います）
         final = r["local_path"]
@@ -1014,8 +1014,8 @@ class JobRunner(threading.Thread):
         if not final or not part or not os.path.exists(paths.long_path(part)):
             final, clash = paths.reserve(self.root / rel, opts["conflict"])
             if final is None:
-                self._update(r["id"], "downloading", status="skipped", status_reason="同名のファイルがある")
-                self.log.write("INFO", "同名のファイルがあるため、スキップしました", name)
+                self._update(r["id"], "downloading", status="skipped", status_reason="同名のファイルが存在する")
+                self.log.write("INFO", "同名のファイルが存在するため、スキップしました", name)
                 return
             part = final + ".part"
             self._update(r["id"], local_path=final, part_path=part, ranges_done_json=None, bytes_downloaded=0)
@@ -1040,7 +1040,7 @@ class JobRunner(threading.Thread):
                 raise BackendError("BlobArchived", "Archive 層のため、ダウンロードできません。")
             if etag_done and etag_done != info.etag:
                 # Blob が更新された: .part を作り直して最初から
-                self.log.write("WARN", "Blob が更新されたため、最初から取得し直します", name)
+                self.log.write("WARN", "Blob が更新されたため、最初から再取得します", name)
                 ranges_done = []
             etag_done = info.etag
             self._update(r["id"], download_etag=info.etag, size=info.size, content_md5=info.content_md5,
@@ -1063,7 +1063,7 @@ class JobRunner(threading.Thread):
         # サイズの確認
         actual = os.path.getsize(paths.long_path(part))
         if actual != info.size:
-            raise BackendError("SIZE_MISMATCH", f"ダウンロードしたファイルのサイズが違います（{actual:,} / {info.size:,} バイト）。")
+            raise BackendError("SIZE_MISMATCH", f"ダウンロードしたファイルのサイズが一致しません（{actual:,} / {info.size:,} バイト）。")
         md5_result = "off"
         if opts["verify_md5"]:
             if info.content_md5:
@@ -1143,7 +1143,7 @@ class JobRunner(threading.Thread):
                 with limits.request(r["storage_account"], self.stop_event):
                     data = b"".join(backend.download_range(target, r["blob_name"], start, length, info.etag))
                 if len(data) != length:
-                    raise BackendError("SHORT_READ", "受け取ったデータが足りません。")
+                    raise BackendError("SHORT_READ", "受信したデータが不足しています。")
                 with flock:
                     f.seek(start)
                     f.write(data)

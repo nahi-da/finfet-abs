@@ -81,12 +81,12 @@ export function openKnownFormats(opt = {}) {
       }
       clear(notes);
       for (const n of f.notes || []) notes.append(h('p', { text: n }));
-      if (!f.verified) notes.append(h('p', { text: 'この形式は、公式のドキュメントで確認できていません。' }));
+      if (!f.verified) notes.append(h('p', { text: 'この形式は、公式のドキュメントで確認されていません。' }));
       right.append(h('h2', { text: f.name }), formGrid(...rows), preview, notes, err);
       build();
     }
 
-    d.setFoot(h('span.push'), button('キャンセル', () => d.close(true)), button('フォームに入れる', async () => {
+    d.setFoot(h('span.push'), button('キャンセル', () => d.close(true)), button('フォームに入力', async () => {
       const b = await build();
       if (!b) return;
       result = b;

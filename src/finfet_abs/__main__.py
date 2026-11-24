@@ -15,7 +15,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--port", type=int, default=None, help="ポートを固定する")
     parser.add_argument("--demo", action="store_true", help="デモモードで起動する")
     parser.add_argument("--data-dir", default=None, help="データ保存先を指定する（開発・テスト用）")
-    parser.add_argument("--self-check", action="store_true", help="動作に必要なものを確認して終了する")
+    parser.add_argument("--self-check", action="store_true", help="動作に必要なコンポーネントを確認して終了する")
     parser.add_argument("--version", action="store_true", help="版を表示して終了する")
     return parser
 

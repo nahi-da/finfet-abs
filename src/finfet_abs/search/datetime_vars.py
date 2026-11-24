@@ -93,13 +93,13 @@ def parse_format(fmt: str) -> list[FmtItem]:
             c = fmt[i]
             if c in _TYPO:
                 hint = {"y": "年は YYYY", "d": "日は DD", "H": "時は hh", "S": "秒は ss"}[c]
-                raise DateTimeFormatError(f"日時の書式に「{c}」は使えません（{hint} と書きます）。", i)
+                raise DateTimeFormatError(f"日時の書式に「{c}」は使用できません（{hint} と記述してください）。", i)
             lit += c
             i += 1
     if lit:
         items.append(FmtItem(None, lit))
     if not any(it.symbol for it in items):
-        raise DateTimeFormatError("日時の書式に、年・月・日などの記号がありません。", 0)
+        raise DateTimeFormatError("日時の書式に、年・月・日などの記号が含まれていません。", 0)
     return items
 
 
@@ -238,7 +238,7 @@ def parse_period_point(text: str) -> tuple[tuple[int, ...], int]:
     else:
         raise ValueError(f"日時「{text}」の形式が正しくありません（例: 2026-11-20、2026-11-20 09:00）。")
     if not valid_fields(vals):
-        raise ValueError(f"日時「{text}」は暦にありません。")
+        raise ValueError(f"日時「{text}」は存在しない日時です。")
     return vals, len(vals) - 1
 
 
@@ -253,10 +253,10 @@ def period_ranges(start: str, end: str, step: int | None = None, step_unit: str 
     if not step:
         return [(lo, hi)]
     if step_unit not in UNITS:
-        raise ValueError("間隔の単位を選んでください。")
+        raise ValueError("間隔の単位を選択してください。")
     su = UNITS.index(step_unit)
     if step < 1:
-        raise ValueError("間隔は 1 以上にしてください。")
+        raise ValueError("間隔は 1 以上で指定してください。")
     out: Ranges = []
     k = 0
     while True:
@@ -285,12 +285,12 @@ def relative_ranges(kind: str, now_wall: datetime, n: int | None = None, from_: 
     if kind == "last_days":
         n = int(n or 0)
         if n < 1:
-            raise ValueError("日数は 1 以上にしてください。")
+            raise ValueError("日数は 1 以上で指定してください。")
         return [(today - timedelta(days=n - 1), today + timedelta(days=1))]
     if kind == "last_hours":
         n = int(n or 0)
         if n < 1:
-            raise ValueError("時間数は 1 以上にしてください。")
+            raise ValueError("時間数は 1 以上で指定してください。")
         hour = truncate(now_wall, HOUR)
         return [(hour - timedelta(hours=n - 1), hour + timedelta(hours=1))]
     if kind == "this_month":
@@ -302,10 +302,10 @@ def relative_ranges(kind: str, now_wall: datetime, n: int | None = None, from_: 
     if kind == "days_ago":
         a, b = int(from_ or 0), int(to or 0)
         if a < 0 or b < 0:
-            raise ValueError("日数は 0 以上にしてください。")
+            raise ValueError("日数は 0 以上で指定してください。")
         far, near = max(a, b), min(a, b)
         return [(today - timedelta(days=far), today - timedelta(days=near) + timedelta(days=1))]
-    raise ValueError(f"知らない相対的な期間です: {kind}")
+    raise ValueError(f"不明な相対的な期間です: {kind}")
 
 
 # ---------------------------------------------------------------- タイムゾーン
@@ -394,10 +394,10 @@ def parse_units(spec: dict) -> UnitsSpec:
             if end < start:
                 raise ValueError(f"{UNIT_LABELS[unit]}の範囲の終了が開始より前です。")
             if step < 1:
-                raise ValueError("間隔は 1 以上にしてください。")
+                raise ValueError("間隔は 1 以上で指定してください。")
             out.allowed[unit] = set(range(start, end + 1, step))
         else:
-            raise ValueError(f"知らない指定です: {mode}")
+            raise ValueError(f"不明な指定です: {mode}")
     return out
 
 
@@ -423,7 +423,7 @@ def resolve_value(value: dict, *, now_utc: datetime, input_zone: Zone, path_zone
         # 追加の期間（v1.5.0。依頼者の依頼: 複数の期間を指定する）。どれかの期間に入れば一致します
         more = value.get("more") or []
         if len(more) > MAX_EXTRA_PERIODS:
-            raise ValueError(f"追加の期間は {MAX_EXTRA_PERIODS} 個までです。")
+            raise ValueError(f"追加できる期間は {MAX_EXTRA_PERIODS} 個までです。")
         for i, p in enumerate(more):
             try:
                 rs += period_ranges((p or {}).get("start", ""), (p or {}).get("end", ""), value.get("step"), value.get("step_unit"))
@@ -434,7 +434,7 @@ def resolve_value(value: dict, *, now_utc: datetime, input_zone: Zone, path_zone
         now_wall = input_zone.from_utc(now_utc.astimezone(timezone.utc).replace(tzinfo=None))
         rs = relative_ranges(value.get("kind", ""), now_wall, value.get("n"), value.get("from"), value.get("to"))
     else:
-        raise ValueError(f"知らない値の指定です: {mode}")
+        raise ValueError(f"不明な値の指定です: {mode}")
     return DateTimeValue("ranges", ranges=convert_ranges(rs, input_zone, path_zone), input_ranges=rs)
 
 

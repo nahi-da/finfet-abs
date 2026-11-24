@@ -179,7 +179,7 @@ def register(router, app) -> None:
             raise bad_request("パスパターンに誤りがあります。")
         idx = next((i for i, t in enumerate(tokens) if t.kind == "var" and t.name == name), None)
         if idx is None:
-            raise bad_request("変数がパスパターンにありません。")
+            raise bad_request("変数がパスパターンに含まれていません。")
         before = "".join(t.text for t in tokens[:idx])
         try:
             part = compile_path(before + "(?:.*)", variables, input_timezone=body.get("input_timezone") or "local",
@@ -219,12 +219,12 @@ def register(router, app) -> None:
         if mode not in infer.MODES:
             raise AppError("BAD_MODE", "範囲の指定が正しくありません。")
         if not target.get("storage_account") or not target.get("container"):
-            raise AppError("NO_TARGET", "接続先を選んでください。")
+            raise AppError("NO_TARGET", "接続先を選択してください。")
         try:
             limit = max(1, min(1_000_000, int(body.get("limit") or 10000)))
             per_level = max(1, min(100, int(body.get("per_level") or 10)))
         except (TypeError, ValueError):
-            raise AppError("BAD_NUMBER", "件数は数で入力してください。") from None
+            raise AppError("BAD_NUMBER", "件数は数値で入力してください。") from None
         prefix = str(body.get("prefix") or "").lstrip("/")
         refresh = bool(body.get("refresh"))
         cancel = threading.Event()
@@ -308,7 +308,7 @@ def register(router, app) -> None:
     def search_info(sid: str) -> dict:
         r = app.db.query_one("SELECT * FROM searches WHERE id=?", (sid,))
         if r is None:
-            raise NotFound("検索結果が見つかりません（古い検索結果は削除されます）。")
+            raise NotFound("検索結果が見つかりません（古い検索結果は自動で削除されます）。")
         cond = json.loads(r["condition_json"])
         targets = [{"no": t["target_no"], "storage_account": t["storage_account"], "endpoint_suffix": t["endpoint_suffix"],
                     "container": t["container"], "status": t["status"], "listed": t["listed_count"],

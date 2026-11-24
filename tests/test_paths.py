@@ -58,14 +58,14 @@ class TemplateTest(unittest.TestCase):
             "\\\\srv\\x": "相対パス",
             "/x": "相対パス",
             "{{@nope}}": "@account",
-            "{{zzz}}": "検索条件にありません",
+            "{{zzz}}": "検索条件に含まれていません",
             "{{dt}}": "書式を付けて",
             "{{dt=YYYYMMDDhh}}": "時",
             "{{dt=yyyy}}": "YYYY",
-            "{{app=YYYY}}": "書式は付けられません",
+            "{{app=YYYY}}": "書式を付けられません",
             "a//{{@name}}": "空の階層",
             "a/": "空の階層",
-            "a/{{@name": "閉じていない",
+            "a/{{@name": "閉じられていない",
         }
         for text, word in cases.items():
             with self.assertRaises(TemplateError, msg=text) as cm:

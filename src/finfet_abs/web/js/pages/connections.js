@@ -23,7 +23,7 @@ export async function signOut(account) {
 async function setDefault(account) {
   try {
     await api.post('/api/v1/auth/default', { account });
-    toast(`既定のアカウントを ${account} にしました`);
+    toast(`既定のアカウントを ${account} に変更しました`);
   } catch (e) {
     toastError(e);
   }
@@ -43,17 +43,17 @@ function signInSection(st) {
     const who = h('span', null, h('span', { text: a.name ? `${a.name}　` : '' }), h('span', { class: 'mono', text: a.username }),
       a.tenant_name ? h('span', { class: 'muted', text: `（${a.tenant_name}）` }) : null);
     const row = h('div', { class: 'line account-row' }, who);
-    if (multi && a.default) row.append(h('span', { class: 'tag', text: '既定', title: 'アカウントを指定していない接続先で使います' }));
+    if (multi && a.default) row.append(h('span', { class: 'tag', text: '既定', title: 'アカウントを指定していない接続先で使用します' }));
     if (multi && !a.default) row.append(linkButton('既定にする', () => setDefault(a.id)));
     row.append(removeButton('サインアウト', () => signOut(multi ? a.id : null)));
     list.append(row);
   }
   sec.append(list, h('div', { class: 'line' }, addButton('アカウントを追加', () => startSignIn(null, { add: true }))));
-  if (multi) sec.append(h('p', { class: 'muted', text: '接続先を追加するときに、使うアカウントを選べます。アカウントを指定していない接続先は、既定のアカウントを使います。' }));
+  if (multi) sec.append(h('p', { class: 'muted', text: '接続先を追加する際に、使用するアカウントを選択できます。アカウントを指定していない接続先では、既定のアカウントを使用します。' }));
   const bad = (st.tenants || []).filter((t) => t.status !== 'ok' && t.status !== 'unknown');
   for (const t of bad) {
     sec.append(h('div', { class: 'line' },
-      h('span', { class: 'warn', text: `使えないテナント: ${t.name || t.id}（${t.label}${multi && t.account ? `、${t.account}` : ''}）` }),
+      h('span', { class: 'warn', text: `使用できないテナント: ${t.name || t.id}（${t.label}${multi && t.account ? `、${t.account}` : ''}）` }),
       linkButton('このテナントにサインイン', () => startSignIn(t.id, { account: t.account }))));
   }
   return sec;
@@ -92,7 +92,7 @@ export async function render(ctx) {
     const body = { ids: ids || [], all: !!all };
     let res = await api.post('/api/v1/credentials/delete', body);
     if (res && res.confirm_required) {
-      const parts = [h('p', { text: '次のジョブ・検索履歴で使っている認証情報が含まれます。削除すると、これらは認証を探し直します。' })];
+      const parts = [h('p', { text: '次のジョブ・検索履歴で使用中の認証情報が含まれます。削除した場合、これらは使用できる認証を改めて探します。' })];
       if (res.jobs.length) parts.push(h('ul', null, res.jobs.map((j) => h('li', { text: j.name }))));
       if (res.history_count) parts.push(h('p', { text: `検索履歴 ${res.history_count} 件` }));
       const ok = await confirmDialog({ title: '認証情報を削除しますか', body: parts, okText: '削除する', danger: true });
@@ -106,13 +106,13 @@ export async function render(ctx) {
 
   async function remove(ids) {
     if (ids && !ids.length) {
-      toast('削除する行をチェックしてください。');
+      toast('削除する行を選択してください。');
       return;
     }
     const n = ids ? ids.length : items.length;
     const ok = await confirmDialog({
       title: ids ? `認証情報を削除しますか（${n} 件）` : 'すべての認証情報を削除しますか',
-      body: '削除した認証情報は、接続先の追加で入力し直すまで使えません。',
+      body: '削除した認証情報は、接続先の追加で再入力するまで使用できません。',
       okText: '削除する',
       danger: true,
     });
@@ -164,7 +164,7 @@ export async function render(ctx) {
       { key: 'menu', label: '', width: 40, fixed: true, noResize: true, align: 'center',
         render: (r) => iconButton('more', '操作', (e) => openMenu(e.currentTarget, [
           { text: '接続テスト', onClick: () => test(r) },
-          { text: '検索のページで使う', href: `/search?credential=${encodeURIComponent(r.id)}` },
+          { text: '検索ページで使用', href: `/search?credential=${encodeURIComponent(r.id)}` },
           { text: '削除', onClick: () => remove([r.id]) },
         ])) },
     ],

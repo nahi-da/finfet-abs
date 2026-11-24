@@ -233,7 +233,7 @@ class ArmClient:
         r = self.find_storage_account(name)
         if r is None:
             raise BackendError("StorageAccountNotFound",
-                               f"ストレージアカウント「{name}」が見つかりません（ARM で読み取れるストレージアカウントだけ、アクセスキーを取得できます）。")
+                               f"ストレージアカウント「{name}」が見つかりません（アクセスキーを取得できるのは、ARM で読み取れるストレージアカウントのみです）。")
         if r.get("allowSharedKeyAccess") is False:
             raise BackendError("KeyBasedAuthenticationNotPermitted",
                                "このストレージアカウントでは、アクセスキーによる認証が無効にされています。Entra ID（ユーザーアカウント）を使用してください。")

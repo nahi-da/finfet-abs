@@ -207,7 +207,7 @@ def register(router, app) -> None:
         def run():
             net = s.get("network")
             if net is None:
-                return {"results": [{"target": t, "via": "直接", "ok": True, "message": "デモモードのため確認しません。"}
+                return {"results": [{"target": t, "via": "直接", "ok": True, "message": "デモモードのため、確認を省略します。"}
                                     for t in ("login.microsoftonline.com", "management.azure.com")]}
             from ..azure.errors import network_message
             from ..azure.proxy import proxy_label, resolve_proxy
