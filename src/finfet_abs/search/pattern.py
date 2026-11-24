@@ -15,8 +15,8 @@ from typing import Callable
 from . import datetime_vars as dtv
 from . import prefix as prefixmod
 from .datetime_vars import FmtItem, Zone
-from .variables import (MAX_ENUM, NAME_RE, VariableError, choice_as_string, number_fragment, number_values,
-                        string_fragment, string_values)
+from .variables import (MAX_ENUM, NAME_RE, VariableError, choice_as_string, exclude_check, number_fragment,
+                        number_values, string_fragment, string_values)
 
 #: コンテナー名の展開の上限（3.2.8）
 MAX_CONTAINERS = 100
@@ -324,10 +324,16 @@ def compile_path(pattern: str, variables: dict, *, ignore_case: bool = False, in
                     frags[name] = frag
                     if check is not None:
                         checks.append(lambda m, n=name, c=check: c(m.group(f"v_{n}")))
+                    ex = exclude_check(name, defn.get("value") or {}, number=True)
+                    if ex is not None:
+                        checks.append(lambda m, n=name, c=ex: c(m.group(f"v_{n}")))
                 elif vtype == "choice":
                     frags[name] = string_fragment(name, choice_as_string(name, defn.get("value") or {}))
                 else:
                     frags[name] = string_fragment(name, defn.get("value") or {})
+                    ex = exclude_check(name, defn.get("value") or {}, ignore_case=ignore_case)
+                    if ex is not None:
+                        checks.append(lambda m, n=name, c=ex: c(m.group(f"v_{n}")))
                 extractors.append(lambda m, vals, n=name: vals.__setitem__(n, m.group(f"v_{n}")))
         except VariableError as exc:
             issues.append(Issue(None, str(exc), name))
