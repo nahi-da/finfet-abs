@@ -644,3 +644,18 @@ a.popup-body:hover .popup-open { text-decoration: underline; }
 .notice[hidden] { display: none; }
 .choice-item.is-new::after { content: '新規'; margin-left: var(--sp-1); font-size: var(--fs-small); color: var(--warn); }
 .ex-chips .chip { text-decoration: line-through; }
+
+/* チュートリアル（4.12。v1.7.0）: 説明する部品の周りを暗くし、横に吹き出しを表示します */
+.tut-layer { position: fixed; inset: 0; z-index: 2000; pointer-events: none; }
+.tut-shade { position: fixed; background: rgba(0, 0, 0, .55); pointer-events: auto; }
+.tut-ring { position: fixed; border: 2px solid var(--accent); border-radius: var(--radius); box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 30%, transparent); pointer-events: none; }
+.tut-ring[hidden] { display: none; }
+.tut-bubble { position: fixed; width: min(380px, calc(100vw - 16px)); pointer-events: auto; background: var(--bg-raised); color: var(--text);
+  border: 1px solid var(--line-strong); border-radius: var(--radius); box-shadow: 0 12px 40px var(--shadow); padding: var(--sp-3) var(--sp-4); }
+.tut-count { font-size: var(--fs-small); color: var(--text-muted); }
+.tut-title { font-weight: 600; margin: 2px 0 var(--sp-2); }
+.tut-text { margin: 0 0 var(--sp-2); }
+.tut-action { margin: 0 0 var(--sp-2); font-weight: 600; }
+.tut-missing { margin: 0 0 var(--sp-2); color: var(--warn); }
+.tut-btns { display: flex; align-items: center; gap: var(--sp-2); margin-top: var(--sp-3); }
+.tut-btns .push { margin-left: auto; }

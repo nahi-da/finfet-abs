@@ -15,4 +15,8 @@ def setup_demo(app) -> None:
     backend = DemoBackend(app.settings)
     counts = populate(backend, app.settings.get("demo.blob_count"), now=app.clock.now())
     app.services["backend"] = backend
+    # 保存先の既定は、デモのデータ保存先の downloads（実際の「ダウンロード」フォルダーに架空のファイルを書き込まないため。4.12）
+    from ..core.settings import defaults
+    if app.settings.get("fetch.directory") == defaults()["fetch.directory"]:
+        app.settings.update({"fetch.directory": str(app.location.data_dir / "downloads")})
     log.info("デモモードで起動しました（Azure には接続しません。架空の Blob %s 件）", f"{sum(counts.values()):,}")

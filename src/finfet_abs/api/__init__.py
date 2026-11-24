@@ -15,7 +15,7 @@ def build_router(app) -> Router:
     fs.register(router, app)
     import importlib
     import importlib.util
-    for name in ("auth_api", "search_api", "jobs_api", "history_api"):
+    for name in ("auth_api", "search_api", "jobs_api", "history_api", "tutorial_api"):
         if importlib.util.find_spec(f"{__name__}.{name}") is None:
             continue
         importlib.import_module(f"{__name__}.{name}").register(router, app)

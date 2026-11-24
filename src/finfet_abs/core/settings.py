@@ -62,6 +62,8 @@ SCHEMA: list[Field] = [
     # 既定は「画面の大きさに合わせる」（v1.5.2: 依頼者の意見。広い画面で UI が小さく感じるため）
     _c("ui.font_size", "auto", "auto", "normal", "large"),
     Field("ui.tables", "dict", {}),
+    # チュートリアル（4.12。v1.7.0）: 初めて起動したときの確認を表示したか
+    _b("tutorial.offered", False),
     # 検索
     _c("search.input_timezone", "local", "local", "utc"),
     _i("search.merge_trial_pages", 1, 1, 10),

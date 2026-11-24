@@ -42,6 +42,7 @@ def register(router, app) -> None:
             "mode": loc.mode,
             "mode_label": loc.mode_label,
             "demo": app.demo,
+            "tutorial_offered": bool(app.settings.get("tutorial.offered")),
             "start_page": app.settings.get("ui.start_page"),
             "default_client_id": app.settings.get("auth.client_id") == DEFAULT_CLIENT_ID,
             "acl_warning": loc.mode == "portable" and loc.acl_ok is False,
