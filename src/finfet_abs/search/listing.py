@@ -8,6 +8,7 @@
 
 from __future__ import annotations
 
+import bisect
 import logging
 import os
 import threading
@@ -42,6 +43,31 @@ def azure_order(name: str) -> bytes:
     return name.encode("utf-16-be", "surrogatepass")
 
 
+def sorted_items(items: list[BlobInfo]) -> list[BlobInfo]:
+    """Azure の名前の順に並んだ一覧（並んでいなければ並べ替えた写し）。"""
+    keys = [azure_order(b.name) for b in items]
+    if all(keys[i] <= keys[i + 1] for i in range(len(keys) - 1)):
+        return list(items)
+    order = sorted(range(len(items)), key=keys.__getitem__)
+    return [items[i] for i in order]
+
+
+def prefix_range(items: list[BlobInfo], prefix: str) -> list[BlobInfo]:
+    """Azure の名前の順に並んだ一覧から、prefix で始まる Blob を二分探索で取り出します（v1.7.0）。
+
+    UTF-16 の符号単位の順では、prefix で始まる名前は連続して並ぶため、始まりを二分探索で求め、
+    prefix で始まらない名前までを取り出します（一覧の件数 × prefix の数の比較をしないため）。
+    """
+    if not prefix:
+        return list(items)
+    i = bisect.bisect_left(items, azure_order(prefix), key=lambda b: azure_order(b.name))
+    j = i
+    n = len(items)
+    while j < n and items[j].name.startswith(prefix):
+        j += 1
+    return items[i:j]
+
+
 def covered_by_trial(prefix: str, last: str) -> bool:
     """まとめて取得したページ（最後の名前 last まで）で、prefix の Blob をすべて取得済みか。"""
     return azure_order(prefix) < azure_order(last) and not last.startswith(prefix)
@@ -70,7 +96,7 @@ class ListingCache:
                 if not prefix.startswith(e.prefix):
                     continue
                 if e.upper is None or covered_by_trial(prefix, e.upper):
-                    return [b for b in e.items if b.name.startswith(prefix)]
+                    return prefix_range(e.items, prefix)
         return None
 
     def put(self, key: tuple, prefix: str, items: list[BlobInfo], upper: str | None = None) -> None:
@@ -78,7 +104,7 @@ class ListingCache:
         with self._lock:
             if self._count + len(items) > self.max_items:
                 return
-            self._entries.setdefault(key, []).append(_Entry(prefix, upper, list(items)))
+            self._entries.setdefault(key, []).append(_Entry(prefix, upper, sorted_items(items)))
             self._count += len(items)
 
 
@@ -150,14 +176,14 @@ class SharedListing:
                         best = e
             if best is None:
                 return None
-            items = best.items if prefix == best.prefix and best.upper is None else \
-                [b for b in best.items if b.name.startswith(prefix)]
+            items = best.items if prefix == best.prefix and best.upper is None else prefix_range(best.items, prefix)
             return items, best.fetched
 
     def put(self, key: tuple, prefix: str, items: list[BlobInfo], upper: str | None = None,
             fetched: float | None = None) -> None:
         if not self.enabled or len(items) > self.max_items:
             return
+        items = sorted_items(items)  # prefix の範囲を二分探索で取り出すため、名前の順にします
         with self._lock:
             now = self.clock()
             entries = self._entries.setdefault(key, [])
@@ -166,7 +192,7 @@ class SharedListing:
                 for e in [e for e in entries if e.prefix.startswith(prefix)]:
                     entries.remove(e)
                     self._count -= len(e.items)
-            entries.append(_Held(prefix, upper, list(items), now if fetched is None else fetched))
+            entries.append(_Held(prefix, upper, items, now if fetched is None else fetched))
             self._count += len(items)
             self._purge(now)
 

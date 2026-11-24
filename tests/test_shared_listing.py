@@ -67,6 +67,28 @@ class SharedListingTest(unittest.TestCase):
         self.assertEqual(view2.reused_at, 1000.0)
 
 
+class PrefixRangeTest(unittest.TestCase):
+    """保持した一覧からの prefix の取り出し（二分探索。v1.7.0）。"""
+
+    def test_matches_linear_scan(self) -> None:
+        from finfet_abs.search.listing import azure_order, prefix_range, sorted_items
+        names = ["a/1", "a/2", "a/ア", "a/😀", "a/ｱ", "ab/1", "b/1", "a", "a/", "a/1/x", "あ/1", "😀/1", "ｱ/1"]
+        items = sorted_items([b(n) for n in reversed(names)])  # 並んでいなければ並べ替えます
+        self.assertEqual([x.name for x in items], sorted(names, key=azure_order))
+        for p in ["", "a", "a/", "a/1", "a/ア", "a/😀", "ab", "あ", "😀", "ｱ", "z", "a/1/x/"]:
+            self.assertEqual([x.name for x in prefix_range(items, p)], [n for n in sorted(names, key=azure_order) if n.startswith(p)], p)
+
+    def test_many_prefixes_are_fast(self) -> None:
+        import time
+        sl = SharedListing()
+        sl.put(("k",), "logs/", [b(f"logs/{d:03d}/{h:02d}/{m:02d}.json") for d in range(200) for h in range(24) for m in range(0, 60, 5)])
+        prefixes = [f"logs/{d:03d}/{h:02d}/" for d in range(30) for h in range(24)]
+        t = time.perf_counter()
+        self.assertIsNotNone(sl.coverage(("k",), prefixes))
+        self.assertEqual(sum(len(sl.lookup(("k",), p)[0]) for p in prefixes), 30 * 24 * 12)
+        self.assertLess(time.perf_counter() - t, 1.0)  # 57,600 件・prefix 720 個（以前は数秒）
+
+
 class SearchReuseTest(SearchTestBase):
     def lists(self) -> int:
         return len([r for r in self.be.requests if r[0] == "list"])
