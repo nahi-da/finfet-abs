@@ -680,3 +680,23 @@ a.popup-body:hover .popup-open { text-decoration: underline; }
 .ip-stats > span:empty { display: none; }
 .ip-num { font-size: 1.25em; }
 .infer-progress .infer-pause { margin: var(--sp-1) 0 0; }
+
+/* チュートリアルの章・いまの画面・操作・結果（v1.7.4） */
+.tut-bubble.tut-intro { width: min(520px, calc(100vw - 16px)); padding: var(--sp-4) var(--sp-5, 20px); }
+.tut-chapter { display: flex; flex-direction: column; gap: 4px; margin-bottom: var(--sp-2); }
+.tut-segs { display: flex; gap: 3px; }
+.tut-seg { flex: 1; height: 4px; border-radius: 2px; background: var(--line); }
+.tut-seg.done { background: color-mix(in srgb, var(--accent) 55%, var(--line)); }
+.tut-seg.current { background: var(--accent); }
+.tut-chapter-name { font-size: var(--fs-small); color: var(--text-muted); font-weight: 600; }
+.tut-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px var(--sp-3); }
+.tut-where { font-size: var(--fs-small); color: var(--text-muted); margin-left: auto; }
+.tut-kicker { margin-top: var(--sp-2); font-size: var(--fs-small); color: var(--accent); font-weight: 700; letter-spacing: .05em; }
+.tut-intro .tut-title { font-size: 1.2em; }
+.tut-list { margin: 0 0 var(--sp-2); padding-left: 1.6em; }
+.tut-list li { margin: 2px 0; }
+.tut-action { display: flex; gap: var(--sp-2); align-items: baseline; margin: var(--sp-2) 0; padding: var(--sp-2) var(--sp-3); border-radius: var(--radius);
+  background: color-mix(in srgb, var(--accent) 14%, transparent); border-left: 3px solid var(--accent); font-weight: 600; }
+.tut-action-label { flex: none; font-size: var(--fs-small); color: var(--accent); }
+.tut-done { display: flex; gap: var(--sp-2); align-items: center; margin: 0 0 var(--sp-2); font-weight: 700; color: var(--ok, #4cc38a); }
+.tut-done-mark { display: inline-grid; place-items: center; width: 1.5em; height: 1.5em; border-radius: 50%; background: color-mix(in srgb, var(--ok, #4cc38a) 20%, transparent); }

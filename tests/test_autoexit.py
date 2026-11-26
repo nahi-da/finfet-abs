@@ -12,7 +12,7 @@ from .helpers import Client, TempDirMixin, make_app, quiet_logs
 
 class FakeSettings:
     def __init__(self, **kw) -> None:
-        self.v = {"exit.when_closed": True, "exit.wait_minutes": 1, **kw}
+        self.v = {"exit.when_closed": True, "exit.wait_seconds": 60, **kw}
 
     def get(self, key):
         return self.v[key]
@@ -101,7 +101,7 @@ class AutoExitTest(unittest.TestCase):
         self.ae.set_state("a", "closed")
         self.assertFalse(self.advance(600))
         self.settings.v["exit.when_closed"] = True
-        self.settings.v["exit.wait_minutes"] = 5
+        self.settings.v["exit.wait_seconds"] = 300
         self.assertFalse(self.advance(295))
         self.assertTrue(self.advance(10))
 
@@ -114,6 +114,27 @@ class AutoExitTest(unittest.TestCase):
         self.assertFalse(self.ae.check())
         self.assertTrue(self.ae.connected())
         self.ae.poll_begin("a")
+        self.assertFalse(self.advance(600))
+
+    def test_default_five_seconds(self) -> None:
+        self.settings.v["exit.wait_seconds"] = 5
+        self.ae.poll_begin("a")
+        self.ae.poll_end("a")
+        self.ae.set_state("a", "closed")
+        self.assertFalse(self.advance(4, step=1))
+        self.assertTrue(self.advance(2, step=1))
+
+    def test_unused_spawned_demo_exits(self) -> None:
+        ae = AutoExit(self.settings, busy=lambda: False, on_exit=self.on_exit, clock=lambda: self.now, unused_seconds=120)
+        self.ae = ae
+        self.assertFalse(self.advance(115))
+        self.assertTrue(self.advance(10))
+        self.assertEqual(self.exits, 1)
+
+    def test_unused_not_applied_after_connect(self) -> None:
+        ae = AutoExit(self.settings, busy=lambda: False, on_exit=self.on_exit, clock=lambda: self.now, unused_seconds=120)
+        self.ae = ae
+        ae.poll_begin("a")
         self.assertFalse(self.advance(600))
 
     def test_reload_keeps_running(self) -> None:

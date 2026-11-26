@@ -60,11 +60,19 @@ class TutorialApiTest(unittest.TestCase):
 
     def test_launch_next(self) -> None:
         app, c = self.client(False)
-        for nxt, where in (("tutorial", "/search?tutorial=1"), ("https://example.com/", "/"), ("", "/")):
+        for nxt in ("https://example.com/", ""):
             code = app.security.new_launch_code()
             r = c.request("GET", f"/auth/launch?code={code}&next={nxt}", cookie=False)
             self.assertEqual(r.status, 302)
-            self.assertEqual(r.header("Location"), where, nxt)
+            self.assertEqual(r.header("Location"), "/", nxt)
+        # チュートリアルは転送せず、Cookie を渡すページから同じサイトの中で移ります（v1.7.4。Firefox 系で S4 に拒否されないように）
+        code = app.security.new_launch_code()
+        r = c.request("GET", f"/auth/launch?code={code}&next=tutorial", cookie=False)
+        self.assertEqual(r.status, 200)
+        self.assertIn(app.security.cookie_name + "=", r.header("Set-Cookie") or "")
+        self.assertIn('http-equiv="refresh" content="0;url=/search?tutorial=1"', r.text)
+        # 同じ起動コードは 2 回目は使えません
+        self.assertEqual(c.request("GET", f"/auth/launch?code={code}&next=tutorial", cookie=False).status, 400)
 
     def test_demo_launch_url(self) -> None:
         spawned = []

@@ -2,11 +2,19 @@
 
 /* ---- 設定（4.9） */
 .settings-layout { display: grid; grid-template-columns: 180px minmax(0, 1fr); gap: var(--sp-6); align-items: start; }
-.settings-toc { position: sticky; top: calc(var(--topbar-h) + var(--sp-4)); display: flex; flex-direction: column; }
+/* ページの見出しと節の一覧は、スクロールしても上に残します（v1.7.4。依頼者の意見） */
+.settings-head { position: sticky; top: var(--topbar-h); z-index: 5; background: var(--bg); margin-top: calc(-1 * var(--sp-4)); padding-top: var(--sp-4); }
+.settings-head .page-head { margin-bottom: var(--sp-3); }
+.settings-chips { display: none; gap: var(--sp-1); overflow-x: auto; scrollbar-width: none; padding-bottom: var(--sp-2); border-bottom: 1px solid var(--line); margin-bottom: var(--sp-3); }
+.settings-chips::-webkit-scrollbar { display: none; }
+.settings-chips a { flex: none; padding: var(--sp-1) var(--sp-3); border-radius: 999px; border: 1px solid var(--line); color: var(--text-muted); white-space: nowrap; }
+.settings-chips a:hover { color: var(--text); text-decoration: none; }
+.settings-chips a.current { color: var(--text); border-color: var(--link); background: var(--bg-selected); }
+.settings-toc { position: sticky; top: calc(var(--topbar-h) + var(--settings-head-h, 0px) + var(--sp-2)); display: flex; flex-direction: column; }
 .settings-toc a { padding: var(--sp-1) var(--sp-3); color: var(--text-muted); border-left: 2px solid var(--line); }
 .settings-toc a:hover { color: var(--text); text-decoration: none; }
 .settings-toc a.current { color: var(--text); border-left-color: var(--link); }
-.settings-body section { padding: var(--sp-4) 0 var(--sp-6); border-top: 1px solid var(--line); scroll-margin-top: calc(var(--topbar-h) + var(--sp-2)); }
+.settings-body section { padding: var(--sp-4) 0 var(--sp-6); border-top: 1px solid var(--line); scroll-margin-top: calc(var(--topbar-h) + var(--settings-head-h, 0px) + var(--sp-2)); }
 .settings-body section:first-child { border-top: 0; padding-top: 0; }
 .settings-body .form { --label-w: 16em; }
 .job-options .form { --label-w: 14em; }
@@ -15,6 +23,7 @@
 @media (max-width: 1100px) {
   .settings-layout { grid-template-columns: minmax(0, 1fr); }
   .settings-toc { display: none; }
+  .settings-chips { display: flex; }
 }
 
 /* ---- 準備中のページ */
@@ -375,3 +384,7 @@ details.more[open] summary { margin-bottom: var(--sp-2); }
   .search-cols .vars-col { border-left: 1px solid var(--line); padding-left: var(--sp-8); min-height: 100%; }
 }
 /* 設定のページは、広い画面でも 1 列にします（v1.7.2。依頼者の依頼。以前は 1600px 以上で 2 列） */
+/* 狭い画面では、main.page の上の余白が小さいため、見出しの帯の位置を合わせます（v1.7.4） */
+@media (max-width: 639px) {
+  .settings-head { margin-top: calc(-1 * var(--sp-3)); padding-top: var(--sp-3); }
+}

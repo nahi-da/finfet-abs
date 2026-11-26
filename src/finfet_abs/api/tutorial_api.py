@@ -30,8 +30,11 @@ def _spawn_demo() -> None:
     """デモモードの本ツールを、同じ Python の実行環境・作業フォルダーで起動します。"""
     flags = 0
     if os.name == "nt":
-        flags = subprocess.CREATE_NEW_CONSOLE | subprocess.CREATE_NEW_PROCESS_GROUP
-    subprocess.Popen([sys.executable, "-X", "utf8", "-m", "finfet_abs", "--demo", "--no-browser"],
+        # コンソールのウィンドウは表示しません（v1.7.4。依頼者の意見: 表示されたウィンドウが前面に出て、ブラウザが
+        # 後ろに隠れていました）。デモモードは、画面をすべて閉じると自動で終了し、画面が開かれないままなら
+        # --for-tutorial により終了します
+        flags = subprocess.CREATE_NO_WINDOW | subprocess.CREATE_NEW_PROCESS_GROUP
+    subprocess.Popen([sys.executable, "-X", "utf8", "-m", "finfet_abs", "--demo", "--no-browser", "--for-tutorial"],
                      cwd=os.getcwd(), env=os.environ.copy(), creationflags=flags,
                      stdin=subprocess.DEVNULL, close_fds=True)
 

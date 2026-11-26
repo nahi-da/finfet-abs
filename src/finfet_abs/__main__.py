@@ -14,6 +14,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--no-browser", action="store_true", help="ブラウザを開かない")
     parser.add_argument("--port", type=int, default=None, help="ポートを固定する")
     parser.add_argument("--demo", action="store_true", help="デモモードで起動する")
+    # チュートリアルのために、通常のモードの本ツールが起動するときに付けます（内部用。画面が開かれないままなら終了します）
+    parser.add_argument("--for-tutorial", action="store_true", help=argparse.SUPPRESS)
     parser.add_argument("--data-dir", default=None, help="データ保存先を指定する（開発・テスト用）")
     parser.add_argument("--self-check", action="store_true", help="動作に必要なコンポーネントを確認して終了する")
     parser.add_argument("--version", action="store_true", help="版を表示して終了する")

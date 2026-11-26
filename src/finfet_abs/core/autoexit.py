@@ -4,8 +4,11 @@
 タブを閉じると、画面は pagehide で「closed」を送ります。Edge のスリープ中のタブなどで画面が凍結されるときは
 freeze で「frozen」を送り、閉じたものとは見なしません。
 
-すべての画面がつながっていない状態が、設定の時間（exit.wait_minutes）続いたら、本ツールを終了します。
-ただし、実行中のジョブや検索がある間は終了せず、終わってから終了します。
+すべての画面がつながっていない状態が、設定の時間（exit.wait_seconds。v1.7.4 から秒で、既定 5 秒）続いたら、
+本ツールを終了します。ただし、実行中のジョブや検索がある間は終了せず、終わってから終了します。
+
+チュートリアルのために起動したデモモード（unused_seconds を指定）は、画面が一度もつながらないまま、その秒数が
+過ぎたときも終了します（コンソールのウィンドウを表示せずに起動するため、残り続けないように）。
 """
 
 from __future__ import annotations
@@ -21,7 +24,7 @@ log = logging.getLogger(__name__)
 #: 最後のイベントの要求の後、つながっていると見なす秒数（ロングポーリングの待ちは 25 秒）
 GRACE_SECONDS = 45.0
 #: 確かめる間隔（秒）
-TICK_SECONDS = 5.0
+TICK_SECONDS = 1.0
 #: 確かめる間隔がこれより空いたら、PC のスリープから戻ったと見なし、画面がつなぎ直すのを待ちます（秒）
 SLEEP_GAP_SECONDS = 60.0
 #: 覚えておく画面の数の上限
@@ -39,8 +42,10 @@ class AutoExit:
     """画面のつながりを見て、すべて閉じたら終了を求めます。"""
 
     def __init__(self, settings, *, busy: Callable[[], bool], on_exit: Callable[[], None],
-                 clock: Callable[[], float] = time.monotonic) -> None:
+                 clock: Callable[[], float] = time.monotonic, unused_seconds: float | None = None) -> None:
         self._settings = settings
+        self._unused_seconds = unused_seconds
+        self._started = clock()
         self._busy = busy
         self._on_exit = on_exit
         self._clock = clock
@@ -110,6 +115,17 @@ class AutoExit:
                     c.last = now
                 self._idle_since = None
             self._last_tick = now
+            if (not self._fired and not self._ever and self._unused_seconds is not None
+                    and now - self._started >= self._unused_seconds):
+                self._fired = True
+                unused = True
+            else:
+                unused = False
+        if unused:
+            log.info("画面が開かれないまま %d 秒経過したため、終了します", int(self._unused_seconds))
+            self._on_exit()
+            return True
+        with self._lock:
             if self._fired or not self._ever or not self._settings.get("exit.when_closed"):
                 self._idle_since = None
                 return False
@@ -120,7 +136,7 @@ class AutoExit:
             if self._idle_since is None:
                 self._idle_since = now
             waited = now - self._idle_since
-        if waited < float(self._settings.get("exit.wait_minutes")) * 60:
+        if waited < float(self._settings.get("exit.wait_seconds")):
             return False
         try:
             if self._busy():
@@ -130,7 +146,7 @@ class AutoExit:
             return False
         with self._lock:
             self._fired = True
-        log.info("画面が閉じられてから %d 分経過したため、終了します", int(waited // 60))
+        log.info("画面が閉じられてから %d 秒経過したため、終了します", int(waited))
         self._on_exit()
         return True
 

@@ -37,6 +37,20 @@ class SettingsTest(TempDirMixin):
         data = json.loads(p.read_text(encoding="utf-8"))
         self.assertIn("search", data)
 
+    def test_exit_wait_minutes_migrates_to_seconds(self) -> None:
+        # v1.7.4: 分で指定していた終了までの時間を、秒に移します。既定（1 分）のままなら、新しい既定（5 秒）にします
+        for old, expect in ((1, 5), (10, 600), (None, 5)):
+            p = self.tmp / f"s{old}.json"
+            p.write_text(json.dumps({"exit": {"wait_minutes": old} if old is not None else {}}), encoding="utf-8")
+            s = Settings(p)
+            s.load()
+            self.assertEqual(s.get("exit.wait_seconds"), expect, old)
+        p = self.tmp / "s-new.json"
+        p.write_text(json.dumps({"exit": {"wait_minutes": 10, "wait_seconds": 30}}), encoding="utf-8")
+        s = Settings(p)
+        s.load()
+        self.assertEqual(s.get("exit.wait_seconds"), 30)
+
     def test_broken_file(self) -> None:
         p = self.tmp / "settings.json"
         p.write_text("{broken", encoding="utf-8")
