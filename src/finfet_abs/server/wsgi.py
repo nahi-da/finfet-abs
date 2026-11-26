@@ -7,7 +7,7 @@ import re
 from typing import Callable
 
 from ..core.errors import AppError
-from .http import Request, Response, error_response, file_response, json_response, redirect, simple_page
+from .http import Request, Response, error_response, file_response, html_response, json_response, redirect, simple_page
 from .router import Router
 from .security import CSRF_HEADER, INSTANCE_HEADER, SECURITY_HEADERS, UNSAFE_METHODS, Security
 from .static import StaticFiles
@@ -82,6 +82,7 @@ class WsgiApp:
 
         # S5: DNS リバインディング
         if not sec.host_ok(req.header("host")):
+            log.warning("Host が違うため拒否しました: %s %s（Host: %s）", req.method, path, req.header("host"))
             return Response(403, b"Forbidden", content_type="text/plain; charset=utf-8")
 
         # サインインの戻り（2.5 の例外。Cookie を求めない。S5〜S7 は行う）
@@ -92,6 +93,9 @@ class WsgiApp:
 
         # S4: ほかの Web サイトからの要求
         if not sec.origin_ok(req.header("origin"), req.header("sec-fetch-site")):
+            # 拒否した理由を調べられるように、ヘッダーの値（秘密の値は含みません）を記録します
+            log.warning("ほかのサイトからの要求として拒否しました: %s %s（Origin: %s、Sec-Fetch-Site: %s、Sec-Fetch-Mode: %s）",
+                        req.method, path, req.header("origin"), req.header("sec-fetch-site"), req.header("sec-fetch-mode"))
             if is_api:
                 return error_response(AppError("FORBIDDEN_ORIGIN", "この要求は受け付けられません。", status=403))
             return Response(403, b"Forbidden", content_type="text/plain; charset=utf-8")
@@ -147,8 +151,18 @@ class WsgiApp:
         if not self.security.consume_launch_code(req.arg("code")):
             return simple_page("FinFeT", "このページの URL は無効か、有効期限が切れています。finfet-abs.bat を再度実行してください。", 400)
         # next は決めた値のみ受け付けます（任意の URL へのリダイレクトはしません。チュートリアル 4.12）
-        target = "/search?tutorial=1" if req.arg("next") == "tutorial" else "/"
-        return redirect(target, [self.security.session_cookie_header()])
+        if req.arg("next") == "tutorial":
+            # チュートリアルは、通常のモードの画面（別のポート）から開きます。Firefox 系のブラウザは、別のポートから開いた
+            # URL の転送（302）の先を「ほかのサイトからの要求」として送るため、S4 で拒否されていました（v1.7.4）。
+            # 転送せず、Cookie を渡すページから、同じサイトの中で移ります（meta refresh。スクリプトは使いません）
+            r = html_response('<!doctype html><html lang="ja"><head><meta charset="utf-8">'
+                              '<meta http-equiv="refresh" content="0;url=/search?tutorial=1"><title>FinFeT</title>'
+                              '<link rel="stylesheet" href="/css/tokens.css"><link rel="stylesheet" href="/css/simple.css"></head>'
+                              '<body><main><p>チュートリアルを開いています…</p>'
+                              '<p><a href="/search?tutorial=1">開かない場合は、ここをクリックしてください</a></p></main></body></html>')
+            r.headers.append(self.security.session_cookie_header())
+            return r
+        return redirect("/", [self.security.session_cookie_header()])
 
 
 def _is_backend_error(exc: Exception) -> bool:

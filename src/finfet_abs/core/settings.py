@@ -108,7 +108,8 @@ SCHEMA: list[Field] = [
     _b("queue.resume_on_startup", True),
     # 画面をすべて閉じた後の自動の終了（依頼者の意見。v1.3.0）
     _b("exit.when_closed", True),
-    _i("exit.wait_minutes", 1, 1, 1440),
+    # v1.7.4 から秒で指定します（依頼者の意見: 5 秒くらいで終了してほしい）。以前の exit.wait_minutes は load で移します
+    _i("exit.wait_seconds", 5, 5, 86400),
     # 負荷（3.4.5）
     _i("transfer.max_connections", 8, 1, 32),
     _i("transfer.check_concurrency", 4, 1, 16),
@@ -209,6 +210,14 @@ def _validate(f: Field, value: Any) -> Any:
     raise ValueError("unknown kind")
 
 
+def _migrate(raw: dict, flat: dict[str, Any]) -> None:
+    """以前の版の設定を、今の項目に移します。"""
+    # v1.7.4: exit.wait_minutes（分。既定 1）→ exit.wait_seconds（秒。既定 5）。既定のままだった場合は、新しい既定値にします
+    old = (raw.get("exit") or {}).get("wait_minutes") if isinstance(raw.get("exit"), dict) else None
+    if "exit.wait_seconds" not in flat and isinstance(old, int) and not isinstance(old, bool) and old != 1:
+        flat["exit.wait_seconds"] = max(5, min(86400, old * 60))
+
+
 def _flatten(obj: dict, prefix: str = "") -> dict[str, Any]:
     out: dict[str, Any] = {}
     for k, v in obj.items():
@@ -256,6 +265,7 @@ class Settings:
                     if not isinstance(raw, dict):
                         raise ValueError("not an object")
                     flat = _flatten(raw)
+                    _migrate(raw, flat)
                     need_write = False
                     for key, f in FIELDS.items():
                         if key not in flat:

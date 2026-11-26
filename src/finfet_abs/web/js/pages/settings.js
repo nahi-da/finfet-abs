@@ -64,7 +64,7 @@ const HELP = {
   'ui.browser_notifications': 'リハイドレートの完了などを、Windows の通知（ブラウザの通知）でも知らせます。本ツールの画面が背面にある場合のみ通知します。',
   'ui.blob_name_display': '検索結果などでの、Blob 名の表示方法の既定値です。',
   'exit.when_closed': '本ツールの画面をすべて閉じた場合に、本ツールを終了します。',
-  'exit.wait_minutes': '画面をすべて閉じてから、本ツールが終了するまでの時間です。',
+  'exit.wait_seconds': '画面をすべて閉じてから、本ツールが終了するまでの時間です（5 秒以上）。ページの再読み込みなどで、画面が一時的に閉じても終了しないよう、数秒の余裕を持たせています。',
   'log.level': 'ログに出力する内容の詳細度です。問題を調査する場合は DEBUG にしてください。',
   'log.max_files': 'ログファイルを保持する日数です。古いものから削除します。',
   'log.console': '本ツールの起動時に開くウィンドウ（コンソール）に、ログを表示します。ファイルのログと同様に、秘密の値は伏せ字にします。表示が追いつかない場合は、一部の行を省略します（ファイルにはすべて記録されます）。',
@@ -168,7 +168,7 @@ function sections(session) {
         ['ui.browser_notifications', 'ブラウザの通知', 'check', { text: 'リハイドレートの完了などを、ブラウザの通知でも知らせる' }],
         ['ui.blob_name_display', 'Blob 名の表示', 'select', { options: [['full', '全体'], ['common', '共通する階層を省略'], ['tail', '末尾のみ']] }],
         ['exit.when_closed', '自動の終了', 'check', { text: '本ツールの画面（ブラウザのタブ）をすべて閉じた場合に、本ツールを終了する（実行中のジョブ・検索がある場合は、完了後に終了します）' }],
-        ['exit.wait_minutes', '終了までの時間', 'num', { unit: '分（画面をすべて閉じてから）' }],
+        ['exit.wait_seconds', '終了までの時間', 'num', { unit: '秒（画面をすべて閉じてから）' }],
         ['__tutorial', 'チュートリアル', 'tutorial'],
         ['__other_browser', '別のブラウザで開く', 'other_browser'],
       ],
@@ -401,9 +401,12 @@ export async function render(ctx) {
 
   const secs = sections(session);
   const toc = h('nav', { class: 'settings-toc', 'aria-label': '設定の節' });
+  // 幅が狭いときは、左の目次の代わりに、ページの見出しの下に節を横に並べます（v1.7.4）
+  const chips = h('nav', { class: 'settings-chips', 'aria-label': '設定の節' });
   const body = h('div', { class: 'settings-body' });
   for (const sec of secs) {
     toc.appendChild(h('a', { href: `#${sec.id}`, dataset: { sec: sec.id } }, sec.title));
+    chips.appendChild(h('a', { href: `#${sec.id}`, dataset: { sec: sec.id } }, sec.title));
     body.appendChild(h('section', { id: sec.id }, h('h2', { text: sec.title }), formGrid(...sec.items.map(buildWithHelp))));
   }
 
@@ -447,7 +450,12 @@ export async function render(ctx) {
     }
   }
 
-  root.append(h('div', { class: 'page-head' }, h('h1', { text: '設定' })), h('div', { class: 'settings-layout' }, toc, body), bar);
+  // ページの見出しと節の一覧は、スクロールしても上に残します（v1.7.4。依頼者の意見）
+  const head = h('div', { class: 'settings-head' }, h('div', { class: 'page-head' }, h('h1', { text: '設定' })), chips);
+  root.append(head, h('div', { class: 'settings-layout' }, toc, body), bar);
+  // 見出しの高さ（幅で変わります）を、目次の位置と、節へ移ったときの余白に使います
+  const headRo = new ResizeObserver(() => root.style.setProperty('--settings-head-h', `${Math.ceil(head.getBoundingClientRect().height)}px`));
+  headRo.observe(head);
   load(saved);
   updateDirty();
   ctx.setGuard(() => (Object.keys(changes()).length ? '保存されていない設定の変更があります。' : null));
@@ -455,6 +463,7 @@ export async function render(ctx) {
   // 現在の節を目次で示します。上端を過ぎた最後の節を現在の節とし、最後までスクロールしたら最後の節にします
   // （v1.5.0: 最後の節が短いと、上端まで来ずにハイライトされなかったため）。目次をクリックした節は、次に手で動かすまで保ちます
   const links = new Map([...toc.querySelectorAll('a')].map((a) => [a.dataset.sec, a]));
+  const chipLinks = new Map([...chips.querySelectorAll('a')].map((a) => [a.dataset.sec, a]));
   const sectionEls = [...body.querySelectorAll(':scope > section')];
   const scroller = (() => {
     for (let el = body.parentElement; el && el !== document.body; el = el.parentElement) {
@@ -464,10 +473,23 @@ export async function render(ctx) {
     return document.scrollingElement || document.documentElement;
   })();
   let pinned = null;
-  const setCurrent = (id) => links.forEach((a, k) => a.classList.toggle('current', k === id));
+  let shownId = null;
+  const setCurrent = (id) => {
+    links.forEach((a, k) => a.classList.toggle('current', k === id));
+    chipLinks.forEach((a, k) => a.classList.toggle('current', k === id));
+    if (id === shownId) return;
+    shownId = id;
+    // 横に並べた節の一覧では、現在の節が見えるように横にスクロールします（ページは縦に動かしません）
+    const a = chipLinks.get(id);
+    if (a && chips.scrollWidth > chips.clientWidth) {
+      const l = a.offsetLeft - chips.offsetLeft;
+      if (l < chips.scrollLeft || l + a.offsetWidth > chips.scrollLeft + chips.clientWidth) chips.scrollLeft = Math.max(0, l - 16);
+    }
+  };
   const updateCurrent = () => {
     if (pinned) { setCurrent(pinned); return; }
-    const top = (scroller === document.scrollingElement || scroller === document.documentElement) ? 0 : scroller.getBoundingClientRect().top;
+    // 上に残す見出しの下端を、節の上端と比べる位置にします（v1.7.4）
+    const top = head.getBoundingClientRect().bottom - 8;
     let cur = sectionEls[0]?.id;
     let curTop = -Infinity;
     for (const s of sectionEls) {
@@ -484,9 +506,10 @@ export async function render(ctx) {
   const unpin = () => { pinned = null; };
   scrollTarget.addEventListener('scroll', onScroll, { passive: true });
   for (const ev of ['wheel', 'touchstart', 'keydown']) window.addEventListener(ev, unpin, { passive: true });
-  toc.addEventListener('click', (e) => { const a = e.target.closest('a[data-sec]'); if (a) { pinned = a.dataset.sec; setCurrent(pinned); } });
+  for (const nav of [toc, chips]) nav.addEventListener('click', (e) => { const a = e.target.closest('a[data-sec]'); if (a) { pinned = a.dataset.sec; setCurrent(pinned); } });
   ctx.onLeave(() => {
     scrollTarget.removeEventListener('scroll', onScroll);
+    headRo.disconnect();
     for (const ev of ['wheel', 'touchstart', 'keydown']) window.removeEventListener(ev, unpin);
   });
   updateCurrent();

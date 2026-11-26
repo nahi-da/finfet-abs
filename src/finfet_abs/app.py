@@ -140,6 +140,8 @@ def run(args) -> int:
     location = paths.resolve(args.data_dir, demo_dir=demo_dir)
     logs.setup(location.logs_dir)
     app = App(location, demo=demo)
+    # チュートリアルのために起動したデモモードは、画面が開かれないまま 3 分たったら終了します（v1.7.4）
+    app.unused_exit_seconds = 180.0 if demo and getattr(args, "for_tutorial", False) else None
     app.start()
     logs.set_level(app.settings.get("log.level"))
     logs.set_max_files(app.settings.get("log.max_files"))

@@ -115,6 +115,7 @@ def setup_services(app) -> None:
     # 画面をすべて閉じた後の自動の終了（依頼者の意見。v1.3.0）
     from .core.autoexit import AutoExit
     s["auto_exit"] = AutoExit(app.settings, on_exit=app.request_shutdown,
-                              busy=lambda: bool(s["jobs"].running_job_names()) or s["search"].any_running())
+                              busy=lambda: bool(s["jobs"].running_job_names()) or s["search"].any_running(),
+                              unused_seconds=getattr(app, "unused_exit_seconds", None))
     s["auto_exit"].start()
     app.on_stop(s["auto_exit"].stop)

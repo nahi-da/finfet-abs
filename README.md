@@ -1,5 +1,7 @@
 # FinFeT（Azure Blob Storage用検索・取得ツール）
 
+FinFeT は **Fin**ding & **Fe**tching **T**ool の略です。
+
 > 本ツールは、Azure Blob Storage を利用するための非公式のツールです。Microsoft Corporation およびその関連会社が開発・提供するものではなく、Microsoft による提携、承認、後援を受けていません。Microsoft、Azure は、Microsoft グループの企業の商標です。
 >
 > This is an unofficial tool for Azure Blob Storage. It is not developed, provided, endorsed, or sponsored by Microsoft Corporation or its affiliates. Microsoft and Azure are trademarks of the Microsoft group of companies.
@@ -23,7 +25,7 @@ Archive 層の Blob は、そのままでは読み取れません。本ツール
 - **期間の指定**: 日付・時刻の入力欄、「今日」「直近 7 日」などの指定、Blob が存在する期間の表示により、検索する期間を指定します。
 - **ジョブとキュー**: 選択した Blob の取得を「ジョブ」として登録し、順番に実行します。リハイドレートの要求、完了の確認、ダウンロード、MD5 の照合までを一つのジョブで行います。本ツールを終了しても、次回の起動時に続きから再開します。
 - **圧縮ファイルの展開**（任意）: ダウンロードした zip・tar・gz・bz2・xz のファイルを、同じフォルダーに展開します。
-- **自動終了**: 本ツールの画面（ブラウザのタブ）をすべて閉じると、一定時間後に本ツールを終了します。実行中のジョブがある場合は、完了するまで終了しません。
+- **自動終了**: 本ツールの画面（ブラウザのタブ）をすべて閉じると、一定時間（既定は 5 秒）の後に本ツールを終了します。実行中のジョブがある場合は、完了するまで終了しません。
 - **画面幅に応じたレイアウト**: ブラウザの幅に応じて、ナビゲーションと表の配置を切り替えます。幅が狭い場合も、横方向にスクロールせずに操作できます。テーマ（ダーク・ライト）と文字サイズは、設定で変更できます。
 
 ## 利用手順
