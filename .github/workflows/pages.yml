@@ -1,0 +1,74 @@
+name: pages
+
+# 公開した Release の全部入り版から、版などを埋め込んだドキュメント（docs）を取り出し、GitHub Pages に公開します（6.11.6 の④）。
+# 作り直さず、公開済みの ZIP（ハッシュと構成証明を確認したもの）から取り出すため、Pages の内容は、いつも公開版の同梱のドキュメントと同じです。
+on:
+  release:
+    types: [published]
+  # 手動の実行では、指定した版（タグ）のドキュメントを公開します（最初の公開と、やり直し用）
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 公開する版のタグ（例: v1.7.3）
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    # 試験版（プレリリース）は、Pages に公開しません
+    if: github.event_name == 'workflow_dispatch' || !github.event.release.prerelease
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      attestations: read
+    env:
+      TAG: ${{ github.event_name == 'release' && github.event.release.tag_name || inputs.tag }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: 全部入り版の取得と確認
+        run: |
+          set -euo pipefail
+          [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "タグの形式が違います: $TAG"; exit 1; }
+          mkdir rel && cd rel
+          gh release download "$TAG" -R "$GITHUB_REPOSITORY" -p 'finfet-abs-*-win-x64.zip' -p SHA256SUMS.txt
+          sha256sum -c SHA256SUMS.txt
+          gh attestation verify finfet-abs-*-win-x64.zip -R "$GITHUB_REPOSITORY" --source-ref "refs/tags/$TAG"
+      - name: ドキュメントの取り出し
+        run: |
+          set -euo pipefail
+          python3 - <<'EOF'
+          import glob, pathlib, zipfile
+          site = pathlib.Path("site")
+          with zipfile.ZipFile(glob.glob("rel/finfet-abs-*-win-x64.zip")[0]) as z:
+              for n in z.namelist():
+                  if n.startswith("finfet-abs/docs/") and not n.endswith("/"):
+                      p = site / n.removeprefix("finfet-abs/docs/")
+                      assert ".." not in p.parts, n
+                      p.parent.mkdir(parents=True, exist_ok=True)
+                      p.write_bytes(z.read(n))
+          assert (site / "index.html").is_file(), "docs/index.html がありません"
+          (site / ".nojekyll").write_text("")
+          EOF
+          ls -R site | head -50
+      - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        with:
+          path: site/
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - id: deploy
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1
