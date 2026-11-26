@@ -4,7 +4,7 @@
 >
 > This is an unofficial tool for Azure Blob Storage. It is not developed, provided, endorsed, or sponsored by Microsoft Corporation or its affiliates. Microsoft and Azure are trademarks of the Microsoft group of companies.
 
-FinFeT は、Azure のストレージアカウントに保存されたログやファイルから、条件に一致するもののみを検索し、PC にまとめてダウンロードするための Windows 用のツールです。たとえば「11 月 1 日から 7 日までの、web01 と web02 のログ」のように、ファイル名の規則と期間を指定して対象を絞り込めます。
+FinFeT は、Azure ストレージアカウントの Blob コンテナーに保存されたログやファイル（Blob）から、条件に一致するもののみを検索し、PC にまとめてダウンロードするための Windows 用のツールです。対象は Blob コンテナーのみで、ファイル共有（Azure Files）・テーブル・キューには対応していません。たとえば「11 月 1 日から 7 日までの、web01 と web02 のログ」のように、ファイル名の規則と期間を指定して対象を絞り込めます。
 
 Archive 層の Blob は、そのままでは読み取れません。本ツールは、オンライン層に戻す操作（リハイドレート）を要求し、数時間かかる完了を待ってから、自動的にダウンロードします。
 

@@ -22,7 +22,7 @@
 </nav>
 <main>
 <h1>はじめに</h1>
-<p>FinFeT（Finding &amp; Fetching Tool for Azure Blob Storage）は、Azure ストレージアカウントの Blob を検索し、リハイドレートとダウンロードを行う Windows 向けのツールです。</p>
+<p>FinFeT（Finding &amp; Fetching Tool for Azure Blob Storage）は、Azure ストレージアカウントの Blob コンテナーにある Blob を検索し、リハイドレートとダウンロードを行う Windows 向けのツールです。</p>
 <p class="note">本ツールは、Azure Blob Storage を利用するための非公式のツールです。Microsoft Corporation およびその関連会社が開発・提供するものではなく、Microsoft による提携、承認、後援を受けていません。Microsoft、Azure は、Microsoft グループの企業の商標です。</p>
 <p class="note" lang="en">This is an unofficial tool for Azure Blob Storage. It is not developed, provided, endorsed, or sponsored by Microsoft Corporation or its affiliates. Microsoft and Azure are trademarks of the Microsoft group of companies.</p>
 <h2>主な機能</h2>
@@ -36,6 +36,7 @@
 <h2>対応していないこと</h2>
 <ul>
 <li>Blob のアップロード・削除・上書き（本ツールが行う操作は、読み取りとアクセス層の変更に限られます）</li>
+<li>Blob コンテナー以外のストレージ（ファイル共有（Azure Files）・テーブル・キュー）</li>
 <li>Windows 以外での実行</li>
 </ul>
 <h2>動作環境</h2>
